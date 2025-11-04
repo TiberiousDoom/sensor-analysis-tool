@@ -4,7 +4,7 @@ wheel
 
 # Install numpy before pandas so pip can fetch a compatible binary wheel
 numpy==1.26.4
-pandas==2.1.3
+pandas==2.2.0
 
 streamlit==1.28.0
 plotly==5.18.0
