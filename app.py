@@ -263,8 +263,8 @@ def analyze_job(df, job_number, threshold_set='Standard'):
              f"**% Change:** {thresholds['min_pct_change']}% to {thresholds['max_pct_change']}% | " +
              f"**Max Std Dev:** {thresholds['max_std_dev']}V")
 
-    # Display Summary, Breakdown, and Legend in columns
-    col1, col2, col3 = st.columns([1, 1, 1.5])
+    # Display Summary and Breakdown in columns, Legend as sidebar
+    col1, col2 = st.columns([1, 1])
 
     with col1:
         st.markdown("**SUMMARY STATISTICS**")
@@ -280,16 +280,60 @@ def analyze_job(df, job_number, threshold_set='Standard'):
             if count > 0:
                 percentage = (count / total_sensors * 100)
                 st.write(f"**{code}:** {count} ({percentage:.1f}%)")
-
-    with col3:
-        with st.expander("📋 STATUS CODE LEGEND", expanded=True):
-            st.write(f"- **FL:** Failed Low (< {thresholds['min_120s']}V)")
-            st.write(f"- **FH:** Failed High (> {thresholds['max_120s']}V)")
-            st.write(f"- **OT-:** Out of Tol. Neg (< {thresholds['min_pct_change']}%) PASS")
-            st.write(f"- **TT:** Test-to-Test (> {thresholds['max_std_dev']}V) PASS")
-            st.write(f"- **OT+:** Out of Tol. Pos (> {thresholds['max_pct_change']}%) PASS")
-            st.write(f"- **DM:** Data Missing (not counted)")
-            st.write(f"- **PASS:** All criteria met")
+    
+    # Add Legend as a right-side expandable panel with custom CSS
+    st.markdown("""
+    <style>
+    .legend-container {
+        position: fixed;
+        right: 0;
+        top: 80px;
+        width: 300px;
+        background-color: #f0f2f6;
+        border-left: 2px solid #d0d0d0;
+        padding: 15px;
+        max-height: 500px;
+        overflow-y: auto;
+        z-index: 999;
+        transition: right 0.3s ease;
+    }
+    .legend-toggle {
+        position: fixed;
+        right: 0px;
+        top: 80px;
+        background-color: #0068c9;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        z-index: 1000;
+        border-radius: 5px 0 0 5px;
+    }
+    .legend-hidden {
+        right: -300px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Legend toggle in sidebar
+    with st.sidebar:
+        st.markdown("---")
+        show_legend = st.checkbox("📋 Show Legend", value=True, key="show_legend")
+    
+    # Show legend if checkbox is checked
+    if show_legend:
+        with st.container():
+            st.markdown("**📋 STATUS CODE LEGEND**")
+            st.markdown(f"""
+            - **FL:** Failed Low (< {thresholds['min_120s']}V)
+            - **FH:** Failed High (> {thresholds['max_120s']}V)
+            - **OT-:** Out of Tol. Neg (< {thresholds['min_pct_change']}%) PASS
+            - **TT:** Test-to-Test (> {thresholds['max_std_dev']}V) PASS
+            - **OT+:** Out of Tol. Pos (> {thresholds['max_pct_change']}%) PASS
+            - **DM:** Data Missing (not counted)
+            - **PASS:** All criteria met
+            """)
+            st.markdown("---")
 
     # Format the results for display
     display_results = results.copy()
@@ -375,7 +419,7 @@ def plot_job_data(df, job_number, threshold_set='Standard'):
     plt.close()
 
 def plot_serial_data(df, job_number, serial_numbers):
-    """Generate plot for specific serial numbers."""
+    """Generate plot for specific serial numbers with distinct line styles for each test."""
     if len(df) == 0 or not serial_numbers:
         return
 
@@ -396,6 +440,10 @@ def plot_serial_data(df, job_number, serial_numbers):
 
     # Plot each serial number with a different color
     colors = plt.cm.tab10(np.linspace(0, 1, len(serial_numbers)))
+    
+    # Define line styles for different tests (up to 3 tests)
+    line_styles = ['-', '--', ':']  # Solid, dashed, dotted
+    markers = ['o', 's', '^']  # Circle, square, triangle
 
     for idx, serial in enumerate(serial_numbers):
         serial_rows = serial_data[serial_data['Serial Number'] == serial]
@@ -409,9 +457,22 @@ def plot_serial_data(df, job_number, serial_numbers):
                     test_times.append(float(time_point))
 
             if test_readings:
-                label = f"{serial}" if row_idx == 0 else None
-                ax.plot(test_times, test_readings, '-o', color=colors[idx],
-                       label=label, linewidth=2, markersize=6, alpha=0.7)
+                # Select line style and marker based on test number
+                style_idx = row_idx % len(line_styles)
+                linestyle = line_styles[style_idx]
+                marker = markers[style_idx]
+                
+                # Create label showing serial number and test number
+                label = f"{serial} (Test {row_idx + 1})"
+                
+                ax.plot(test_times, test_readings, 
+                       linestyle=linestyle,
+                       marker=marker,
+                       color=colors[idx],
+                       label=label, 
+                       linewidth=2.5, 
+                       markersize=8, 
+                       alpha=0.8)
 
     ax.set_title("Filtered Serial Number Readings Over Time", fontsize=14, fontweight='bold')
     ax.set_xlabel('Time (seconds)', fontsize=12)
@@ -419,7 +480,7 @@ def plot_serial_data(df, job_number, serial_numbers):
     ax.set_ylim(0, 5)
     ax.set_yticks(np.arange(0, 5.5, 0.5))
     ax.grid(True, alpha=0.3, which='both')
-    ax.legend(loc='best', fontsize=10)
+    ax.legend(loc='best', fontsize=9, ncol=2)
 
     st.pyplot(fig)
     plt.close()
@@ -456,8 +517,6 @@ if 'status_filter' not in st.session_state:
     st.session_state.status_filter = []
 if 'serial_search' not in st.session_state:
     st.session_state.serial_search = ""
-if 'channel_filter' not in st.session_state:
-    st.session_state.channel_filter = []
 
 # Main interface
 if len(df) > 0:
@@ -478,7 +537,6 @@ if len(df) > 0:
             # Reset filters when analyzing a new job
             st.session_state.status_filter = []
             st.session_state.serial_search = ""
-            st.session_state.channel_filter = []
 
     # Display results if they exist in session state
     if st.session_state.analysis_results is not None:
@@ -489,17 +547,14 @@ if len(df) > 0:
 
         # Add filtering options
         st.markdown("**Filter Results:**")
-        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 1, 1])
+        filter_col1, filter_col2, filter_col3 = st.columns([2, 3, 1])
 
-        # Get unique Pass/Fail statuses and channels
+        # Get unique Pass/Fail statuses
         all_statuses = sorted(results['Pass/Fail'].unique().tolist())
-        all_channels = sorted(results['Channel'].unique().tolist())
         
         # Initialize filters on first load if not already set
         if not st.session_state.status_filter:
             st.session_state.status_filter = all_statuses
-        if not st.session_state.channel_filter:
-            st.session_state.channel_filter = all_channels
 
         with filter_col1:
             selected_statuses = st.multiselect(
@@ -510,39 +565,27 @@ if len(df) > 0:
             )
 
         with filter_col2:
-            # Serial Number search
+            # Serial Number search (supports comma-separated values)
             serial_search = st.text_input(
-                "Search Serial Number:",
+                "Search Serial Number(s):",
                 value=st.session_state.serial_search,
                 key="serial_search_input",
-                placeholder="Enter partial serial..."
+                placeholder="Enter serial number(s), separate with commas..."
             )
 
         with filter_col3:
-            with st.expander("Channel", expanded=False):
-                selected_channels = st.multiselect(
-                    "Select:",
-                    options=all_channels,
-                    default=st.session_state.channel_filter,
-                    key="channel_multiselect",
-                    label_visibility="collapsed"
-                )
-
-        with filter_col4:
             # Reset filters button
             st.write("")  # Spacing
             if st.button("🔄 Reset", key="reset_filters"):
                 # Update session state with defaults
                 st.session_state.status_filter = all_statuses
                 st.session_state.serial_search = ""
-                st.session_state.channel_filter = all_channels
                 # Rerun to refresh the widgets
                 st.rerun()
         
         # Update session state from widget values
         st.session_state.status_filter = selected_statuses
         st.session_state.serial_search = serial_search
-        st.session_state.channel_filter = selected_channels
 
         # Apply filters
         filtered_results = results.copy()
@@ -551,18 +594,30 @@ if len(df) > 0:
         if selected_statuses:
             filtered_results = filtered_results[filtered_results['Pass/Fail'].isin(selected_statuses)]
 
-        # Filter by serial number search
+        # Filter by serial number search (supports comma-separated values)
         if serial_search:
-            filtered_results = filtered_results[
-                filtered_results['Serial Number'].str.contains(serial_search, case=False, na=False)
-            ]
-
-        # Filter by channel
-        if selected_channels:
-            filtered_results = filtered_results[filtered_results['Channel'].isin(selected_channels)]
+            # Split by comma, strip whitespace, and filter out empty strings
+            serial_list = [s.strip() for s in serial_search.split(',') if s.strip()]
+            
+            if serial_list:
+                # Create a mask that matches any of the serial numbers
+                mask = filtered_results['Serial Number'].str.contains('|'.join(serial_list), case=False, na=False, regex=True)
+                filtered_results = filtered_results[mask]
 
         # Display filtered count
         st.write(f"Showing {len(filtered_results)} of {len(results)} sensors")
+
+        # Add CSS for wrapped column headers
+        st.markdown("""
+        <style>
+        .stDataFrame div[data-testid="stDataFrameResizable"] div[data-testid="stDataFrameColHeader"] {
+            white-space: normal !important;
+            word-wrap: break-word !important;
+            height: auto !important;
+            max-width: 100px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
         # Display filtered results
         st.dataframe(filtered_results, use_container_width=True)
