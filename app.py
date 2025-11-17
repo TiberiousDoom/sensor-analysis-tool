@@ -263,32 +263,33 @@ def analyze_job(df, job_number, threshold_set='Standard'):
              f"**% Change:** {thresholds['min_pct_change']}% to {thresholds['max_pct_change']}% | " +
              f"**Max Std Dev:** {thresholds['max_std_dev']}V")
 
-    # Display Legend and Summary in columns
-    col1, col2 = st.columns(2)
+    # Display Summary, Breakdown, and Legend in columns
+    col1, col2, col3 = st.columns([1, 1, 1.5])
 
     with col1:
-        st.markdown("**STATUS CODE LEGEND**")
-        st.write(f"- **FL:** Failed Low (< {thresholds['min_120s']}V)")
-        st.write(f"- **FH:** Failed High (> {thresholds['max_120s']}V)")
-        st.write(f"- **OT-:** Out of Tol. Neg (< {thresholds['min_pct_change']}%) PASS")
-        st.write(f"- **TT:** Test-to-Test (> {thresholds['max_std_dev']}V) PASS")
-        st.write(f"- **OT+:** Out of Tol. Pos (> {thresholds['max_pct_change']}%) PASS")
-        st.write(f"- **DM:** Data Missing (not counted)")
-        st.write(f"- **PASS:** All criteria met")
-
-    with col2:
         st.markdown("**SUMMARY STATISTICS**")
         st.write(f"**Total Sensors:** {total_sensors}")
         st.write(f"**Passed:** {passed_sensors} ({pass_rate:.1f}%)")
         st.write(f"**Failed:** {failed_sensors} ({fail_rate:.1f}%)")
         st.write(f"**Data Missing:** {dm_sensors} (not counted)")
-        st.write("")
-        st.write("**Breakdown:**")
+
+    with col2:
+        st.markdown("**BREAKDOWN**")
         for code in ['FL', 'FH', 'OT-', 'TT', 'OT+', 'DM', 'PASS']:
             count = status_counts[code]
             if count > 0:
                 percentage = (count / total_sensors * 100)
-                st.write(f"  {code}: {count} ({percentage:.1f}%)")
+                st.write(f"**{code}:** {count} ({percentage:.1f}%)")
+
+    with col3:
+        with st.expander("📋 STATUS CODE LEGEND", expanded=True):
+            st.write(f"- **FL:** Failed Low (< {thresholds['min_120s']}V)")
+            st.write(f"- **FH:** Failed High (> {thresholds['max_120s']}V)")
+            st.write(f"- **OT-:** Out of Tol. Neg (< {thresholds['min_pct_change']}%) PASS")
+            st.write(f"- **TT:** Test-to-Test (> {thresholds['max_std_dev']}V) PASS")
+            st.write(f"- **OT+:** Out of Tol. Pos (> {thresholds['max_pct_change']}%) PASS")
+            st.write(f"- **DM:** Data Missing (not counted)")
+            st.write(f"- **PASS:** All criteria met")
 
     # Format the results for display
     display_results = results.copy()
@@ -373,6 +374,56 @@ def plot_job_data(df, job_number, threshold_set='Standard'):
     st.pyplot(fig)
     plt.close()
 
+def plot_serial_data(df, job_number, serial_numbers):
+    """Generate plot for specific serial numbers."""
+    if len(df) == 0 or not serial_numbers:
+        return
+
+    job_data = get_job_data(df, job_number)
+
+    if len(job_data) == 0:
+        return
+
+    # Filter for the specific serial numbers
+    serial_data = job_data[job_data['Serial Number'].isin(serial_numbers)]
+
+    if len(serial_data) == 0:
+        st.warning("No data found for the filtered serial numbers")
+        return
+
+    # Create plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot each serial number with a different color
+    colors = plt.cm.tab10(np.linspace(0, 1, len(serial_numbers)))
+
+    for idx, serial in enumerate(serial_numbers):
+        serial_rows = serial_data[serial_data['Serial Number'] == serial]
+
+        for row_idx, (_, row) in enumerate(serial_rows.iterrows()):
+            test_readings = []
+            test_times = []
+            for time_point in TIME_POINTS:
+                if time_point in row and pd.notna(row[time_point]):
+                    test_readings.append(row[time_point])
+                    test_times.append(float(time_point))
+
+            if test_readings:
+                label = f"{serial}" if row_idx == 0 else None
+                ax.plot(test_times, test_readings, '-o', color=colors[idx],
+                       label=label, linewidth=2, markersize=6, alpha=0.7)
+
+    ax.set_title("Filtered Serial Number Readings Over Time", fontsize=14, fontweight='bold')
+    ax.set_xlabel('Time (seconds)', fontsize=12)
+    ax.set_ylabel('Voltage (V)', fontsize=12)
+    ax.set_ylim(0, 5)
+    ax.set_yticks(np.arange(0, 5.5, 0.5))
+    ax.grid(True, alpha=0.3, which='both')
+    ax.legend(loc='best', fontsize=10)
+
+    st.pyplot(fig)
+    plt.close()
+
 # Main app
 st.title("🔬 Sensor Data Analysis Tool")
 
@@ -406,10 +457,13 @@ if 'current_threshold' not in st.session_state:
 if len(df) > 0:
     st.sidebar.header("Analysis Parameters")
 
-    job_number = st.sidebar.text_input("Job Number:", "")
-    threshold_set = st.sidebar.radio("Threshold Set:", ["Standard", "High Range"])
+    # Use form to allow Enter key to submit
+    with st.sidebar.form(key="analysis_form"):
+        job_number = st.text_input("Job Number:", "")
+        threshold_set = st.radio("Threshold Set:", ["Standard", "High Range"])
+        submit_button = st.form_submit_button("Analyze Job")
 
-    if st.sidebar.button("Analyze Job") and job_number:
+    if submit_button and job_number:
         results = analyze_job(df, job_number, threshold_set)
         if results is not None:
             st.session_state.analysis_results = results
@@ -425,7 +479,7 @@ if len(df) > 0:
 
         # Add filtering options
         st.markdown("**Filter Results:**")
-        filter_col1, filter_col2, filter_col3 = st.columns(3)
+        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 1, 1])
 
         with filter_col1:
             # Get unique Pass/Fail statuses
@@ -449,12 +503,23 @@ if len(df) > 0:
         with filter_col3:
             # Get unique channels
             all_channels = sorted(results['Channel'].unique().tolist())
-            selected_channels = st.multiselect(
-                "Filter by Channel:",
-                options=all_channels,
-                default=all_channels,
-                key="channel_filter"
-            )
+            with st.expander("Channel", expanded=False):
+                selected_channels = st.multiselect(
+                    "Select:",
+                    options=all_channels,
+                    default=all_channels,
+                    key="channel_filter",
+                    label_visibility="collapsed"
+                )
+
+        with filter_col4:
+            # Reset filters button
+            st.write("")  # Spacing
+            if st.button("🔄 Reset", key="reset_filters"):
+                st.session_state.status_filter = all_statuses
+                st.session_state.serial_search = ""
+                st.session_state.channel_filter = all_channels
+                st.rerun()
 
         # Apply filters
         filtered_results = results.copy()
@@ -478,6 +543,13 @@ if len(df) > 0:
 
         # Display filtered results
         st.dataframe(filtered_results, use_container_width=True)
+
+        # Show serial number plot if serial search is active
+        if serial_search and len(filtered_results) > 0:
+            st.markdown("---")
+            st.subheader("Filtered Serial Number Plot")
+            filtered_serials = filtered_results['Serial Number'].unique().tolist()
+            plot_serial_data(df, st.session_state.current_job, filtered_serials)
 
         st.markdown("---")
         st.subheader("Job Data Plot")
