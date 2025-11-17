@@ -1,12 +1,4 @@
-pip>=24.0
-setuptools>=68.0
-wheel
-
-# Install numpy before pandas so pip can fetch a compatible binary wheel
-numpy==1.26.4
-pandas==2.2.0
-
-streamlit==1.28.0
-plotly==5.18.0
-openpyxl==3.1.2
-# kaleido==0.2.1
+streamlit
+pandas
+numpy
+matplotlib
