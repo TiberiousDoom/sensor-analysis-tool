@@ -340,36 +340,19 @@ def plot_job_data(df, job_number, threshold_set='Standard'):
     # Create plot
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Plot all individual readings
-    for point in time_data:
-        time_val = point['time']
-        for reading in point['all_readings']:
-            ax.plot(time_val, reading, 'o', color='lightblue', markersize=4, alpha=0.5)
-
-    # Plot mean line
-    ax.plot(df_plot['time'], df_plot['mean'], 'b-', linewidth=2, label='Mean', zorder=10)
-
-    # Plot mean as dashed line for each test
-    for idx, row in job_data.iterrows():
-        test_readings = []
-        test_times = []
-        for time_point in TIME_POINTS:
-            if time_point in row and pd.notna(row[time_point]):
-                test_readings.append(row[time_point])
-                test_times.append(float(time_point))
-        if test_readings:
-            ax.plot(test_times, test_readings, '--', color='gray', alpha=0.3, linewidth=1)
-
-    # Shaded areas
-    ax.fill_between(df_plot['time'],
-                     df_plot['mean'] - df_plot['std'],
-                     df_plot['mean'] + df_plot['std'],
-                     alpha=0.2, color='blue', label='±1 Std Dev')
-
+    # Shaded areas first (so they're behind the mean line)
     ax.fill_between(df_plot['time'],
                      df_plot['p5'],
                      df_plot['p95'],
-                     alpha=0.1, color='green', label='5th-95th Percentile')
+                     alpha=0.15, color='green', label='5th-95th Percentile')
+    
+    ax.fill_between(df_plot['time'],
+                     df_plot['mean'] - df_plot['std'],
+                     df_plot['mean'] + df_plot['std'],
+                     alpha=0.25, color='blue', label='±1 Std Dev')
+
+    # Plot mean line on top
+    ax.plot(df_plot['time'], df_plot['mean'], 'b-', linewidth=2.5, label='Mean', zorder=10)
 
     # Formatting
     if len(matched_jobs) > 1:
