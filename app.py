@@ -423,7 +423,62 @@ if len(df) > 0:
         if results is not None:
             st.markdown("---")
             st.subheader("Results Table")
-            st.dataframe(results, use_container_width=True)
+
+            # Add filtering options
+            st.markdown("**Filter Results:**")
+            filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+            with filter_col1:
+                # Get unique Pass/Fail statuses
+                all_statuses = sorted(results['Pass/Fail'].unique().tolist())
+                selected_statuses = st.multiselect(
+                    "Filter by Status:",
+                    options=all_statuses,
+                    default=all_statuses,
+                    key="status_filter"
+                )
+
+            with filter_col2:
+                # Serial Number search
+                serial_search = st.text_input(
+                    "Search Serial Number:",
+                    "",
+                    key="serial_search",
+                    placeholder="Enter partial serial..."
+                )
+
+            with filter_col3:
+                # Get unique channels
+                all_channels = sorted(results['Channel'].unique().tolist())
+                selected_channels = st.multiselect(
+                    "Filter by Channel:",
+                    options=all_channels,
+                    default=all_channels,
+                    key="channel_filter"
+                )
+
+            # Apply filters
+            filtered_results = results.copy()
+
+            # Filter by status
+            if selected_statuses:
+                filtered_results = filtered_results[filtered_results['Pass/Fail'].isin(selected_statuses)]
+
+            # Filter by serial number search
+            if serial_search:
+                filtered_results = filtered_results[
+                    filtered_results['Serial Number'].str.contains(serial_search, case=False, na=False)
+                ]
+
+            # Filter by channel
+            if selected_channels:
+                filtered_results = filtered_results[filtered_results['Channel'].isin(selected_channels)]
+
+            # Display filtered count
+            st.write(f"Showing {len(filtered_results)} of {len(results)} sensors")
+
+            # Display filtered results
+            st.dataframe(filtered_results, use_container_width=True)
 
             st.markdown("---")
             st.subheader("Job Data Plot")
