@@ -452,6 +452,12 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
+if 'status_filter' not in st.session_state:
+    st.session_state.status_filter = []
+if 'serial_search' not in st.session_state:
+    st.session_state.serial_search = ""
+if 'channel_filter' not in st.session_state:
+    st.session_state.channel_filter = []
 
 # Main interface
 if len(df) > 0:
@@ -469,6 +475,10 @@ if len(df) > 0:
             st.session_state.analysis_results = results
             st.session_state.current_job = job_number
             st.session_state.current_threshold = threshold_set
+            # Reset filters when analyzing a new job
+            st.session_state.status_filter = []
+            st.session_state.serial_search = ""
+            st.session_state.channel_filter = []
 
     # Display results if they exist in session state
     if st.session_state.analysis_results is not None:
@@ -484,10 +494,13 @@ if len(df) > 0:
         with filter_col1:
             # Get unique Pass/Fail statuses
             all_statuses = sorted(results['Pass/Fail'].unique().tolist())
+            # Initialize status filter on first load of results
+            if not st.session_state.status_filter:
+                st.session_state.status_filter = all_statuses
             selected_statuses = st.multiselect(
                 "Filter by Status:",
                 options=all_statuses,
-                default=all_statuses,
+                default=st.session_state.status_filter,
                 key="status_filter"
             )
 
@@ -495,7 +508,7 @@ if len(df) > 0:
             # Serial Number search
             serial_search = st.text_input(
                 "Search Serial Number:",
-                "",
+                st.session_state.serial_search,
                 key="serial_search",
                 placeholder="Enter partial serial..."
             )
@@ -503,11 +516,14 @@ if len(df) > 0:
         with filter_col3:
             # Get unique channels
             all_channels = sorted(results['Channel'].unique().tolist())
+            # Initialize channel filter on first load of results
+            if not st.session_state.channel_filter:
+                st.session_state.channel_filter = all_channels
             with st.expander("Channel", expanded=False):
                 selected_channels = st.multiselect(
                     "Select:",
                     options=all_channels,
-                    default=all_channels,
+                    default=st.session_state.channel_filter,
                     key="channel_filter",
                     label_visibility="collapsed"
                 )
