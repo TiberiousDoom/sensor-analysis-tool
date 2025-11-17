@@ -411,6 +411,14 @@ else:
         if len(df) > 0:
             st.sidebar.success(f"Loaded {len(df)} records")
 
+# Initialize session state
+if 'analysis_results' not in st.session_state:
+    st.session_state.analysis_results = None
+if 'current_job' not in st.session_state:
+    st.session_state.current_job = None
+if 'current_threshold' not in st.session_state:
+    st.session_state.current_threshold = 'Standard'
+
 # Main interface
 if len(df) > 0:
     st.sidebar.header("Analysis Parameters")
@@ -421,67 +429,75 @@ if len(df) > 0:
     if st.sidebar.button("Analyze Job") and job_number:
         results = analyze_job(df, job_number, threshold_set)
         if results is not None:
-            st.markdown("---")
-            st.subheader("Results Table")
+            st.session_state.analysis_results = results
+            st.session_state.current_job = job_number
+            st.session_state.current_threshold = threshold_set
 
-            # Add filtering options
-            st.markdown("**Filter Results:**")
-            filter_col1, filter_col2, filter_col3 = st.columns(3)
+    # Display results if they exist in session state
+    if st.session_state.analysis_results is not None:
+        results = st.session_state.analysis_results
 
-            with filter_col1:
-                # Get unique Pass/Fail statuses
-                all_statuses = sorted(results['Pass/Fail'].unique().tolist())
-                selected_statuses = st.multiselect(
-                    "Filter by Status:",
-                    options=all_statuses,
-                    default=all_statuses,
-                    key="status_filter"
-                )
+        st.markdown("---")
+        st.subheader("Results Table")
 
-            with filter_col2:
-                # Serial Number search
-                serial_search = st.text_input(
-                    "Search Serial Number:",
-                    "",
-                    key="serial_search",
-                    placeholder="Enter partial serial..."
-                )
+        # Add filtering options
+        st.markdown("**Filter Results:**")
+        filter_col1, filter_col2, filter_col3 = st.columns(3)
 
-            with filter_col3:
-                # Get unique channels
-                all_channels = sorted(results['Channel'].unique().tolist())
-                selected_channels = st.multiselect(
-                    "Filter by Channel:",
-                    options=all_channels,
-                    default=all_channels,
-                    key="channel_filter"
-                )
+        with filter_col1:
+            # Get unique Pass/Fail statuses
+            all_statuses = sorted(results['Pass/Fail'].unique().tolist())
+            selected_statuses = st.multiselect(
+                "Filter by Status:",
+                options=all_statuses,
+                default=all_statuses,
+                key="status_filter"
+            )
 
-            # Apply filters
-            filtered_results = results.copy()
+        with filter_col2:
+            # Serial Number search
+            serial_search = st.text_input(
+                "Search Serial Number:",
+                "",
+                key="serial_search",
+                placeholder="Enter partial serial..."
+            )
 
-            # Filter by status
-            if selected_statuses:
-                filtered_results = filtered_results[filtered_results['Pass/Fail'].isin(selected_statuses)]
+        with filter_col3:
+            # Get unique channels
+            all_channels = sorted(results['Channel'].unique().tolist())
+            selected_channels = st.multiselect(
+                "Filter by Channel:",
+                options=all_channels,
+                default=all_channels,
+                key="channel_filter"
+            )
 
-            # Filter by serial number search
-            if serial_search:
-                filtered_results = filtered_results[
-                    filtered_results['Serial Number'].str.contains(serial_search, case=False, na=False)
-                ]
+        # Apply filters
+        filtered_results = results.copy()
 
-            # Filter by channel
-            if selected_channels:
-                filtered_results = filtered_results[filtered_results['Channel'].isin(selected_channels)]
+        # Filter by status
+        if selected_statuses:
+            filtered_results = filtered_results[filtered_results['Pass/Fail'].isin(selected_statuses)]
 
-            # Display filtered count
-            st.write(f"Showing {len(filtered_results)} of {len(results)} sensors")
+        # Filter by serial number search
+        if serial_search:
+            filtered_results = filtered_results[
+                filtered_results['Serial Number'].str.contains(serial_search, case=False, na=False)
+            ]
 
-            # Display filtered results
-            st.dataframe(filtered_results, use_container_width=True)
+        # Filter by channel
+        if selected_channels:
+            filtered_results = filtered_results[filtered_results['Channel'].isin(selected_channels)]
 
-            st.markdown("---")
-            st.subheader("Job Data Plot")
-            plot_job_data(df, job_number, threshold_set)
+        # Display filtered count
+        st.write(f"Showing {len(filtered_results)} of {len(results)} sensors")
+
+        # Display filtered results
+        st.dataframe(filtered_results, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("Job Data Plot")
+        plot_job_data(df, st.session_state.current_job, st.session_state.current_threshold)
 else:
     st.info("👈 Please load data using the sidebar to begin analysis")
