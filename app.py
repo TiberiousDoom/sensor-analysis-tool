@@ -491,40 +491,40 @@ if len(df) > 0:
         st.markdown("**Filter Results:**")
         filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 1, 1])
 
+        # Get unique Pass/Fail statuses and channels
+        all_statuses = sorted(results['Pass/Fail'].unique().tolist())
+        all_channels = sorted(results['Channel'].unique().tolist())
+        
+        # Initialize filters on first load if not already set
+        if not st.session_state.status_filter:
+            st.session_state.status_filter = all_statuses
+        if not st.session_state.channel_filter:
+            st.session_state.channel_filter = all_channels
+
         with filter_col1:
-            # Get unique Pass/Fail statuses
-            all_statuses = sorted(results['Pass/Fail'].unique().tolist())
-            # Initialize status filter on first load of results
-            if not st.session_state.status_filter:
-                st.session_state.status_filter = all_statuses
             selected_statuses = st.multiselect(
                 "Filter by Status:",
                 options=all_statuses,
                 default=st.session_state.status_filter,
-                key="status_filter"
+                key="status_multiselect"
             )
 
         with filter_col2:
             # Serial Number search
             serial_search = st.text_input(
                 "Search Serial Number:",
-                st.session_state.serial_search,
-                key="serial_search",
+                value=st.session_state.serial_search,
+                key="serial_search_input",
                 placeholder="Enter partial serial..."
             )
 
         with filter_col3:
-            # Get unique channels
-            all_channels = sorted(results['Channel'].unique().tolist())
-            # Initialize channel filter on first load of results
-            if not st.session_state.channel_filter:
-                st.session_state.channel_filter = all_channels
             with st.expander("Channel", expanded=False):
                 selected_channels = st.multiselect(
                     "Select:",
                     options=all_channels,
                     default=st.session_state.channel_filter,
-                    key="channel_filter",
+                    key="channel_multiselect",
                     label_visibility="collapsed"
                 )
 
@@ -532,10 +532,17 @@ if len(df) > 0:
             # Reset filters button
             st.write("")  # Spacing
             if st.button("🔄 Reset", key="reset_filters"):
+                # Update session state with defaults
                 st.session_state.status_filter = all_statuses
                 st.session_state.serial_search = ""
                 st.session_state.channel_filter = all_channels
+                # Rerun to refresh the widgets
                 st.rerun()
+        
+        # Update session state from widget values
+        st.session_state.status_filter = selected_statuses
+        st.session_state.serial_search = serial_search
+        st.session_state.channel_filter = selected_channels
 
         # Apply filters
         filtered_results = results.copy()
