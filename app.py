@@ -263,7 +263,7 @@ def analyze_job(df, job_number, threshold_set='Standard'):
              f"**% Change:** {thresholds['min_pct_change']}% to {thresholds['max_pct_change']}% | " +
              f"**Max Std Dev:** {thresholds['max_std_dev']}V")
 
-    # Display Summary and Breakdown in columns, Legend as sidebar
+    # Display Summary and Breakdown in columns
     col1, col2 = st.columns([1, 1])
 
     with col1:
@@ -281,59 +281,110 @@ def analyze_job(df, job_number, threshold_set='Standard'):
                 percentage = (count / total_sensors * 100)
                 st.write(f"**{code}:** {count} ({percentage:.1f}%)")
     
-    # Add Legend as a right-side expandable panel with custom CSS
-    st.markdown("""
+    # Store legend state
+    if 'legend_open' not in st.session_state:
+        st.session_state.legend_open = True
+    
+    # Create legend toggle button and sidebar with custom HTML/CSS
+    legend_state = "open" if st.session_state.legend_open else "closed"
+    
+    st.markdown(f"""
     <style>
-    .legend-container {
+    .legend-sidebar {{
         position: fixed;
-        right: 0;
+        right: {'-250px' if legend_state == 'closed' else '0'};
         top: 80px;
-        width: 300px;
-        background-color: #f0f2f6;
-        border-left: 2px solid #d0d0d0;
-        padding: 15px;
-        max-height: 500px;
-        overflow-y: auto;
-        z-index: 999;
+        width: 250px;
+        height: calc(100vh - 100px);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        box-shadow: -2px 0 10px rgba(0,0,0,0.2);
         transition: right 0.3s ease;
-    }
-    .legend-toggle {
+        z-index: 999;
+        overflow-y: auto;
+        border-radius: 10px 0 0 10px;
+    }}
+    
+    .legend-toggle {{
         position: fixed;
-        right: 0px;
-        top: 80px;
-        background-color: #0068c9;
+        right: {('0' if legend_state == 'closed' else '250px')};
+        top: 100px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
-        padding: 10px 15px;
+        padding: 12px 8px;
         cursor: pointer;
         z-index: 1000;
-        border-radius: 5px 0 0 5px;
-    }
-    .legend-hidden {
-        right: -300px;
-    }
+        border-radius: 8px 0 0 8px;
+        font-size: 20px;
+        transition: right 0.3s ease;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    }}
+    
+    .legend-toggle:hover {{
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }}
+    
+    .legend-title {{
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgba(255,255,255,0.3);
+    }}
+    
+    .legend-item {{
+        margin: 10px 0;
+        padding: 8px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 5px;
+        font-size: 13px;
+        line-height: 1.4;
+    }}
+    
+    .legend-code {{
+        font-weight: bold;
+        color: #ffd700;
+    }}
     </style>
+    
+    <div class="legend-sidebar">
+        <div class="legend-title">📋 STATUS CODE LEGEND</div>
+        <div class="legend-item">
+            <span class="legend-code">FL:</span> Failed Low<br/>
+            (&lt; {thresholds['min_120s']}V)
+        </div>
+        <div class="legend-item">
+            <span class="legend-code">FH:</span> Failed High<br/>
+            (&gt; {thresholds['max_120s']}V)
+        </div>
+        <div class="legend-item">
+            <span class="legend-code">OT-:</span> Out of Tol. Neg<br/>
+            (&lt; {thresholds['min_pct_change']}%) <span style="color:#90EE90">PASS</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-code">TT:</span> Test-to-Test<br/>
+            (&gt; {thresholds['max_std_dev']}V) <span style="color:#90EE90">PASS</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-code">OT+:</span> Out of Tol. Pos<br/>
+            (&gt; {thresholds['max_pct_change']}%) <span style="color:#90EE90">PASS</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-code">DM:</span> Data Missing<br/>
+            (not counted)
+        </div>
+        <div class="legend-item">
+            <span class="legend-code">PASS:</span> All criteria met
+        </div>
+    </div>
     """, unsafe_allow_html=True)
     
-    # Legend toggle in sidebar
-    with st.sidebar:
-        st.markdown("---")
-        show_legend = st.checkbox("📋 Show Legend", value=True, key="show_legend")
-    
-    # Show legend if checkbox is checked
-    if show_legend:
-        with st.container():
-            st.markdown("**📋 STATUS CODE LEGEND**")
-            st.markdown(f"""
-            - **FL:** Failed Low (< {thresholds['min_120s']}V)
-            - **FH:** Failed High (> {thresholds['max_120s']}V)
-            - **OT-:** Out of Tol. Neg (< {thresholds['min_pct_change']}%) PASS
-            - **TT:** Test-to-Test (> {thresholds['max_std_dev']}V) PASS
-            - **OT+:** Out of Tol. Pos (> {thresholds['max_pct_change']}%) PASS
-            - **DM:** Data Missing (not counted)
-            - **PASS:** All criteria met
-            """)
-            st.markdown("---")
+    # Add toggle button functionality
+    if st.button("◀" if st.session_state.legend_open else "▶", key="legend_toggle_btn"):
+        st.session_state.legend_open = not st.session_state.legend_open
+        st.rerun()
 
     # Format the results for display
     display_results = results.copy()
@@ -443,7 +494,6 @@ def plot_serial_data(df, job_number, serial_numbers):
     
     # Define line styles for different tests (up to 3 tests)
     line_styles = ['-', '--', ':']  # Solid, dashed, dotted
-    markers = ['o', 's', '^']  # Circle, square, triangle
 
     for idx, serial in enumerate(serial_numbers):
         serial_rows = serial_data[serial_data['Serial Number'] == serial]
@@ -457,21 +507,18 @@ def plot_serial_data(df, job_number, serial_numbers):
                     test_times.append(float(time_point))
 
             if test_readings:
-                # Select line style and marker based on test number
+                # Select line style based on test number
                 style_idx = row_idx % len(line_styles)
                 linestyle = line_styles[style_idx]
-                marker = markers[style_idx]
                 
                 # Create label showing serial number and test number
                 label = f"{serial} (Test {row_idx + 1})"
                 
                 ax.plot(test_times, test_readings, 
                        linestyle=linestyle,
-                       marker=marker,
                        color=colors[idx],
                        label=label, 
                        linewidth=2.5, 
-                       markersize=8, 
                        alpha=0.8)
 
     ax.set_title("Filtered Serial Number Readings Over Time", fontsize=14, fontweight='bold')
@@ -576,16 +623,17 @@ if len(df) > 0:
         with filter_col3:
             # Reset filters button
             st.write("")  # Spacing
-            if st.button("🔄 Reset", key="reset_filters"):
-                # Update session state with defaults
-                st.session_state.status_filter = all_statuses
-                st.session_state.serial_search = ""
-                # Rerun to refresh the widgets
-                st.rerun()
+            reset_clicked = st.button("🔄 Reset", key="reset_filters")
         
-        # Update session state from widget values
-        st.session_state.status_filter = selected_statuses
-        st.session_state.serial_search = serial_search
+        # Handle reset BEFORE updating session state from widgets
+        if reset_clicked:
+            st.session_state.status_filter = all_statuses
+            st.session_state.serial_search = ""
+            st.rerun()
+        else:
+            # Only update session state from widget values if NOT resetting
+            st.session_state.status_filter = selected_statuses
+            st.session_state.serial_search = serial_search
 
         # Apply filters
         filtered_results = results.copy()
