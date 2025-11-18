@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as path_effects
 import io
+import re
 from datetime import datetime
 
 # Page configuration with custom theme
@@ -710,12 +711,6 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
-if 'selected_statuses' not in st.session_state:
-    st.session_state.selected_statuses = []
-if 'serial_search' not in st.session_state:
-    st.session_state.serial_search = ""
-if 'active_tab' not in st.session_state:
-    st.session_state.active_tab = 0  # Default to first tab
 
 # Sidebar for data loading
 with st.sidebar:
@@ -786,10 +781,6 @@ if len(df) > 0:
                 st.session_state.analysis_results = analysis_info
                 st.session_state.current_job = job_number
                 st.session_state.current_threshold = threshold_set
-                # Reset filters when analyzing a new job
-                all_statuses = sorted(analysis_info['results']['Pass/Fail'].unique().tolist())
-                st.session_state.selected_statuses = all_statuses
-                st.session_state.serial_search = ""
     
     # Display results if available
     if st.session_state.analysis_results:
@@ -837,70 +828,76 @@ if len(df) > 0:
         
         st.markdown("---")
         
-        # Create tabs for organized view - use on_change to track active tab
-        tab_names = ["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"]
+        # Create tabs for organized view
+        tab1, tab2, tab3, tab4 = st.tabs(["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"])
         
-        # Create the tabs
-        tabs = st.tabs(tab_names)
-        
-        with tabs[0]:
+        with tab1:
             # Enhanced visualization
             fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
             if fig:
                 st.pyplot(fig)
                 plt.close()
         
-        with tabs[1]:
+        with tab2:
             # Data filters
             st.markdown("#### 🔍 Filters")
+            
+            # Get unique Pass/Fail statuses
+            all_statuses = sorted(info['results']['Pass/Fail'].unique().tolist())
+            
+            # Initialize session state for filters if not exists
+            if 'selected_statuses' not in st.session_state:
+                st.session_state.selected_statuses = all_statuses
+            if 'serial_text' not in st.session_state:
+                st.session_state.serial_text = ""
+            
+            # Create columns for filters
             col1, col2, col3 = st.columns([3, 3, 1])
             
             with col1:
-                # Get unique Pass/Fail statuses
-                all_statuses = sorted(info['results']['Pass/Fail'].unique().tolist())
-                
-                # Initialize if needed
-                if not st.session_state.selected_statuses:
-                    st.session_state.selected_statuses = all_statuses
-                
-                status_filter = st.multiselect(
+                # Status filter multiselect
+                selected_statuses = st.multiselect(
                     "Status:",
                     options=all_statuses,
-                    default=st.session_state.selected_statuses,
-                    key="status_multiselect"
+                    default=st.session_state.selected_statuses
                 )
             
             with col2:
-                # Serial Number search
-                serial_search = st.text_input(
+                # Serial number search
+                serial_text = st.text_input(
                     "Serial Number(s):",
-                    value=st.session_state.serial_search,
-                    placeholder="Comma-separated...",
-                    key="serial_search_input"
+                    value=st.session_state.serial_text,
+                    placeholder="Comma-separated..."
                 )
             
             with col3:
                 st.write("")  # Spacer
-                if st.button("🔄 Reset", key="reset_btn"):
-                    # Reset filters to defaults
-                    st.session_state.selected_statuses = all_statuses
-                    st.session_state.serial_search = ""
-                    st.rerun()
+                reset_clicked = st.button("🔄 Reset Filters", type="secondary")
             
-            # Update session state from current widget values
-            st.session_state.selected_statuses = status_filter
-            st.session_state.serial_search = serial_search
+            # Handle reset
+            if reset_clicked:
+                st.session_state.selected_statuses = all_statuses
+                st.session_state.serial_text = ""
+                st.rerun()
+            else:
+                # Update session state with current values
+                st.session_state.selected_statuses = selected_statuses
+                st.session_state.serial_text = serial_text
             
-            # Apply filters
+            # Apply filters to data
             filtered_data = info['results'].copy()
             
-            if status_filter:
-                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(status_filter)]
+            # Apply status filter
+            if selected_statuses:
+                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(selected_statuses)]
             
-            if serial_search:
-                serials = [s.strip() for s in serial_search.split(',') if s.strip()]
+            # Apply serial number filter
+            if serial_text:
+                serials = [s.strip() for s in serial_text.split(',') if s.strip()]
                 if serials:
-                    mask = filtered_data['Serial Number'].str.contains('|'.join(serials), case=False, na=False)
+                    # Create regex pattern for matching
+                    pattern = '|'.join([re.escape(s) for s in serials])
+                    mask = filtered_data['Serial Number'].str.contains(pattern, case=False, na=False, regex=True)
                     filtered_data = filtered_data[mask]
             
             # Display count
@@ -922,7 +919,7 @@ if len(df) > 0:
                 height=400
             )
         
-        with tabs[2]:
+        with tab3:
             # Status breakdown with visual chart
             col1, col2 = st.columns([1, 2])
             
@@ -1049,7 +1046,7 @@ if len(df) > 0:
                     st.pyplot(fig)
                     plt.close()
         
-        with tabs[3]:
+        with tab4:
             # Threshold information
             st.markdown("#### Current Threshold Settings")
             
