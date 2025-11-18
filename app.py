@@ -710,6 +710,12 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
+if 'selected_statuses' not in st.session_state:
+    st.session_state.selected_statuses = []
+if 'serial_search' not in st.session_state:
+    st.session_state.serial_search = ""
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = 0  # Default to first tab
 
 # Sidebar for data loading
 with st.sidebar:
@@ -780,6 +786,10 @@ if len(df) > 0:
                 st.session_state.analysis_results = analysis_info
                 st.session_state.current_job = job_number
                 st.session_state.current_threshold = threshold_set
+                # Reset filters when analyzing a new job
+                all_statuses = sorted(analysis_info['results']['Pass/Fail'].unique().tolist())
+                st.session_state.selected_statuses = all_statuses
+                st.session_state.serial_search = ""
     
     # Display results if available
     if st.session_state.analysis_results:
@@ -827,68 +837,59 @@ if len(df) > 0:
         
         st.markdown("---")
         
-        # Create tabs for organized view
-        tab1, tab2, tab3, tab4 = st.tabs(["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"])
+        # Create tabs for organized view - use on_change to track active tab
+        tab_names = ["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"]
         
-        with tab1:
+        # Create the tabs
+        tabs = st.tabs(tab_names)
+        
+        with tabs[0]:
             # Enhanced visualization
             fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
             if fig:
                 st.pyplot(fig)
                 plt.close()
         
-        with tab2:
+        with tabs[1]:
             # Data filters
             st.markdown("#### 🔍 Filters")
             col1, col2, col3 = st.columns([3, 3, 1])
-            
-            # Initialize filter states
-            if 'filter_reset' not in st.session_state:
-                st.session_state.filter_reset = False
             
             with col1:
                 # Get unique Pass/Fail statuses
                 all_statuses = sorted(info['results']['Pass/Fail'].unique().tolist())
                 
-                # Reset to all statuses if reset was clicked
-                if st.session_state.filter_reset:
-                    default_statuses = all_statuses
-                else:
-                    default_statuses = st.session_state.get('selected_statuses', all_statuses)
+                # Initialize if needed
+                if not st.session_state.selected_statuses:
+                    st.session_state.selected_statuses = all_statuses
                 
                 status_filter = st.multiselect(
                     "Status:",
                     options=all_statuses,
-                    default=default_statuses,
+                    default=st.session_state.selected_statuses,
                     key="status_multiselect"
                 )
-                st.session_state.selected_statuses = status_filter
             
             with col2:
                 # Serial Number search
-                if st.session_state.filter_reset:
-                    default_search = ""
-                    st.session_state.serial_search = ""
-                else:
-                    default_search = st.session_state.get('serial_search', "")
-                
                 serial_search = st.text_input(
                     "Serial Number(s):",
-                    value=default_search,
+                    value=st.session_state.serial_search,
                     placeholder="Comma-separated...",
                     key="serial_search_input"
                 )
-                st.session_state.serial_search = serial_search
             
             with col3:
                 st.write("")  # Spacer
-                if st.button("🔄 Reset Filters", key="reset_btn"):
-                    st.session_state.filter_reset = True
+                if st.button("🔄 Reset", key="reset_btn"):
+                    # Reset filters to defaults
+                    st.session_state.selected_statuses = all_statuses
+                    st.session_state.serial_search = ""
                     st.rerun()
             
-            # Reset the flag after using it
-            if st.session_state.filter_reset:
-                st.session_state.filter_reset = False
+            # Update session state from current widget values
+            st.session_state.selected_statuses = status_filter
+            st.session_state.serial_search = serial_search
             
             # Apply filters
             filtered_data = info['results'].copy()
@@ -921,7 +922,7 @@ if len(df) > 0:
                 height=400
             )
         
-        with tab3:
+        with tabs[2]:
             # Status breakdown with visual chart
             col1, col2 = st.columns([1, 2])
             
@@ -1048,7 +1049,7 @@ if len(df) > 0:
                     st.pyplot(fig)
                     plt.close()
         
-        with tab4:
+        with tabs[3]:
             # Threshold information
             st.markdown("#### Current Threshold Settings")
             
