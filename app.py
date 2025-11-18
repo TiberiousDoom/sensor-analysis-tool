@@ -725,20 +725,12 @@ if len(df) > 0:
         
         st.markdown("---")
         
-        # Create tabs without state preservation issues
-        tab_list = ["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"]
+        # Create tabs with Data Table as the first/default tab
+        tab_list = ["📋 Data Table", "📈 Visualization", "📊 Status Breakdown", "ℹ️ Thresholds"]
         tabs = st.tabs(tab_list)
         
-        # Tab 1: Visualization
+        # Tab 1: Data Table with simple filters
         with tabs[0]:
-            # Enhanced visualization
-            fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
-            if fig:
-                st.pyplot(fig)
-                plt.close()
-        
-        # Tab 2: Data Table with simple filters
-        with tabs[1]:
             st.markdown("#### 🔍 Filters")
             
             # Get unique Pass/Fail statuses
@@ -800,6 +792,14 @@ if len(df) > 0:
                 hide_index=True,
                 height=400
             )
+        
+        # Tab 2: Visualization
+        with tabs[1]:
+            # Enhanced visualization
+            fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
+            if fig:
+                st.pyplot(fig)
+                plt.close()
         
         # Tab 3: Status Breakdown
         with tabs[2]:
