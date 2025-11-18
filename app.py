@@ -207,7 +207,7 @@ THRESHOLDS = {
     'High Range': {
         'min_120s': 0.55,
         'max_120s': 1.0,
-        'min_pct_change': -10.00,
+        'min_pct_change': 0.00,
         'max_pct_change': 75.00,
         'max_std_dev': 0.5
     }
@@ -278,8 +278,8 @@ def calculate_metrics(df):
     metrics = df.copy()
 
     # Calculate percentage change between 90s and 120s
-    if '90' in df.columns and '120' in df.columns:
-        metrics['pct_change_90_120'] = ((df['120'] - df['90']) / df['90'] * 100).replace([np.inf, -np.inf], np.nan)
+    if '90' in df.columns and '120' in df.columns and '0' in df.columns:
+        metrics['pct_change_90_120'] = ((df['120'] - df['90']) / (df['90'] - df['0']) * 100).replace([np.inf, -np.inf], np.nan)
 
     return metrics
 
@@ -695,9 +695,9 @@ def plot_individual_serial_data(df, job_number, serial_numbers):
                     test_times.append(float(time_point))
 
             if test_readings:
-                # Create label with channel info if available
-                channel = row.get('Channel', 'N/A')
-                label = f"Channel {channel}"
+                # Create label with test number
+                test_num = row_idx + 1
+                label = f"Test {test_num}"
                 ax.plot(test_times, test_readings, '-o', color=colors[row_idx],
                        label=label, linewidth=2, markersize=6, alpha=0.7)
 
