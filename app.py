@@ -851,49 +851,53 @@ if len(df) > 0:
             if 'serial_text' not in st.session_state:
                 st.session_state.serial_text = ""
             
-            # Create columns for filters
-            col1, col2, col3 = st.columns([3, 3, 1])
+            # Create form to prevent rerun on every change
+            with st.form(key="filter_form"):
+                col1, col2 = st.columns([3, 3])
+                
+                with col1:
+                    # Status filter multiselect
+                    selected_statuses = st.multiselect(
+                        "Status:",
+                        options=all_statuses,
+                        default=st.session_state.selected_statuses
+                    )
+                
+                with col2:
+                    # Serial number search
+                    serial_text = st.text_input(
+                        "Serial Number(s):",
+                        value=st.session_state.serial_text,
+                        placeholder="Comma-separated..."
+                    )
+                
+                # Form buttons
+                col3, col4, col5 = st.columns([2, 1, 3])
+                with col3:
+                    apply_filters = st.form_submit_button("✅ Apply Filters", type="primary")
+                with col4:
+                    reset_filters = st.form_submit_button("🔄 Reset", type="secondary")
             
-            with col1:
-                # Status filter multiselect
-                selected_statuses = st.multiselect(
-                    "Status:",
-                    options=all_statuses,
-                    default=st.session_state.selected_statuses
-                )
-            
-            with col2:
-                # Serial number search
-                serial_text = st.text_input(
-                    "Serial Number(s):",
-                    value=st.session_state.serial_text,
-                    placeholder="Comma-separated..."
-                )
-            
-            with col3:
-                st.write("")  # Spacer
-                reset_clicked = st.button("🔄 Reset Filters", type="secondary")
-            
-            # Handle reset
-            if reset_clicked:
-                st.session_state.selected_statuses = all_statuses
-                st.session_state.serial_text = ""
-                st.rerun()
-            else:
-                # Update session state with current values
+            # Handle filter actions
+            if apply_filters:
                 st.session_state.selected_statuses = selected_statuses
                 st.session_state.serial_text = serial_text
             
-            # Apply filters to data
+            if reset_filters:
+                st.session_state.selected_statuses = all_statuses
+                st.session_state.serial_text = ""
+                st.rerun()
+            
+            # Apply filters to data using session state values
             filtered_data = info['results'].copy()
             
             # Apply status filter
-            if selected_statuses:
-                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(selected_statuses)]
+            if st.session_state.selected_statuses:
+                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(st.session_state.selected_statuses)]
             
             # Apply serial number filter
-            if serial_text:
-                serials = [s.strip() for s in serial_text.split(',') if s.strip()]
+            if st.session_state.serial_text:
+                serials = [s.strip() for s in st.session_state.serial_text.split(',') if s.strip()]
                 if serials:
                     # Create regex pattern for matching
                     pattern = '|'.join([re.escape(s) for s in serials])
