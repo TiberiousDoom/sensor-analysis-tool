@@ -539,6 +539,191 @@ def analyze_job(df, job_number, threshold_set='Standard'):
         st.error("Error: Job # column not found in data")
         return None
 
+def create_enhanced_plot(df, job_number, threshold_set='Standard'):
+    """Generate enhanced visualization for a specific job with dark mode compatibility."""
+    job_data = get_job_data(df, job_number)
+    
+    if len(job_data) == 0:
+        return None
+    
+    matched_jobs = sorted(job_data['Job #'].unique())
+    thresholds = THRESHOLDS[threshold_set]
+    
+    # Aggregate data
+    time_data = []
+    for time_point in TIME_POINTS:
+        if time_point in job_data.columns:
+            readings = job_data[time_point].dropna()
+            if len(readings) > 0:
+                time_data.append({
+                    'time': float(time_point),
+                    'mean': readings.mean(),
+                    'std': readings.std(),
+                    'p5': readings.quantile(0.05),
+                    'p95': readings.quantile(0.95),
+                    'p25': readings.quantile(0.25),
+                    'p75': readings.quantile(0.75)
+                })
+    
+    if not time_data:
+        return None
+    
+    df_plot = pd.DataFrame(time_data)
+    
+    # Set style for better visibility
+    plt.style.use('dark_background' if st.get_option('theme.base') == 'dark' else 'default')
+    
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), facecolor='#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    # Set background colors based on theme
+    for ax in [ax1, ax2]:
+        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
+    
+    # Main trend plot (left) with vibrant colors
+    ax1.fill_between(df_plot['time'], df_plot['p5'], df_plot['p95'],
+                     alpha=0.2, color='#7c8bff', label='5th-95th Percentile')
+    ax1.fill_between(df_plot['time'], df_plot['p25'], df_plot['p75'],
+                     alpha=0.3, color='#9b67d6', label='25th-75th Percentile')
+    ax1.fill_between(df_plot['time'], df_plot['mean'] - df_plot['std'],
+                     df_plot['mean'] + df_plot['std'],
+                     alpha=0.4, color='#667eea', label='±1 Std Dev')
+    
+    # Mean line with markers
+    ax1.plot(df_plot['time'], df_plot['mean'], 'o-', color='#00ff88', 
+             linewidth=3, markersize=8, label='Mean', zorder=10,
+             markeredgecolor='white', markeredgewidth=1)
+    
+    # Add threshold lines
+    ax1.axhline(y=thresholds['min_120s'], color='#ff4444', linestyle='--', 
+                alpha=0.7, linewidth=2, label=f'Min Threshold ({thresholds["min_120s"]}V)')
+    ax1.axhline(y=thresholds['max_120s'], color='#ff4444', linestyle='--', 
+                alpha=0.7, linewidth=2, label=f'Max Threshold ({thresholds["max_120s"]}V)')
+    
+    # Formatting
+    ax1.set_title('Sensor Readings Over Time', fontsize=14, fontweight='bold', pad=20, 
+                  color='white' if st.get_option('theme.base') == 'dark' else 'black')
+    ax1.set_xlabel('Time (seconds)', fontsize=12)
+    ax1.set_ylabel('Voltage (V)', fontsize=12)
+    ax1.set_ylim(0, 5)
+    ax1.set_xlim(-5, 125)
+    ax1.grid(True, alpha=0.3, linestyle='--', color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+    ax1.legend(loc='best', framealpha=0.9, facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    # Box plot for 120s readings (right)
+    if '120' in job_data.columns:
+        readings_120 = job_data['120'].dropna()
+        bp = ax2.boxplot([readings_120], vert=True, patch_artist=True,
+                         widths=0.6, showmeans=True, meanline=True)
+        
+        # Style the boxplot with vibrant colors
+        for patch in bp['boxes']:
+            patch.set_facecolor('#7c8bff')
+            patch.set_alpha(0.8)
+            patch.set_edgecolor('white')
+            patch.set_linewidth(1.5)
+        
+        # Style whiskers and caps
+        for item in ['whiskers', 'caps']:
+            plt.setp(bp[item], color='white', linewidth=1.5)
+        
+        # Style medians
+        plt.setp(bp['medians'], color='#00ff88', linewidth=2)
+        
+        # Add threshold regions
+        ax2.axhspan(0, thresholds['min_120s'], alpha=0.2, color='#ff4444', label='Fail Low')
+        ax2.axhspan(thresholds['max_120s'], 5, alpha=0.2, color='#ff4444', label='Fail High')
+        ax2.axhspan(thresholds['min_120s'], thresholds['max_120s'], alpha=0.2, 
+                   color='#00ff88', label='Pass Range')
+        
+        ax2.set_title('120s Reading Distribution', fontsize=14, fontweight='bold', pad=20,
+                     color='white' if st.get_option('theme.base') == 'dark' else 'black')
+        ax2.set_ylabel('Voltage (V)', fontsize=12)
+        ax2.set_ylim(0, 5)
+        ax2.set_xticklabels(['120s'])
+        ax2.grid(True, alpha=0.3, axis='y', linestyle='--', 
+                color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+        ax2.legend(loc='upper right', framealpha=0.9, 
+                  facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    plt.suptitle(f'Job {matched_jobs[0].split(".")[0]} Analysis', 
+                fontsize=16, fontweight='bold', y=1.02,
+                color='white' if st.get_option('theme.base') == 'dark' else 'black')
+    plt.tight_layout()
+    
+    return fig
+
+def plot_individual_serial_data(df, job_number, serial_numbers):
+    """Generate individual plots for each filtered serial number."""
+    if len(df) == 0 or not serial_numbers:
+        return None
+
+    job_data = get_job_data(df, job_number)
+
+    if len(job_data) == 0:
+        return None
+
+    # Filter for the specific serial numbers
+    serial_data = job_data[job_data['Serial Number'].isin(serial_numbers)]
+
+    if len(serial_data) == 0:
+        st.warning("No data found for the filtered serial numbers")
+        return None
+
+    # Create individual plots for each serial number
+    num_serials = len(serial_numbers)
+
+    for serial in serial_numbers:
+        serial_rows = serial_data[serial_data['Serial Number'] == serial]
+
+        if len(serial_rows) == 0:
+            continue
+
+        # Create a figure for this serial number
+        fig, ax = plt.subplots(figsize=(12, 5), facecolor='#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
+
+        # Use different colors for each channel/row
+        colors = plt.cm.tab20(np.linspace(0, 1, len(serial_rows)))
+
+        for row_idx, (_, row) in enumerate(serial_rows.iterrows()):
+            test_readings = []
+            test_times = []
+            for time_point in TIME_POINTS:
+                if time_point in row and pd.notna(row[time_point]):
+                    test_readings.append(row[time_point])
+                    test_times.append(float(time_point))
+
+            if test_readings:
+                # Create label with channel info if available
+                channel = row.get('Channel', 'N/A')
+                label = f"Channel {channel}"
+                ax.plot(test_times, test_readings, '-o', color=colors[row_idx],
+                       label=label, linewidth=2, markersize=6, alpha=0.7)
+
+        ax.set_title(f"Serial Number: {serial}", fontsize=14, fontweight='bold')
+        ax.set_xlabel('Time (seconds)', fontsize=12)
+        ax.set_ylabel('Voltage (V)', fontsize=12)
+        ax.set_ylim(0, 5)
+        ax.set_yticks(np.arange(0, 5.5, 0.5))
+        ax.grid(True, alpha=0.3, which='both')
+
+        if len(serial_rows) > 1:
+            ax.legend(loc='best', fontsize=10)
+
+        st.pyplot(fig)
+        plt.close()
+
+def analyze_job(df, job_number, threshold_set='Standard'):
+    """Analyze data for a specific job number."""
+    if len(df) == 0:
+        st.error("No data loaded. Please load data first.")
+        return None
+
+    if 'Job #' not in df.columns:
+        st.error("Error: Job # column not found in data")
+        return None
+
     job_data = get_job_data(df, job_number)
 
     if len(job_data) == 0:
@@ -608,6 +793,8 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
+if 'filtered_serials' not in st.session_state:
+    st.session_state.filtered_serials = []
 
 # Sidebar for data loading
 with st.sidebar:
@@ -767,12 +954,17 @@ if len(df) > 0:
                 filtered_data = pd.DataFrame(columns=filtered_data.columns)
             
             # Apply serial filter
+            filtered_serials = []
             if serial_text:
                 serials = [s.strip() for s in serial_text.split(',') if s.strip()]
                 if serials:
                     pattern = '|'.join([re.escape(s) for s in serials])
                     mask = filtered_data['Serial Number'].str.contains(pattern, case=False, na=False, regex=True)
                     filtered_data = filtered_data[mask]
+                    filtered_serials = filtered_data['Serial Number'].unique().tolist()
+
+            # Store filtered serials in session state for use in Visualization tab
+            st.session_state.filtered_serials = filtered_serials
             
             # Display results count
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
@@ -795,6 +987,19 @@ if len(df) > 0:
         
         # Tab 2: Visualization
         with tabs[1]:
+            # Show individual serial plots if serials are filtered
+            if st.session_state.filtered_serials and len(st.session_state.filtered_serials) > 0:
+                st.markdown("### 📊 Individual Serial Number Plots")
+                st.caption("Detailed view of each filtered serial number")
+                plot_individual_serial_data(df, st.session_state.current_job, st.session_state.filtered_serials)
+
+                st.markdown("---")
+                st.markdown("### 📈 Overall Job Trend")
+                st.caption("Aggregate statistics for all job data")
+            else:
+                st.markdown("### 📈 Overall Job Trend")
+                st.caption("Aggregate statistics for all job data (enter a serial number to see individual plots)")
+
             # Enhanced visualization
             fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
             if fig:
