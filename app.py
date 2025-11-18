@@ -3,10 +3,149 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import io
+from datetime import datetime
 
-# Page configuration
-st.set_page_config(page_title="Sensor Analysis Tool", layout="wide")
+# Page configuration with custom theme
+st.set_page_config(
+    page_title="Sensor Analysis Dashboard", 
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'About': "Sensor Data Analysis Tool v2.0"
+    }
+)
+
+# Custom CSS for modern UI
+st.markdown("""
+<style>
+    /* Main container styling */
+    .main {
+        background: #f8f9fa;
+    }
+    
+    /* Header gradient */
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    
+    /* Metric cards */
+    div[data-testid="metric-container"] {
+        background: white;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        border-left: 4px solid #667eea;
+    }
+    
+    /* Status pills */
+    .status-pill {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+        margin: 2px;
+    }
+    
+    .status-pass {
+        background: #d4f4dd;
+        color: #1e7e34;
+    }
+    
+    .status-fail {
+        background: #ffd6d6;
+        color: #bd2130;
+    }
+    
+    .status-warning {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    /* Improved button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.6rem 1.5rem;
+        border-radius: 25px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    /* Sidebar improvements */
+    section[data-testid="stSidebar"] {
+        background: white;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+    }
+    
+    /* Success/Error messages */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        padding: 0px 24px;
+        background-color: white;
+        border-radius: 10px;
+        border: 2px solid #e0e0e0;
+        font-weight: 600;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    
+    /* Data table improvements */
+    .dataframe {
+        font-size: 14px;
+    }
+    
+    .dataframe tbody tr:hover {
+        background-color: #f0f7ff !important;
+    }
+    
+    /* Legend box */
+    .legend-box {
+        background: white;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        margin: 1rem 0;
+    }
+    
+    /* Quick stats container */
+    .quick-stats {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+        margin-bottom: 1.5rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Define threshold sets
 THRESHOLDS = {
@@ -28,6 +167,17 @@ THRESHOLDS = {
 
 # Time points for analysis
 TIME_POINTS = ['0', '5', '15', '30', '60', '90', '120']
+
+# Status color mapping for visual consistency
+STATUS_COLORS = {
+    'PASS': '#28a745',
+    'FL': '#dc3545',
+    'FH': '#dc3545',
+    'OT-': '#ffc107',
+    'TT': '#ffc107',
+    'OT+': '#ffc107',
+    'DM': '#6c757d'
+}
 
 @st.cache_data
 def load_data_from_db(db_path='sensor_data.db'):
@@ -90,7 +240,7 @@ def determine_pass_fail(df, threshold_set='Standard'):
     thresholds = THRESHOLDS[threshold_set]
     results = []
 
-    # Define priority order for status codes: FL > FH > OT- > TT > OT+ > DM > PASS
+    # Define priority order for status codes
     status_priority = {'FL': 1, 'FH': 2, 'OT-': 3, 'TT': 4, 'OT+': 5, 'DM': 6, 'PASS': 7}
 
     for serial in df['Serial Number'].unique():
@@ -160,14 +310,13 @@ def determine_pass_fail(df, threshold_set='Standard'):
         if std_dev_120 > thresholds['max_std_dev']:
             all_failure_codes.append('TT')
 
-        # Determine overall status with priority - show only the highest priority code
+        # Determine overall status with priority
         if len(all_failure_codes) == 0:
             status = 'PASS'
         else:
-            # Sort by priority and take only the highest priority code
             unique_failures = list(set(all_failure_codes))
             unique_failures.sort(key=lambda x: status_priority.get(x, 99))
-            status = unique_failures[0]  # Only display the highest priority status
+            status = unique_failures[0]
 
         # Add overall columns
         serial_row['Pass/Fail'] = status
@@ -178,13 +327,9 @@ def determine_pass_fail(df, threshold_set='Standard'):
     # Create DataFrame and reorder columns
     results_df = pd.DataFrame(results)
 
-    # Build desired column order: Serial Number, Channel, Pass/Fail, 120s(St.Dev.), then all test columns
+    # Build desired column order
     base_cols = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)']
-
-    # Get all test columns (they're already in order from the loop)
     test_cols = [col for col in results_df.columns if col not in base_cols]
-
-    # Reorder
     column_order = base_cols + test_cols
     results_df = results_df[column_order]
 
@@ -210,6 +355,109 @@ def get_job_data(df, job_number):
         job_data = df[df['Job #'].str.lower().str.strip().str.startswith(job_number_str.lower())].copy()
 
     return job_data
+
+def create_status_badge(status):
+    """Create HTML for a status badge with appropriate color."""
+    if status == 'PASS':
+        return f'<span class="status-pill status-pass">{status}</span>'
+    elif status in ['FL', 'FH']:
+        return f'<span class="status-pill status-fail">{status}</span>'
+    elif status in ['OT-', 'TT', 'OT+']:
+        return f'<span class="status-pill status-warning">{status}</span>'
+    else:
+        return f'<span class="status-pill" style="background: #e9ecef; color: #6c757d;">{status}</span>'
+
+def create_enhanced_plot(df, job_number, threshold_set='Standard'):
+    """Generate enhanced visualization for a specific job."""
+    job_data = get_job_data(df, job_number)
+    
+    if len(job_data) == 0:
+        return None
+    
+    matched_jobs = sorted(job_data['Job #'].unique())
+    thresholds = THRESHOLDS[threshold_set]
+    
+    # Aggregate data
+    time_data = []
+    for time_point in TIME_POINTS:
+        if time_point in job_data.columns:
+            readings = job_data[time_point].dropna()
+            if len(readings) > 0:
+                time_data.append({
+                    'time': float(time_point),
+                    'mean': readings.mean(),
+                    'std': readings.std(),
+                    'p5': readings.quantile(0.05),
+                    'p95': readings.quantile(0.95),
+                    'p25': readings.quantile(0.25),
+                    'p75': readings.quantile(0.75)
+                })
+    
+    if not time_data:
+        return None
+    
+    df_plot = pd.DataFrame(time_data)
+    
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Main trend plot (left)
+    ax1.fill_between(df_plot['time'], df_plot['p5'], df_plot['p95'],
+                     alpha=0.15, color='#667eea', label='5th-95th Percentile')
+    ax1.fill_between(df_plot['time'], df_plot['p25'], df_plot['p75'],
+                     alpha=0.25, color='#764ba2', label='25th-75th Percentile')
+    ax1.fill_between(df_plot['time'], df_plot['mean'] - df_plot['std'],
+                     df_plot['mean'] + df_plot['std'],
+                     alpha=0.3, color='#667eea', label='±1 Std Dev')
+    
+    # Mean line
+    ax1.plot(df_plot['time'], df_plot['mean'], 'o-', color='#764ba2', 
+             linewidth=3, markersize=8, label='Mean', zorder=10)
+    
+    # Add threshold lines
+    ax1.axhline(y=thresholds['min_120s'], color='red', linestyle='--', 
+                alpha=0.5, label=f'Min Threshold ({thresholds["min_120s"]}V)')
+    ax1.axhline(y=thresholds['max_120s'], color='red', linestyle='--', 
+                alpha=0.5, label=f'Max Threshold ({thresholds["max_120s"]}V)')
+    
+    # Formatting
+    ax1.set_title('Sensor Readings Over Time', fontsize=14, fontweight='bold', pad=20)
+    ax1.set_xlabel('Time (seconds)', fontsize=12)
+    ax1.set_ylabel('Voltage (V)', fontsize=12)
+    ax1.set_ylim(0, 5)
+    ax1.set_xlim(-5, 125)
+    ax1.grid(True, alpha=0.3, linestyle='--')
+    ax1.legend(loc='best', framealpha=0.9)
+    
+    # Box plot for 120s readings (right)
+    if '120' in job_data.columns:
+        readings_120 = job_data['120'].dropna()
+        bp = ax2.boxplot([readings_120], vert=True, patch_artist=True,
+                         widths=0.6, showmeans=True, meanline=True)
+        
+        # Style the boxplot
+        for patch in bp['boxes']:
+            patch.set_facecolor('#667eea')
+            patch.set_alpha(0.7)
+        
+        # Add threshold regions
+        ax2.axhspan(0, thresholds['min_120s'], alpha=0.1, color='red', label='Fail Low')
+        ax2.axhspan(thresholds['max_120s'], 5, alpha=0.1, color='red', label='Fail High')
+        ax2.axhspan(thresholds['min_120s'], thresholds['max_120s'], alpha=0.1, 
+                   color='green', label='Pass Range')
+        
+        ax2.set_title('120s Reading Distribution', fontsize=14, fontweight='bold', pad=20)
+        ax2.set_ylabel('Voltage (V)', fontsize=12)
+        ax2.set_ylim(0, 5)
+        ax2.set_xticklabels(['120s'])
+        ax2.grid(True, alpha=0.3, axis='y', linestyle='--')
+        ax2.legend(loc='upper right')
+    
+    plt.suptitle(f'Job {matched_jobs[0].split(".")[0]} Analysis', 
+                fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    return fig
 
 def analyze_job(df, job_number, threshold_set='Standard'):
     """Analyze data for a specific job number."""
@@ -256,302 +504,32 @@ def analyze_job(df, job_number, threshold_set='Standard'):
         if status in status_counts:
             status_counts[status] += 1
 
-    # Display header
-    st.markdown("---")
-    st.subheader(f"JOB ANALYSIS: {matched_jobs[0] if len(matched_jobs) == 1 else f'{len(matched_jobs)} entries starting with {job_number}'}")
-    st.write(f"**Threshold Set:** {threshold_set} | **120s Range:** {thresholds['min_120s']}-{thresholds['max_120s']}V | " +
-             f"**% Change:** {thresholds['min_pct_change']}% to {thresholds['max_pct_change']}% | " +
-             f"**Max Std Dev:** {thresholds['max_std_dev']}V")
+    # Store analysis info
+    analysis_info = {
+        'matched_jobs': matched_jobs,
+        'thresholds': thresholds,
+        'threshold_set': threshold_set,
+        'total_sensors': total_sensors,
+        'passed_sensors': passed_sensors,
+        'failed_sensors': failed_sensors,
+        'dm_sensors': dm_sensors,
+        'pass_rate': pass_rate,
+        'fail_rate': fail_rate,
+        'status_counts': status_counts,
+        'results': results
+    }
 
-    # Display Summary and Breakdown in columns
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        st.markdown("**SUMMARY STATISTICS**")
-        st.write(f"**Total Sensors:** {total_sensors}")
-        st.write(f"**Passed:** {passed_sensors} ({pass_rate:.1f}%)")
-        st.write(f"**Failed:** {failed_sensors} ({fail_rate:.1f}%)")
-        st.write(f"**Data Missing:** {dm_sensors} (not counted)")
-
-    with col2:
-        st.markdown("**BREAKDOWN**")
-        for code in ['FL', 'FH', 'OT-', 'TT', 'OT+', 'DM', 'PASS']:
-            count = status_counts[code]
-            if count > 0:
-                percentage = (count / total_sensors * 100)
-                st.write(f"**{code}:** {count} ({percentage:.1f}%)")
-    
-    # Store legend state
-    if 'legend_open' not in st.session_state:
-        st.session_state.legend_open = True
-    
-    # Create legend toggle button and sidebar with custom HTML/CSS
-    legend_state = "open" if st.session_state.legend_open else "closed"
-    
-    st.markdown(f"""
-    <style>
-    .legend-sidebar {{
-        position: fixed;
-        right: {'-250px' if legend_state == 'closed' else '0'};
-        top: 80px;
-        width: 250px;
-        height: calc(100vh - 100px);
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        box-shadow: -2px 0 10px rgba(0,0,0,0.2);
-        transition: right 0.3s ease;
-        z-index: 999;
-        overflow-y: auto;
-        border-radius: 10px 0 0 10px;
-    }}
-    
-    .legend-toggle {{
-        position: fixed;
-        right: {('0' if legend_state == 'closed' else '250px')};
-        top: 100px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 12px 8px;
-        cursor: pointer;
-        z-index: 1000;
-        border-radius: 8px 0 0 8px;
-        font-size: 20px;
-        transition: right 0.3s ease;
-        box-shadow: -2px 0 5px rgba(0,0,0,0.2);
-    }}
-    
-    .legend-toggle:hover {{
-        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-    }}
-    
-    .legend-title {{
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid rgba(255,255,255,0.3);
-    }}
-    
-    .legend-item {{
-        margin: 10px 0;
-        padding: 8px;
-        background: rgba(255,255,255,0.1);
-        border-radius: 5px;
-        font-size: 13px;
-        line-height: 1.4;
-    }}
-    
-    .legend-code {{
-        font-weight: bold;
-        color: #ffd700;
-    }}
-    </style>
-    
-    <div class="legend-sidebar">
-        <div class="legend-title">📋 STATUS CODE LEGEND</div>
-        <div class="legend-item">
-            <span class="legend-code">FL:</span> Failed Low<br/>
-            (&lt; {thresholds['min_120s']}V)
-        </div>
-        <div class="legend-item">
-            <span class="legend-code">FH:</span> Failed High<br/>
-            (&gt; {thresholds['max_120s']}V)
-        </div>
-        <div class="legend-item">
-            <span class="legend-code">OT-:</span> Out of Tol. Neg<br/>
-            (&lt; {thresholds['min_pct_change']}%) <span style="color:#90EE90">PASS</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-code">TT:</span> Test-to-Test<br/>
-            (&gt; {thresholds['max_std_dev']}V) <span style="color:#90EE90">PASS</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-code">OT+:</span> Out of Tol. Pos<br/>
-            (&gt; {thresholds['max_pct_change']}%) <span style="color:#90EE90">PASS</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-code">DM:</span> Data Missing<br/>
-            (not counted)
-        </div>
-        <div class="legend-item">
-            <span class="legend-code">PASS:</span> All criteria met
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Add toggle button functionality
-    if st.button("◀" if st.session_state.legend_open else "▶", key="legend_toggle_btn"):
-        st.session_state.legend_open = not st.session_state.legend_open
-        st.rerun()
-
-    # Format the results for display
-    display_results = results.copy()
-
-    # Format numeric columns to 1 decimal place
-    for col in display_results.columns:
-        if col.startswith('0s(') or col.startswith('90s(') or col.startswith('120s('):
-            display_results[col] = display_results[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else x)
-        elif col == '120s(St.Dev.)':
-            display_results[col] = display_results[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else x)
-
-    return display_results
-
-def plot_job_data(df, job_number, threshold_set='Standard'):
-    """Generate plot for a specific job."""
-    if len(df) == 0:
-        st.error("No data loaded. Please load data first.")
-        return
-
-    job_data = get_job_data(df, job_number)
-
-    if len(job_data) == 0:
-        st.error(f"No data found for Job # {job_number}")
-        return
-
-    matched_jobs = sorted(job_data['Job #'].unique())
-
-    # Aggregate data
-    time_data = []
-    for time_point in TIME_POINTS:
-        if time_point in job_data.columns:
-            readings = job_data[time_point].dropna()
-            if len(readings) > 0:
-                time_data.append({
-                    'time': float(time_point),
-                    'mean': readings.mean(),
-                    'std': readings.std(),
-                    'p5': readings.quantile(0.05),
-                    'p95': readings.quantile(0.95),
-                    'all_readings': readings.tolist()
-                })
-
-    if not time_data:
-        st.error("No valid data points to plot")
-        return
-
-    df_plot = pd.DataFrame(time_data)
-
-    # Create plot
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # Shaded areas first (so they're behind the mean line)
-    ax.fill_between(df_plot['time'],
-                     df_plot['p5'],
-                     df_plot['p95'],
-                     alpha=0.15, color='green', label='5th-95th Percentile')
-    
-    ax.fill_between(df_plot['time'],
-                     df_plot['mean'] - df_plot['std'],
-                     df_plot['mean'] + df_plot['std'],
-                     alpha=0.25, color='blue', label='±1 Std Dev')
-
-    # Plot mean line on top
-    ax.plot(df_plot['time'], df_plot['mean'], 'b-', linewidth=2.5, label='Mean', zorder=10)
-
-    # Formatting
-    if len(matched_jobs) > 1:
-        base_num = matched_jobs[0].split('.')[0]
-        title = f"Sensor Readings Over Time - Jobs {base_num}"
-    else:
-        job_num_parts = matched_jobs[0].split('.')
-        title = f"Sensor Readings Over Time - Job {job_num_parts[0]}"
-
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.set_xlabel('Time (seconds)', fontsize=12)
-    ax.set_ylabel('Voltage (V)', fontsize=12)
-    ax.set_ylim(0, 5)
-    ax.set_yticks(np.arange(0, 5.5, 0.5))
-    ax.grid(True, alpha=0.3, which='both')
-    ax.legend(loc='best')
-
-    st.pyplot(fig)
-    plt.close()
-
-def plot_serial_data(df, job_number, serial_numbers):
-    """Generate plot for specific serial numbers with distinct line styles for each test."""
-    if len(df) == 0 or not serial_numbers:
-        return
-
-    job_data = get_job_data(df, job_number)
-
-    if len(job_data) == 0:
-        return
-
-    # Filter for the specific serial numbers
-    serial_data = job_data[job_data['Serial Number'].isin(serial_numbers)]
-
-    if len(serial_data) == 0:
-        st.warning("No data found for the filtered serial numbers")
-        return
-
-    # Create plot
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # Plot each serial number with a different color
-    colors = plt.cm.tab10(np.linspace(0, 1, len(serial_numbers)))
-    
-    # Define line styles for different tests (up to 3 tests)
-    line_styles = ['-', '--', ':']  # Solid, dashed, dotted
-
-    for idx, serial in enumerate(serial_numbers):
-        serial_rows = serial_data[serial_data['Serial Number'] == serial]
-
-        for row_idx, (_, row) in enumerate(serial_rows.iterrows()):
-            test_readings = []
-            test_times = []
-            for time_point in TIME_POINTS:
-                if time_point in row and pd.notna(row[time_point]):
-                    test_readings.append(row[time_point])
-                    test_times.append(float(time_point))
-
-            if test_readings:
-                # Select line style based on test number
-                style_idx = row_idx % len(line_styles)
-                linestyle = line_styles[style_idx]
-                
-                # Create label showing serial number and test number
-                label = f"{serial} (Test {row_idx + 1})"
-                
-                ax.plot(test_times, test_readings, 
-                       linestyle=linestyle,
-                       color=colors[idx],
-                       label=label, 
-                       linewidth=2.5, 
-                       alpha=0.8)
-
-    ax.set_title("Filtered Serial Number Readings Over Time", fontsize=14, fontweight='bold')
-    ax.set_xlabel('Time (seconds)', fontsize=12)
-    ax.set_ylabel('Voltage (V)', fontsize=12)
-    ax.set_ylim(0, 5)
-    ax.set_yticks(np.arange(0, 5.5, 0.5))
-    ax.grid(True, alpha=0.3, which='both')
-    ax.legend(loc='best', fontsize=9, ncol=2)
-
-    st.pyplot(fig)
-    plt.close()
+    return analysis_info
 
 # Main app
-st.title("🔬 Sensor Data Analysis Tool")
-
-# Sidebar for data loading
-st.sidebar.header("Data Loading")
-data_source = st.sidebar.radio("Select Data Source:", ["Upload CSV", "Use Database File"])
-
-df = pd.DataFrame()
-
-if data_source == "Upload CSV":
-    uploaded_file = st.sidebar.file_uploader("Upload CSV File", type=['csv'])
-    if uploaded_file is not None:
-        df = load_data_from_csv(uploaded_file)
-        if len(df) > 0:
-            st.sidebar.success(f"Loaded {len(df)} records")
-else:
-    if st.sidebar.button("Load Database"):
-        df = load_data_from_db('sensor_data.db')
-        if len(df) > 0:
-            st.sidebar.success(f"Loaded {len(df)} records")
+st.markdown("""
+<div class="main-header">
+    <h1 style="color: white; margin: 0;">🔬 Sensor Analysis Dashboard</h1>
+    <p style="color: rgba(255,255,255,0.9); margin-top: 0.5rem; font-size: 1.1rem;">
+        Advanced sensor data analysis with real-time insights
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # Initialize session state
 if 'analysis_results' not in st.session_state:
@@ -560,125 +538,284 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
-if 'status_filter' not in st.session_state:
-    st.session_state.status_filter = []
-if 'serial_search' not in st.session_state:
-    st.session_state.serial_search = ""
 
-# Main interface
-if len(df) > 0:
-    st.sidebar.header("Analysis Parameters")
-
-    # Use form to allow Enter key to submit
-    with st.sidebar.form(key="analysis_form"):
-        job_number = st.text_input("Job Number:", "")
-        threshold_set = st.radio("Threshold Set:", ["Standard", "High Range"])
-        submit_button = st.form_submit_button("Analyze Job")
-
-    if submit_button and job_number:
-        results = analyze_job(df, job_number, threshold_set)
-        if results is not None:
-            st.session_state.analysis_results = results
-            st.session_state.current_job = job_number
-            st.session_state.current_threshold = threshold_set
-            # Reset filters when analyzing a new job
-            st.session_state.status_filter = []
-            st.session_state.serial_search = ""
-
-    # Display results if they exist in session state
-    if st.session_state.analysis_results is not None:
-        results = st.session_state.analysis_results
-
+# Sidebar for data loading
+with st.sidebar:
+    st.markdown("### 📁 Data Source")
+    
+    data_source = st.radio(
+        "Select input method:",
+        ["📤 Upload CSV", "💾 Use Database"],
+        label_visibility="collapsed"
+    )
+    
+    df = pd.DataFrame()
+    
+    if data_source == "📤 Upload CSV":
+        uploaded_file = st.file_uploader(
+            "Choose a CSV file",
+            type=['csv'],
+            help="Upload your sensor data CSV file"
+        )
+        if uploaded_file is not None:
+            with st.spinner("Loading data..."):
+                df = load_data_from_csv(uploaded_file)
+                if len(df) > 0:
+                    st.success(f"✅ Loaded {len(df):,} records")
+    else:
+        if st.button("🔄 Load Database", use_container_width=True):
+            with st.spinner("Connecting to database..."):
+                df = load_data_from_db('sensor_data.db')
+                if len(df) > 0:
+                    st.success(f"✅ Loaded {len(df):,} records")
+    
+    if len(df) > 0:
         st.markdown("---")
-        st.subheader("Results Table")
-
-        # Add filtering options
-        st.markdown("**Filter Results:**")
-        filter_col1, filter_col2, filter_col3 = st.columns([2, 3, 1])
-
-        # Get unique Pass/Fail statuses
-        all_statuses = sorted(results['Pass/Fail'].unique().tolist())
+        st.markdown("### ⚙️ Analysis Settings")
         
-        # Initialize filters on first load if not already set
-        if not st.session_state.status_filter:
-            st.session_state.status_filter = all_statuses
-
-        with filter_col1:
-            selected_statuses = st.multiselect(
-                "Filter by Status:",
-                options=all_statuses,
-                default=st.session_state.status_filter,
-                key="status_multiselect"
+        with st.form(key="analysis_form"):
+            job_number = st.text_input(
+                "Job Number:",
+                placeholder="Enter job number...",
+                help="Enter the job number to analyze"
             )
-
-        with filter_col2:
-            # Serial Number search (supports comma-separated values)
-            serial_search = st.text_input(
-                "Search Serial Number(s):",
-                value=st.session_state.serial_search,
-                key="serial_search_input",
-                placeholder="Enter serial number(s), separate with commas..."
-            )
-
-        with filter_col3:
-            # Reset filters button
-            st.write("")  # Spacing
-            reset_clicked = st.button("🔄 Reset", key="reset_filters")
-        
-        # Handle reset BEFORE updating session state from widgets
-        if reset_clicked:
-            st.session_state.status_filter = all_statuses
-            st.session_state.serial_search = ""
-            st.rerun()
-        else:
-            # Only update session state from widget values if NOT resetting
-            st.session_state.status_filter = selected_statuses
-            st.session_state.serial_search = serial_search
-
-        # Apply filters
-        filtered_results = results.copy()
-
-        # Filter by status
-        if selected_statuses:
-            filtered_results = filtered_results[filtered_results['Pass/Fail'].isin(selected_statuses)]
-
-        # Filter by serial number search (supports comma-separated values)
-        if serial_search:
-            # Split by comma, strip whitespace, and filter out empty strings
-            serial_list = [s.strip() for s in serial_search.split(',') if s.strip()]
             
-            if serial_list:
-                # Create a mask that matches any of the serial numbers
-                mask = filtered_results['Serial Number'].str.contains('|'.join(serial_list), case=False, na=False, regex=True)
-                filtered_results = filtered_results[mask]
+            threshold_set = st.radio(
+                "Threshold Set:",
+                ["Standard", "High Range"],
+                help="Select the threshold criteria set"
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                submit_button = st.form_submit_button(
+                    "🔍 Analyze",
+                    use_container_width=True
+                )
+            with col2:
+                export_button = st.form_submit_button(
+                    "📊 Export",
+                    use_container_width=True
+                )
 
-        # Display filtered count
-        st.write(f"Showing {len(filtered_results)} of {len(results)} sensors")
-
-        # Add CSS for wrapped column headers
-        st.markdown("""
-        <style>
-        .stDataFrame div[data-testid="stDataFrameResizable"] div[data-testid="stDataFrameColHeader"] {
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            height: auto !important;
-            max-width: 100px !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # Display filtered results
-        st.dataframe(filtered_results, use_container_width=True)
-
-        # Show serial number plot if serial search is active
-        if serial_search and len(filtered_results) > 0:
-            st.markdown("---")
-            st.subheader("Filtered Serial Number Plot")
-            filtered_serials = filtered_results['Serial Number'].unique().tolist()
-            plot_serial_data(df, st.session_state.current_job, filtered_serials)
-
+# Main content area
+if len(df) > 0:
+    # Process analysis if submitted
+    if submit_button and job_number:
+        with st.spinner("Analyzing data..."):
+            analysis_info = analyze_job(df, job_number, threshold_set)
+            if analysis_info:
+                st.session_state.analysis_results = analysis_info
+                st.session_state.current_job = job_number
+                st.session_state.current_threshold = threshold_set
+    
+    # Display results if available
+    if st.session_state.analysis_results:
+        info = st.session_state.analysis_results
+        
+        # Quick Summary Cards
+        st.markdown("### 📊 Quick Summary")
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric(
+                label="Total Sensors",
+                value=f"{info['total_sensors']:,}",
+                delta=None
+            )
+        
+        with col2:
+            st.metric(
+                label="Pass Rate",
+                value=f"{info['pass_rate']:.1f}%",
+                delta=f"{info['passed_sensors']} passed"
+            )
+        
+        with col3:
+            st.metric(
+                label="Fail Rate",
+                value=f"{info['fail_rate']:.1f}%",
+                delta=f"{info['failed_sensors']} failed"
+            )
+        
+        with col4:
+            st.metric(
+                label="Data Missing",
+                value=f"{info['dm_sensors']}",
+                delta="Not counted"
+            )
+        
+        with col5:
+            st.metric(
+                label="Job(s)",
+                value=len(info['matched_jobs']),
+                delta=info['matched_jobs'][0].split('.')[0]
+            )
+        
         st.markdown("---")
-        st.subheader("Job Data Plot")
-        plot_job_data(df, st.session_state.current_job, st.session_state.current_threshold)
+        
+        # Create tabs for organized view
+        tab1, tab2, tab3, tab4 = st.tabs(["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"])
+        
+        with tab1:
+            # Enhanced visualization
+            fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
+            if fig:
+                st.pyplot(fig)
+                plt.close()
+        
+        with tab2:
+            # Data filters
+            st.markdown("#### 🔍 Filters")
+            col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+            
+            with col1:
+                status_filter = st.multiselect(
+                    "Status:",
+                    options=info['results']['Pass/Fail'].unique().tolist(),
+                    default=info['results']['Pass/Fail'].unique().tolist()
+                )
+            
+            with col2:
+                serial_search = st.text_input(
+                    "Serial Number(s):",
+                    placeholder="Comma-separated..."
+                )
+            
+            with col3:
+                channel_filter = st.selectbox(
+                    "Channel:",
+                    options=["All"] + sorted(info['results']['Channel'].unique().tolist()),
+                    index=0
+                )
+            
+            with col4:
+                st.write("")  # Spacer
+                if st.button("🔄 Reset Filters"):
+                    st.rerun()
+            
+            # Apply filters
+            filtered_data = info['results'].copy()
+            
+            if status_filter:
+                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(status_filter)]
+            
+            if serial_search:
+                serials = [s.strip() for s in serial_search.split(',') if s.strip()]
+                if serials:
+                    mask = filtered_data['Serial Number'].str.contains('|'.join(serials), case=False, na=False)
+                    filtered_data = filtered_data[mask]
+            
+            if channel_filter != "All":
+                filtered_data = filtered_data[filtered_data['Channel'] == channel_filter]
+            
+            # Display count
+            st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
+            
+            # Format display data
+            display_data = filtered_data.copy()
+            for col in display_data.columns:
+                if col.startswith('0s(') or col.startswith('90s(') or col.startswith('120s('):
+                    display_data[col] = display_data[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+                elif col == '120s(St.Dev.)':
+                    display_data[col] = display_data[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
+            
+            # Display table with styling
+            st.dataframe(
+                display_data,
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+        
+        with tab3:
+            # Status breakdown with visual chart
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                st.markdown("#### Status Distribution")
+                for status, count in info['status_counts'].items():
+                    if count > 0:
+                        pct = (count / info['total_sensors'] * 100)
+                        badge_html = create_status_badge(status)
+                        st.markdown(f"{badge_html} **{count}** ({pct:.1f}%)", unsafe_allow_html=True)
+            
+            with col2:
+                # Create pie chart for status distribution
+                fig, ax = plt.subplots(figsize=(8, 6))
+                
+                # Filter out zero counts
+                plot_labels = []
+                plot_sizes = []
+                plot_colors = []
+                
+                for status, count in info['status_counts'].items():
+                    if count > 0:
+                        plot_labels.append(f"{status} ({count})")
+                        plot_sizes.append(count)
+                        plot_colors.append(STATUS_COLORS.get(status, '#6c757d'))
+                
+                if plot_sizes:
+                    ax.pie(plot_sizes, labels=plot_labels, colors=plot_colors, 
+                          autopct='%1.1f%%', startangle=90)
+                    ax.set_title('Status Distribution', fontsize=14, fontweight='bold', pad=20)
+                    st.pyplot(fig)
+                    plt.close()
+        
+        with tab4:
+            # Threshold information
+            st.markdown("#### Current Threshold Settings")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"**Threshold Set:** {info['threshold_set']}")
+                st.markdown(f"**120s Voltage Range:** {info['thresholds']['min_120s']} - {info['thresholds']['max_120s']}V")
+                st.markdown(f"**Max Std Dev:** {info['thresholds']['max_std_dev']}V")
+            
+            with col2:
+                st.markdown(f"**% Change Range:** {info['thresholds']['min_pct_change']}% to {info['thresholds']['max_pct_change']}%")
+                st.markdown(f"**Applied to:** {info['total_sensors']} sensors")
+            
+            # Legend
+            st.markdown("---")
+            st.markdown("#### 📋 Status Code Reference")
+            
+            legend_data = {
+                'Code': ['FL', 'FH', 'OT-', 'TT', 'OT+', 'DM', 'PASS'],
+                'Description': [
+                    'Failed Low (< min voltage)',
+                    'Failed High (> max voltage)',
+                    'Out of Tolerance Negative (< min % change)',
+                    'Test-to-Test Variability (> max std dev)',
+                    'Out of Tolerance Positive (> max % change)',
+                    'Data Missing (not counted)',
+                    'All criteria met'
+                ],
+                'Category': ['FAIL', 'FAIL', 'PASS*', 'PASS*', 'PASS*', 'N/A', 'PASS']
+            }
+            
+            legend_df = pd.DataFrame(legend_data)
+            st.table(legend_df)
+            st.caption("*OT-, TT, and OT+ are counted as PASS in statistics")
+
 else:
+    # Welcome screen when no data is loaded
     st.info("👈 Please load data using the sidebar to begin analysis")
+    
+    # Show sample instructions
+    with st.expander("📖 How to use this tool"):
+        st.markdown("""
+        1. **Load your data** using the sidebar (CSV upload or database)
+        2. **Enter a Job Number** to analyze
+        3. **Select threshold criteria** (Standard or High Range)
+        4. **Click Analyze** to generate results
+        5. **Explore the tabs** for different views of your data
+        
+        The tool will automatically:
+        - Calculate pass/fail rates
+        - Show status breakdowns
+        - Generate visualizations
+        - Allow filtering and searching
+        """)
