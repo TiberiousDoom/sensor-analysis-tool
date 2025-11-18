@@ -374,6 +374,64 @@ def plot_job_data(df, job_number, threshold_set='Standard'):
     st.pyplot(fig)
     plt.close()
 
+def plot_individual_serial_data(df, job_number, serial_numbers):
+    """Generate individual plots for each serial number."""
+    if len(df) == 0 or not serial_numbers:
+        return
+
+    job_data = get_job_data(df, job_number)
+
+    if len(job_data) == 0:
+        return
+
+    # Filter for the specific serial numbers
+    serial_data = job_data[job_data['Serial Number'].isin(serial_numbers)]
+
+    if len(serial_data) == 0:
+        st.warning("No data found for the filtered serial numbers")
+        return
+
+    # Create individual plot for each serial number
+    for serial in serial_numbers:
+        serial_rows = serial_data[serial_data['Serial Number'] == serial]
+
+        if len(serial_rows) == 0:
+            continue
+
+        # Create a figure for this serial number
+        fig, ax = plt.subplots(figsize=(12, 5))
+
+        # Use different colors for each channel/row
+        colors = plt.cm.tab20(np.linspace(0, 1, len(serial_rows)))
+
+        for row_idx, (_, row) in enumerate(serial_rows.iterrows()):
+            test_readings = []
+            test_times = []
+            for time_point in TIME_POINTS:
+                if time_point in row and pd.notna(row[time_point]):
+                    test_readings.append(row[time_point])
+                    test_times.append(float(time_point))
+
+            if test_readings:
+                # Create label with channel info if available
+                channel = row.get('Channel', 'N/A')
+                label = f"Channel {channel}"
+                ax.plot(test_times, test_readings, '-o', color=colors[row_idx],
+                       label=label, linewidth=2, markersize=6, alpha=0.7)
+
+        ax.set_title(f"Serial Number: {serial}", fontsize=14, fontweight='bold')
+        ax.set_xlabel('Time (seconds)', fontsize=12)
+        ax.set_ylabel('Voltage (V)', fontsize=12)
+        ax.set_ylim(0, 5)
+        ax.set_yticks(np.arange(0, 5.5, 0.5))
+        ax.grid(True, alpha=0.3, which='both')
+
+        if len(serial_rows) > 1:
+            ax.legend(loc='best', fontsize=10)
+
+        st.pyplot(fig)
+        plt.close()
+
 def plot_serial_data(df, job_number, serial_numbers):
     """Generate plot for specific serial numbers."""
     if len(df) == 0 or not serial_numbers:
@@ -560,11 +618,18 @@ if len(df) > 0:
         # Display filtered results
         st.dataframe(filtered_results, use_container_width=True)
 
-        # Show serial number plot if serial search is active
+        # Show serial number plots if serial search is active
         if serial_search and len(filtered_results) > 0:
-            st.markdown("---")
-            st.subheader("Filtered Serial Number Plot")
             filtered_serials = filtered_results['Serial Number'].unique().tolist()
+
+            st.markdown("---")
+            st.subheader("Individual Serial Number Plots")
+            st.caption("Detailed view of each filtered serial number")
+            plot_individual_serial_data(df, st.session_state.current_job, filtered_serials)
+
+            st.markdown("---")
+            st.subheader("Combined Serial Number Plot")
+            st.caption("All filtered serial numbers on a single graph")
             plot_serial_data(df, st.session_state.current_job, filtered_serials)
 
         st.markdown("---")
