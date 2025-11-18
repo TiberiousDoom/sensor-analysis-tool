@@ -840,32 +840,55 @@ if len(df) > 0:
         with tab2:
             # Data filters
             st.markdown("#### 🔍 Filters")
-            col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+            col1, col2, col3 = st.columns([3, 3, 1])
+            
+            # Initialize filter states
+            if 'filter_reset' not in st.session_state:
+                st.session_state.filter_reset = False
             
             with col1:
+                # Get unique Pass/Fail statuses
+                all_statuses = sorted(info['results']['Pass/Fail'].unique().tolist())
+                
+                # Reset to all statuses if reset was clicked
+                if st.session_state.filter_reset:
+                    default_statuses = all_statuses
+                else:
+                    default_statuses = st.session_state.get('selected_statuses', all_statuses)
+                
                 status_filter = st.multiselect(
                     "Status:",
-                    options=info['results']['Pass/Fail'].unique().tolist(),
-                    default=info['results']['Pass/Fail'].unique().tolist()
+                    options=all_statuses,
+                    default=default_statuses,
+                    key="status_multiselect"
                 )
+                st.session_state.selected_statuses = status_filter
             
             with col2:
+                # Serial Number search
+                if st.session_state.filter_reset:
+                    default_search = ""
+                    st.session_state.serial_search = ""
+                else:
+                    default_search = st.session_state.get('serial_search', "")
+                
                 serial_search = st.text_input(
                     "Serial Number(s):",
-                    placeholder="Comma-separated..."
+                    value=default_search,
+                    placeholder="Comma-separated...",
+                    key="serial_search_input"
                 )
+                st.session_state.serial_search = serial_search
             
             with col3:
-                channel_filter = st.selectbox(
-                    "Channel:",
-                    options=["All"] + sorted(info['results']['Channel'].unique().tolist()),
-                    index=0
-                )
-            
-            with col4:
                 st.write("")  # Spacer
-                if st.button("🔄 Reset Filters"):
+                if st.button("🔄 Reset Filters", key="reset_btn"):
+                    st.session_state.filter_reset = True
                     st.rerun()
+            
+            # Reset the flag after using it
+            if st.session_state.filter_reset:
+                st.session_state.filter_reset = False
             
             # Apply filters
             filtered_data = info['results'].copy()
@@ -878,9 +901,6 @@ if len(df) > 0:
                 if serials:
                     mask = filtered_data['Serial Number'].str.contains('|'.join(serials), case=False, na=False)
                     filtered_data = filtered_data[mask]
-            
-            if channel_filter != "All":
-                filtered_data = filtered_data[filtered_data['Channel'] == channel_filter]
             
             # Display count
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
@@ -914,8 +934,8 @@ if len(df) > 0:
                         st.markdown(f"{badge_html} **{count}** ({pct:.1f}%)", unsafe_allow_html=True)
             
             with col2:
-                # Create pie chart for status distribution with enhanced colors
-                fig, ax = plt.subplots(figsize=(8, 6))
+                # Create pie chart for status distribution with enhanced colors and leader lines
+                fig, ax = plt.subplots(figsize=(10, 7))
                 
                 # Set background based on theme
                 fig.patch.set_facecolor('#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
@@ -939,27 +959,92 @@ if len(df) > 0:
                 
                 for status, count in info['status_counts'].items():
                     if count > 0:
-                        plot_labels.append(f"{status} ({count})")
+                        plot_labels.append(f"{status}\n({count})")
                         plot_sizes.append(count)
                         plot_colors.append(ENHANCED_COLORS.get(status, '#6c757d'))
                 
                 if plot_sizes:
+                    # Create pie chart with exploded slices for small segments
+                    explode = []
+                    for size in plot_sizes:
+                        # Explode small slices slightly for better visibility
+                        if size / sum(plot_sizes) < 0.05:  # Less than 5%
+                            explode.append(0.1)
+                        else:
+                            explode.append(0.02)
+                    
                     wedges, texts, autotexts = ax.pie(
-                        plot_sizes, labels=plot_labels, colors=plot_colors, 
-                        autopct='%1.1f%%', startangle=90,
-                        textprops={'weight': 'bold', 'size': 10}
+                        plot_sizes, 
+                        labels=None,  # We'll add labels manually with leader lines
+                        colors=plot_colors, 
+                        autopct='%1.1f%%', 
+                        startangle=90,
+                        explode=explode,
+                        textprops={'weight': 'bold', 'size': 11},
+                        pctdistance=0.85
                     )
                     
-                    # Enhance text visibility for dark mode
-                    text_color = 'white' if st.get_option('theme.base') == 'dark' else 'black'
-                    for text in texts:
-                        text.set_color(text_color)
+                    # Add labels with leader lines
+                    bbox_props = dict(boxstyle="round,pad=0.3", fc="white", ec="gray", lw=0.5, alpha=0.8)
+                    if st.get_option('theme.base') == 'dark':
+                        bbox_props = dict(boxstyle="round,pad=0.3", fc="#2d2d2d", ec="gray", lw=0.5, alpha=0.9)
+                    
+                    # Calculate positions for labels with leader lines
+                    for i, (wedge, label) in enumerate(zip(wedges, plot_labels)):
+                        ang = (wedge.theta2 - wedge.theta1) / 2. + wedge.theta1
+                        y = np.sin(np.deg2rad(ang))
+                        x = np.cos(np.deg2rad(ang))
+                        
+                        # Position labels further out for better spacing
+                        horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
+                        connectionstyle = f"angle,angleA=0,angleB={ang}"
+                        
+                        # Only add leader lines for smaller slices or when needed for clarity
+                        if plot_sizes[i] / sum(plot_sizes) < 0.15:  # Less than 15%
+                            ax.annotate(
+                                label,
+                                xy=(x, y),
+                                xytext=(1.4*np.sign(x), 1.4*y),
+                                horizontalalignment=horizontalalignment,
+                                size=10,
+                                weight='bold',
+                                color='white' if st.get_option('theme.base') == 'dark' else 'black',
+                                bbox=bbox_props,
+                                arrowprops=dict(
+                                    arrowstyle="-",
+                                    connectionstyle=connectionstyle,
+                                    color='gray',
+                                    lw=1
+                                )
+                            )
+                    
+                    # Enhance text visibility for percentages
                     for autotext in autotexts:
                         autotext.set_color('white')
+                        autotext.set_fontsize(10)
+                        autotext.set_weight('bold')
                         autotext.set_path_effects([path_effects.withStroke(linewidth=2, foreground='black')])
                     
-                    ax.set_title('Status Distribution', fontsize=14, fontweight='bold', pad=20,
+                    # Add a subtle border to the pie chart
+                    centre_circle = plt.Circle((0, 0), 0.70, fc='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
+                    fig.gca().add_artist(centre_circle)
+                    
+                    ax.set_title('Status Distribution', fontsize=16, fontweight='bold', pad=20,
                                color='white' if st.get_option('theme.base') == 'dark' else 'black')
+                    
+                    # Add a legend for clarity
+                    ax.legend(
+                        wedges, 
+                        [f"{label.split()[0]}" for label in plot_labels],
+                        title="Status",
+                        loc="center left",
+                        bbox_to_anchor=(1, 0, 0.5, 1),
+                        framealpha=0.9,
+                        facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white',
+                        edgecolor='gray'
+                    )
+                    
+                    plt.tight_layout()
                     st.pyplot(fig)
                     plt.close()
         
