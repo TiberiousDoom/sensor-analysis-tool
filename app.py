@@ -695,9 +695,9 @@ def plot_individual_serial_data(df, job_number, serial_numbers):
                     test_times.append(float(time_point))
 
             if test_readings:
-                # Create label with channel info if available
-                channel = row.get('Channel', 'N/A')
-                label = f"Channel {channel}"
+                # Create label with test number
+                test_num = row_idx + 1
+                label = f"Test {test_num}"
                 ax.plot(test_times, test_readings, '-o', color=colors[row_idx],
                        label=label, linewidth=2, markersize=6, alpha=0.7)
 
