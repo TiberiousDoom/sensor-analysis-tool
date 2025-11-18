@@ -170,45 +170,6 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
     
-    /* Sidebar with better visibility */
-    section[data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.98);
-        box-shadow: 2px 0 10px rgba(0,0,0,0.08);
-    }
-    
-    /* Enhanced success/error messages */
-    .stSuccess {
-        background: #10b981;
-        color: white;
-        border-radius: 10px;
-        padding: 1rem;
-        font-weight: 600;
-    }
-    
-    .stError {
-        background: #ef4444;
-        color: white;
-        border-radius: 10px;
-        padding: 1rem;
-        font-weight: 600;
-    }
-    
-    .stWarning {
-        background: #f59e0b;
-        color: white;
-        border-radius: 10px;
-        padding: 1rem;
-        font-weight: 600;
-    }
-    
-    .stInfo {
-        background: #3b82f6;
-        color: white;
-        border-radius: 10px;
-        padding: 1rem;
-        font-weight: 600;
-    }
-    
     /* Tab styling with better contrast */
     .stTabs [data-baseweb="tab-list"] {
         gap: 24px;
@@ -230,70 +191,6 @@ st.markdown("""
         color: white !important;
         border: none;
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-    
-    /* Data table improvements */
-    .dataframe {
-        font-size: 14px;
-        background: white;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    
-    .dataframe tbody tr:hover {
-        background-color: rgba(102, 126, 234, 0.1) !important;
-    }
-    
-    /* Info cards */
-    .info-card {
-        background: rgba(255, 255, 255, 0.95);
-        padding: 1.2rem;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        border: 1px solid rgba(102, 126, 234, 0.2);
-        margin-bottom: 1rem;
-    }
-    
-    .status-card {
-        background: rgba(255, 255, 255, 0.95);
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin-bottom: 0.8rem;
-        border: 1px solid #e0e0e0;
-        transition: transform 0.2s ease;
-    }
-    
-    .status-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white !important;
-        border-radius: 10px;
-        font-weight: 600;
-    }
-    
-    /* Select box styling */
-    div[data-baseweb="select"] > div {
-        background-color: rgba(255, 255, 255, 0.95);
-        border: 2px solid #667eea;
-        border-radius: 10px;
-    }
-    
-    /* Input field styling */
-    input[type="text"] {
-        border: 2px solid #667eea !important;
-        border-radius: 10px !important;
-        padding: 0.5rem !important;
-        font-weight: 500 !important;
-    }
-    
-    input[type="text"]:focus {
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -828,94 +725,75 @@ if len(df) > 0:
         
         st.markdown("---")
         
-        # Create tabs for organized view
-        tab1, tab2, tab3, tab4 = st.tabs(["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"])
+        # Create tabs without state preservation issues
+        tab_list = ["📈 Visualization", "📋 Data Table", "📊 Status Breakdown", "ℹ️ Thresholds"]
+        tabs = st.tabs(tab_list)
         
-        with tab1:
+        # Tab 1: Visualization
+        with tabs[0]:
             # Enhanced visualization
             fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
             if fig:
                 st.pyplot(fig)
                 plt.close()
         
-        with tab2:
-            # Data filters
+        # Tab 2: Data Table with simple filters
+        with tabs[1]:
             st.markdown("#### 🔍 Filters")
             
             # Get unique Pass/Fail statuses
             all_statuses = sorted(info['results']['Pass/Fail'].unique().tolist())
             
-            # Initialize session state for filters if not exists
-            if 'selected_statuses' not in st.session_state:
-                st.session_state.selected_statuses = all_statuses
-            if 'serial_text' not in st.session_state:
-                st.session_state.serial_text = ""
+            # Create simple filter columns without complex state management
+            col1, col2 = st.columns([3, 3])
             
-            # Create form to prevent rerun on every change
-            with st.form(key="filter_form"):
-                col1, col2 = st.columns([3, 3])
-                
-                with col1:
-                    # Status filter multiselect
-                    selected_statuses = st.multiselect(
-                        "Status:",
-                        options=all_statuses,
-                        default=st.session_state.selected_statuses
-                    )
-                
-                with col2:
-                    # Serial number search
-                    serial_text = st.text_input(
-                        "Serial Number(s):",
-                        value=st.session_state.serial_text,
-                        placeholder="Comma-separated..."
-                    )
-                
-                # Form buttons
-                col3, col4, col5 = st.columns([2, 1, 3])
-                with col3:
-                    apply_filters = st.form_submit_button("✅ Apply Filters", type="primary")
-                with col4:
-                    reset_filters = st.form_submit_button("🔄 Reset", type="secondary")
+            with col1:
+                # Allow empty default selection if user previously filtered
+                selected_statuses = st.pills(
+                    "Select Status:",
+                    options=all_statuses,
+                    default=all_statuses,
+                    selection_mode="multi"
+                )
             
-            # Handle filter actions
-            if apply_filters:
-                st.session_state.selected_statuses = selected_statuses
-                st.session_state.serial_text = serial_text
+            with col2:
+                serial_text = st.text_input(
+                    "Serial Number(s):",
+                    placeholder="Enter serial numbers separated by commas..."
+                )
             
-            if reset_filters:
-                st.session_state.selected_statuses = all_statuses
-                st.session_state.serial_text = ""
-                st.rerun()
+            # Note about filters
+            st.caption("💡 Filters apply automatically. Remove status pills or clear text to reset.")
             
-            # Apply filters to data using session state values
+            # Apply filters
             filtered_data = info['results'].copy()
             
             # Apply status filter
-            if st.session_state.selected_statuses:
-                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(st.session_state.selected_statuses)]
+            if selected_statuses:
+                filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(selected_statuses)]
+            else:
+                filtered_data = pd.DataFrame(columns=filtered_data.columns)
             
-            # Apply serial number filter
-            if st.session_state.serial_text:
-                serials = [s.strip() for s in st.session_state.serial_text.split(',') if s.strip()]
+            # Apply serial filter
+            if serial_text:
+                serials = [s.strip() for s in serial_text.split(',') if s.strip()]
                 if serials:
-                    # Create regex pattern for matching
                     pattern = '|'.join([re.escape(s) for s in serials])
                     mask = filtered_data['Serial Number'].str.contains(pattern, case=False, na=False, regex=True)
                     filtered_data = filtered_data[mask]
             
-            # Display count
+            # Display results count
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
             
-            # Format display data
+            # Format and display data
             display_data = filtered_data.copy()
-            for col in display_data.columns:
-                if col.startswith('0s(') or col.startswith('90s(') or col.startswith('120s('):
-                    display_data[col] = display_data[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
-                elif col == '120s(St.Dev.)':
-                    display_data[col] = display_data[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
+            if len(display_data) > 0:
+                for col in display_data.columns:
+                    if col.startswith('0s(') or col.startswith('90s(') or col.startswith('120s('):
+                        display_data[col] = display_data[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+                    elif col == '120s(St.Dev.)':
+                        display_data[col] = display_data[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
             
-            # Display table with styling
             st.dataframe(
                 display_data,
                 use_container_width=True,
@@ -923,7 +801,8 @@ if len(df) > 0:
                 height=400
             )
         
-        with tab3:
+        # Tab 3: Status Breakdown
+        with tabs[2]:
             # Status breakdown with visual chart
             col1, col2 = st.columns([1, 2])
             
@@ -936,27 +815,26 @@ if len(df) > 0:
                         st.markdown(f"{badge_html} **{count}** ({pct:.1f}%)", unsafe_allow_html=True)
             
             with col2:
-                # Create pie chart for status distribution with enhanced colors and leader lines
+                # Enhanced pie chart
                 fig, ax = plt.subplots(figsize=(10, 7))
                 
-                # Set background based on theme
+                # Set background
                 fig.patch.set_facecolor('#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
                 ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
                 
-                # Filter out zero counts
+                # Prepare data
                 plot_labels = []
                 plot_sizes = []
                 plot_colors = []
                 
-                # Enhanced color mapping for better visibility
                 ENHANCED_COLORS = {
-                    'PASS': '#10b981',  # Emerald green
-                    'FL': '#ef4444',    # Red
-                    'FH': '#dc2626',    # Dark red
-                    'OT-': '#f59e0b',   # Amber
-                    'TT': '#eab308',    # Yellow
-                    'OT+': '#fb923c',   # Orange
-                    'DM': '#6b7280'     # Gray
+                    'PASS': '#10b981',
+                    'FL': '#ef4444',
+                    'FH': '#dc2626',
+                    'OT-': '#f59e0b',
+                    'TT': '#eab308',
+                    'OT+': '#fb923c',
+                    'DM': '#6b7280'
                 }
                 
                 for status, count in info['status_counts'].items():
@@ -966,92 +844,40 @@ if len(df) > 0:
                         plot_colors.append(ENHANCED_COLORS.get(status, '#6c757d'))
                 
                 if plot_sizes:
-                    # Create pie chart with exploded slices for small segments
-                    explode = []
-                    for size in plot_sizes:
-                        # Explode small slices slightly for better visibility
-                        if size / sum(plot_sizes) < 0.05:  # Less than 5%
-                            explode.append(0.1)
-                        else:
-                            explode.append(0.02)
+                    # Create exploded pie for small slices
+                    explode = [0.1 if size/sum(plot_sizes) < 0.05 else 0.02 for size in plot_sizes]
                     
                     wedges, texts, autotexts = ax.pie(
-                        plot_sizes, 
-                        labels=None,  # We'll add labels manually with leader lines
-                        colors=plot_colors, 
-                        autopct='%1.1f%%', 
+                        plot_sizes,
+                        labels=plot_labels,
+                        colors=plot_colors,
+                        autopct='%1.1f%%',
                         startangle=90,
                         explode=explode,
                         textprops={'weight': 'bold', 'size': 11},
                         pctdistance=0.85
                     )
                     
-                    # Add labels with leader lines
-                    bbox_props = dict(boxstyle="round,pad=0.3", fc="white", ec="gray", lw=0.5, alpha=0.8)
-                    if st.get_option('theme.base') == 'dark':
-                        bbox_props = dict(boxstyle="round,pad=0.3", fc="#2d2d2d", ec="gray", lw=0.5, alpha=0.9)
-                    
-                    # Calculate positions for labels with leader lines
-                    for i, (wedge, label) in enumerate(zip(wedges, plot_labels)):
-                        ang = (wedge.theta2 - wedge.theta1) / 2. + wedge.theta1
-                        y = np.sin(np.deg2rad(ang))
-                        x = np.cos(np.deg2rad(ang))
-                        
-                        # Position labels further out for better spacing
-                        horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
-                        connectionstyle = f"angle,angleA=0,angleB={ang}"
-                        
-                        # Only add leader lines for smaller slices or when needed for clarity
-                        if plot_sizes[i] / sum(plot_sizes) < 0.15:  # Less than 15%
-                            ax.annotate(
-                                label,
-                                xy=(x, y),
-                                xytext=(1.4*np.sign(x), 1.4*y),
-                                horizontalalignment=horizontalalignment,
-                                size=10,
-                                weight='bold',
-                                color='white' if st.get_option('theme.base') == 'dark' else 'black',
-                                bbox=bbox_props,
-                                arrowprops=dict(
-                                    arrowstyle="-",
-                                    connectionstyle=connectionstyle,
-                                    color='gray',
-                                    lw=1
-                                )
-                            )
-                    
-                    # Enhance text visibility for percentages
+                    # Style text
+                    for text in texts:
+                        text.set_color('white' if st.get_option('theme.base') == 'dark' else 'black')
                     for autotext in autotexts:
                         autotext.set_color('white')
-                        autotext.set_fontsize(10)
-                        autotext.set_weight('bold')
                         autotext.set_path_effects([path_effects.withStroke(linewidth=2, foreground='black')])
                     
-                    # Add a subtle border to the pie chart
+                    # Add donut hole
                     centre_circle = plt.Circle((0, 0), 0.70, fc='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
                     fig.gca().add_artist(centre_circle)
                     
                     ax.set_title('Status Distribution', fontsize=16, fontweight='bold', pad=20,
                                color='white' if st.get_option('theme.base') == 'dark' else 'black')
                     
-                    # Add a legend for clarity
-                    ax.legend(
-                        wedges, 
-                        [f"{label.split()[0]}" for label in plot_labels],
-                        title="Status",
-                        loc="center left",
-                        bbox_to_anchor=(1, 0, 0.5, 1),
-                        framealpha=0.9,
-                        facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white',
-                        edgecolor='gray'
-                    )
-                    
                     plt.tight_layout()
                     st.pyplot(fig)
                     plt.close()
         
-        with tab4:
-            # Threshold information
+        # Tab 4: Thresholds
+        with tabs[3]:
             st.markdown("#### Current Threshold Settings")
             
             col1, col2 = st.columns(2)
@@ -1088,10 +914,9 @@ if len(df) > 0:
             st.caption("*OT-, TT, and OT+ are counted as PASS in statistics")
 
 else:
-    # Welcome screen when no data is loaded
+    # Welcome screen
     st.info("👈 Please load data using the sidebar to begin analysis")
     
-    # Show sample instructions
     with st.expander("📖 How to use this tool"):
         st.markdown("""
         1. **Load your data** using the sidebar (CSV upload or database)
