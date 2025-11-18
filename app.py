@@ -277,9 +277,12 @@ def calculate_metrics(df):
     """Calculate key metrics for sensor readings."""
     metrics = df.copy()
 
-    # Calculate percentage change between 90s and 120s
-    if '90' in df.columns and '120' in df.columns and '0' in df.columns:
-        metrics['pct_change_90_120'] = ((df['120'] - df['90']) / (df['90'] - df['0']) * 100).replace([np.inf, -np.inf], np.nan)
+    # Calculate percentage change: (120s - 90s) / (90s - 0s) * 100
+    if '0' in df.columns and '90' in df.columns and '120' in df.columns:
+        denominator = df['90'] - df['0']
+        # Avoid division by zero
+        denominator = denominator.replace(0, np.nan)
+        metrics['pct_change_90_120'] = ((df['120'] - df['90']) / denominator * 100).replace([np.inf, -np.inf], np.nan)
 
     return metrics
 
@@ -529,190 +532,166 @@ def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     
     return fig
 
-def analyze_job(df, job_number, threshold_set='Standard'):
-    """Analyze data for a specific job number."""
-    if len(df) == 0:
-        st.error("No data loaded. Please load data first.")
-        return None
+def create_status_flowchart():
+    """Generate the status determination logic flowchart."""
+    # Color scheme
+    color_start = '#667eea'
+    color_process = '#4ECDC4'
+    color_decision = '#FFD93D'
+    color_result = '#FF6B6B'
+    color_final = '#95E1D3'
+    
+    def draw_box(ax, x, y, width, height, text, color, fontsize=10, bold=False):
+        """Draw a rounded rectangle with text"""
+        from matplotlib.patches import FancyBboxPatch
+        box = FancyBboxPatch((x, y), width, height, 
+                              boxstyle="round,pad=0.1", 
+                              edgecolor='black', 
+                              facecolor=color, 
+                              linewidth=2)
+        ax.add_patch(box)
+        weight = 'bold' if bold else 'normal'
+        ax.text(x + width/2, y + height/2, text, 
+                ha='center', va='center', 
+                fontsize=fontsize, weight=weight,
+                wrap=True)
+    
+    def draw_arrow(ax, x1, y1, x2, y2):
+        """Draw an arrow between two points"""
+        from matplotlib.patches import FancyArrowPatch
+        arrow = FancyArrowPatch((x1, y1), (x2, y2),
+                               arrowstyle='->', 
+                               mutation_scale=20, 
+                               linewidth=2,
+                               color='black')
+        ax.add_patch(arrow)
+    
+    def draw_label(ax, x, y, text, fontsize=9):
+        """Draw a label at a specific position"""
+        ax.text(x, y, text, fontsize=fontsize, style='italic', 
+                ha='center', va='center',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='none', alpha=0.8))
+    
+    # Create figure
+    fig, ax = plt.subplots(1, 1, figsize=(14, 20))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(-2, 21)
+    ax.axis('off')
+    
+    # Title
+    ax.text(5, 20, 'Sensor Status Determination Logic', 
+            ha='center', fontsize=16, weight='bold')
+    
+    # Start
+    draw_box(ax, 3.5, 18.5, 3, 0.8, 'START\n(Per Serial Number)', color_start, fontsize=11, bold=True)
+    draw_arrow(ax, 5, 18.5, 5, 17.8)
+    
+    # Step 1
+    draw_box(ax, 2.5, 17, 5, 0.7, 'Collect all 120s readings\nfrom all tests', color_process, fontsize=9)
+    draw_arrow(ax, 5, 17, 5, 16.3)
+    
+    # Step 2
+    draw_box(ax, 2.5, 15.5, 5, 0.7, 'Calculate std_dev_120\nacross all tests', color_process, fontsize=9)
+    draw_arrow(ax, 5, 15.5, 5, 14.8)
+    
+    # Step 3
+    draw_box(ax, 2, 14, 6, 0.7, 'FOR EACH TEST (T1, T2, T3...)', color_start, fontsize=10, bold=True)
+    draw_arrow(ax, 5, 14, 5, 13.3)
+    
+    # Check 1
+    draw_box(ax, 2.5, 12.5, 5, 0.7, '120s reading < 1.5V?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 12.85, 1.5, 12.85)
+    draw_label(ax, 2.0, 13.05, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 12.5, 1.1, 0.4, 'Add FL', color_result, fontsize=8)
+    draw_arrow(ax, 5, 12.5, 5, 11.8)
+    draw_label(ax, 5.3, 12.15, 'NO', fontsize=8)
+    
+    # Check 2
+    draw_box(ax, 2.5, 11.0, 5, 0.7, '120s reading > 4.9V?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 11.35, 1.5, 11.35)
+    draw_label(ax, 2.0, 11.55, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 11.0, 1.1, 0.4, 'Add FH', color_result, fontsize=8)
+    draw_arrow(ax, 5, 11.0, 5, 10.3)
+    draw_label(ax, 5.3, 10.65, 'NO', fontsize=8)
+    
+    # Check 3
+    draw_box(ax, 2.5, 9.5, 5, 0.7, '120s reading missing?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 9.85, 1.5, 9.85)
+    draw_label(ax, 2.0, 10.05, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 9.5, 1.1, 0.4, 'Add DM', color_result, fontsize=8)
+    draw_arrow(ax, 5, 9.5, 5, 8.8)
+    
+    # Step 4
+    draw_box(ax, 2.5, 8, 5, 0.7, 'Calculate % Change:\n(120s - 90s) / (90s - 0s) × 100', color_process, fontsize=8)
+    draw_arrow(ax, 5, 8, 5, 7.3)
+    
+    # Check 4
+    draw_box(ax, 2.5, 6.5, 5, 0.7, '% Change < -6%?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 6.85, 1.5, 6.85)
+    draw_label(ax, 2.0, 7.05, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 6.5, 1.1, 0.4, 'Add OT-', color_result, fontsize=8)
+    draw_arrow(ax, 5, 6.5, 5, 5.8)
+    draw_label(ax, 5.3, 6.15, 'NO', fontsize=8)
+    
+    # Check 5
+    draw_box(ax, 2.5, 5.0, 5, 0.7, '% Change > 30%?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 5.35, 1.5, 5.35)
+    draw_label(ax, 2.0, 5.55, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 5.0, 1.1, 0.4, 'Add OT+', color_result, fontsize=8)
+    draw_arrow(ax, 5, 5.0, 5, 4.3)
+    
+    # End of test loop
+    draw_box(ax, 2.5, 3.5, 5, 0.7, 'Collect all failure codes\nfrom this test', color_process, fontsize=9)
+    draw_arrow(ax, 5, 3.5, 5, 2.8)
+    
+    # Loop back arrow
+    loop_x = 8.2
+    ax.plot([loop_x, loop_x], [3.85, 13.35], 'k-', linewidth=2)
+    ax.plot([loop_x, 7.9], [13.35, 13.35], 'k-', linewidth=2)
+    ax.plot([loop_x, 7.9], [3.85, 3.85], 'k-', linewidth=2)
+    ax.annotate('', xy=(7.9, 13.35), xytext=(loop_x, 13.35),
+                arrowprops=dict(arrowstyle='->', lw=2, color='black'))
+    ax.text(8.7, 8.6, 'LOOP\nBACK', ha='center', fontsize=8, style='italic')
+    
+    # Step 5
+    draw_box(ax, 2.5, 2.0, 5, 0.7, 'std_dev_120 > 0.3V?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 2.35, 1.5, 2.35)
+    draw_label(ax, 2.0, 2.55, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 2.0, 1.1, 0.4, 'Add TT', color_result, fontsize=8)
+    draw_arrow(ax, 5, 2.0, 5, 1.3)
+    
+    # Step 6
+    draw_box(ax, 2, 0.5, 6, 0.7, 'Sort all failure codes by priority:\nFL > FH > OT- > TT > OT+ > DM > PASS', color_process, fontsize=8)
+    draw_arrow(ax, 5, 0.5, 5, -0.2)
+    
+    # Final result
+    draw_box(ax, 3, -1.0, 4, 0.7, 'Pass/Fail = Highest Priority Code', color_final, fontsize=10, bold=True)
+    
+    # Legend
+    legend_elements = [
+        mpatches.Patch(color=color_start, label='Start/Loop'),
+        mpatches.Patch(color=color_process, label='Process'),
+        mpatches.Patch(color=color_decision, label='Decision'),
+        mpatches.Patch(color=color_result, label='Status Code'),
+        mpatches.Patch(color=color_final, label='Final Result')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=9)
+    
+    # Example box
+    example_text = """Example (Standard Thresholds):
+Test 1: 120s=1.2V (FL), %Chg=5%
+Test 2: 120s=1.8V, %Chg=35% (OT+)
+Test 3: 120s=1.5V, %Chg=8%
+std_dev=0.35V (TT triggered)
 
-    if 'Job #' not in df.columns:
-        st.error("Error: Job # column not found in data")
-        return None
-
-def create_enhanced_plot(df, job_number, threshold_set='Standard'):
-    """Generate enhanced visualization for a specific job with dark mode compatibility."""
-    job_data = get_job_data(df, job_number)
+Codes: FL, OT+, TT
+Result: FL (highest priority)"""
     
-    if len(job_data) == 0:
-        return None
+    draw_box(ax, 0.2, -1.8, 2.5, 2.5, example_text, '#E8F5E9', fontsize=12)
     
-    matched_jobs = sorted(job_data['Job #'].unique())
-    thresholds = THRESHOLDS[threshold_set]
-    
-    # Aggregate data
-    time_data = []
-    for time_point in TIME_POINTS:
-        if time_point in job_data.columns:
-            readings = job_data[time_point].dropna()
-            if len(readings) > 0:
-                time_data.append({
-                    'time': float(time_point),
-                    'mean': readings.mean(),
-                    'std': readings.std(),
-                    'p5': readings.quantile(0.05),
-                    'p95': readings.quantile(0.95),
-                    'p25': readings.quantile(0.25),
-                    'p75': readings.quantile(0.75)
-                })
-    
-    if not time_data:
-        return None
-    
-    df_plot = pd.DataFrame(time_data)
-    
-    # Set style for better visibility
-    plt.style.use('dark_background' if st.get_option('theme.base') == 'dark' else 'default')
-    
-    # Create figure with subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), facecolor='#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
-    
-    # Set background colors based on theme
-    for ax in [ax1, ax2]:
-        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
-    
-    # Main trend plot (left) with vibrant colors
-    ax1.fill_between(df_plot['time'], df_plot['p5'], df_plot['p95'],
-                     alpha=0.2, color='#7c8bff', label='5th-95th Percentile')
-    ax1.fill_between(df_plot['time'], df_plot['p25'], df_plot['p75'],
-                     alpha=0.3, color='#9b67d6', label='25th-75th Percentile')
-    ax1.fill_between(df_plot['time'], df_plot['mean'] - df_plot['std'],
-                     df_plot['mean'] + df_plot['std'],
-                     alpha=0.4, color='#667eea', label='±1 Std Dev')
-    
-    # Mean line with markers
-    ax1.plot(df_plot['time'], df_plot['mean'], 'o-', color='#00ff88', 
-             linewidth=3, markersize=8, label='Mean', zorder=10,
-             markeredgecolor='white', markeredgewidth=1)
-    
-    # Add threshold lines
-    ax1.axhline(y=thresholds['min_120s'], color='#ff4444', linestyle='--', 
-                alpha=0.7, linewidth=2, label=f'Min Threshold ({thresholds["min_120s"]}V)')
-    ax1.axhline(y=thresholds['max_120s'], color='#ff4444', linestyle='--', 
-                alpha=0.7, linewidth=2, label=f'Max Threshold ({thresholds["max_120s"]}V)')
-    
-    # Formatting
-    ax1.set_title('Sensor Readings Over Time', fontsize=14, fontweight='bold', pad=20, 
-                  color='white' if st.get_option('theme.base') == 'dark' else 'black')
-    ax1.set_xlabel('Time (seconds)', fontsize=12)
-    ax1.set_ylabel('Voltage (V)', fontsize=12)
-    ax1.set_ylim(0, 5)
-    ax1.set_xlim(-5, 125)
-    ax1.grid(True, alpha=0.3, linestyle='--', color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
-    ax1.legend(loc='best', framealpha=0.9, facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
-    
-    # Box plot for 120s readings (right)
-    if '120' in job_data.columns:
-        readings_120 = job_data['120'].dropna()
-        bp = ax2.boxplot([readings_120], vert=True, patch_artist=True,
-                         widths=0.6, showmeans=True, meanline=True)
-        
-        # Style the boxplot with vibrant colors
-        for patch in bp['boxes']:
-            patch.set_facecolor('#7c8bff')
-            patch.set_alpha(0.8)
-            patch.set_edgecolor('white')
-            patch.set_linewidth(1.5)
-        
-        # Style whiskers and caps
-        for item in ['whiskers', 'caps']:
-            plt.setp(bp[item], color='white', linewidth=1.5)
-        
-        # Style medians
-        plt.setp(bp['medians'], color='#00ff88', linewidth=2)
-        
-        # Add threshold regions
-        ax2.axhspan(0, thresholds['min_120s'], alpha=0.2, color='#ff4444', label='Fail Low')
-        ax2.axhspan(thresholds['max_120s'], 5, alpha=0.2, color='#ff4444', label='Fail High')
-        ax2.axhspan(thresholds['min_120s'], thresholds['max_120s'], alpha=0.2, 
-                   color='#00ff88', label='Pass Range')
-        
-        ax2.set_title('120s Reading Distribution', fontsize=14, fontweight='bold', pad=20,
-                     color='white' if st.get_option('theme.base') == 'dark' else 'black')
-        ax2.set_ylabel('Voltage (V)', fontsize=12)
-        ax2.set_ylim(0, 5)
-        ax2.set_xticklabels(['120s'])
-        ax2.grid(True, alpha=0.3, axis='y', linestyle='--', 
-                color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
-        ax2.legend(loc='upper right', framealpha=0.9, 
-                  facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
-    
-    plt.suptitle(f'Job {matched_jobs[0].split(".")[0]} Analysis', 
-                fontsize=16, fontweight='bold', y=1.02,
-                color='white' if st.get_option('theme.base') == 'dark' else 'black')
     plt.tight_layout()
     
     return fig
-
-def plot_individual_serial_data(df, job_number, serial_numbers):
-    """Generate individual plots for each filtered serial number."""
-    if len(df) == 0 or not serial_numbers:
-        return None
-
-    job_data = get_job_data(df, job_number)
-
-    if len(job_data) == 0:
-        return None
-
-    # Filter for the specific serial numbers
-    serial_data = job_data[job_data['Serial Number'].isin(serial_numbers)]
-
-    if len(serial_data) == 0:
-        st.warning("No data found for the filtered serial numbers")
-        return None
-
-    # Create individual plots for each serial number
-    num_serials = len(serial_numbers)
-
-    for serial in serial_numbers:
-        serial_rows = serial_data[serial_data['Serial Number'] == serial]
-
-        if len(serial_rows) == 0:
-            continue
-
-        # Create a figure for this serial number
-        fig, ax = plt.subplots(figsize=(12, 5), facecolor='#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
-        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
-
-        # Use different colors for each channel/row
-        colors = plt.cm.tab20(np.linspace(0, 1, len(serial_rows)))
-
-        for row_idx, (_, row) in enumerate(serial_rows.iterrows()):
-            test_readings = []
-            test_times = []
-            for time_point in TIME_POINTS:
-                if time_point in row and pd.notna(row[time_point]):
-                    test_readings.append(row[time_point])
-                    test_times.append(float(time_point))
-
-            if test_readings:
-                # Create label with test number
-                test_num = row_idx + 1
-                label = f"Test {test_num}"
-                ax.plot(test_times, test_readings, '-o', color=colors[row_idx],
-                       label=label, linewidth=2, markersize=6, alpha=0.7)
-
-        ax.set_title(f"Serial Number: {serial}", fontsize=14, fontweight='bold')
-        ax.set_xlabel('Time (seconds)', fontsize=12)
-        ax.set_ylabel('Voltage (V)', fontsize=12)
-        ax.set_ylim(0, 5)
-        ax.set_yticks(np.arange(0, 5.5, 0.5))
-        ax.grid(True, alpha=0.3, which='both')
-
-        if len(serial_rows) > 1:
-            ax.legend(loc='best', fontsize=10)
-
-        st.pyplot(fig)
-        plt.close()
 
 def analyze_job(df, job_number, threshold_set='Standard'):
     """Analyze data for a specific job number."""
@@ -793,8 +772,6 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
-if 'filtered_serials' not in st.session_state:
-    st.session_state.filtered_serials = []
 
 # Sidebar for data loading
 with st.sidebar:
@@ -954,17 +931,12 @@ if len(df) > 0:
                 filtered_data = pd.DataFrame(columns=filtered_data.columns)
             
             # Apply serial filter
-            filtered_serials = []
             if serial_text:
                 serials = [s.strip() for s in serial_text.split(',') if s.strip()]
                 if serials:
                     pattern = '|'.join([re.escape(s) for s in serials])
                     mask = filtered_data['Serial Number'].str.contains(pattern, case=False, na=False, regex=True)
                     filtered_data = filtered_data[mask]
-                    filtered_serials = filtered_data['Serial Number'].unique().tolist()
-
-            # Store filtered serials in session state for use in Visualization tab
-            st.session_state.filtered_serials = filtered_serials
             
             # Display results count
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
@@ -987,19 +959,6 @@ if len(df) > 0:
         
         # Tab 2: Visualization
         with tabs[1]:
-            # Show individual serial plots if serials are filtered
-            if st.session_state.filtered_serials and len(st.session_state.filtered_serials) > 0:
-                st.markdown("### 📊 Individual Serial Number Plots")
-                st.caption("Detailed view of each filtered serial number")
-                plot_individual_serial_data(df, st.session_state.current_job, st.session_state.filtered_serials)
-
-                st.markdown("---")
-                st.markdown("### 📈 Overall Job Trend")
-                st.caption("Aggregate statistics for all job data")
-            else:
-                st.markdown("### 📈 Overall Job Trend")
-                st.caption("Aggregate statistics for all job data (enter a serial number to see individual plots)")
-
             # Enhanced visualization
             fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
             if fig:
@@ -1117,6 +1076,15 @@ if len(df) > 0:
             legend_df = pd.DataFrame(legend_data)
             st.table(legend_df)
             st.caption("*OT-, TT, and OT+ are counted as PASS in statistics")
+            
+            # Decision Logic Flowchart
+            st.markdown("---")
+            st.markdown("#### 🔀 Decision Logic Flowchart")
+            st.caption("Visual representation of the status determination process")
+            
+            flowchart_fig = create_status_flowchart()
+            st.pyplot(flowchart_fig)
+            plt.close()
 
 else:
     # Welcome screen
