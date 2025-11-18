@@ -529,6 +529,130 @@ def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     
     return fig
 
+def analyze_job(df, job_number, threshold_set='Standard'):
+    """Analyze data for a specific job number."""
+    if len(df) == 0:
+        st.error("No data loaded. Please load data first.")
+        return None
+
+    if 'Job #' not in df.columns:
+        st.error("Error: Job # column not found in data")
+        return None
+
+def create_enhanced_plot(df, job_number, threshold_set='Standard'):
+    """Generate enhanced visualization for a specific job with dark mode compatibility."""
+    job_data = get_job_data(df, job_number)
+    
+    if len(job_data) == 0:
+        return None
+    
+    matched_jobs = sorted(job_data['Job #'].unique())
+    thresholds = THRESHOLDS[threshold_set]
+    
+    # Aggregate data
+    time_data = []
+    for time_point in TIME_POINTS:
+        if time_point in job_data.columns:
+            readings = job_data[time_point].dropna()
+            if len(readings) > 0:
+                time_data.append({
+                    'time': float(time_point),
+                    'mean': readings.mean(),
+                    'std': readings.std(),
+                    'p5': readings.quantile(0.05),
+                    'p95': readings.quantile(0.95),
+                    'p25': readings.quantile(0.25),
+                    'p75': readings.quantile(0.75)
+                })
+    
+    if not time_data:
+        return None
+    
+    df_plot = pd.DataFrame(time_data)
+    
+    # Set style for better visibility
+    plt.style.use('dark_background' if st.get_option('theme.base') == 'dark' else 'default')
+    
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), facecolor='#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    # Set background colors based on theme
+    for ax in [ax1, ax2]:
+        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
+    
+    # Main trend plot (left) with vibrant colors
+    ax1.fill_between(df_plot['time'], df_plot['p5'], df_plot['p95'],
+                     alpha=0.2, color='#7c8bff', label='5th-95th Percentile')
+    ax1.fill_between(df_plot['time'], df_plot['p25'], df_plot['p75'],
+                     alpha=0.3, color='#9b67d6', label='25th-75th Percentile')
+    ax1.fill_between(df_plot['time'], df_plot['mean'] - df_plot['std'],
+                     df_plot['mean'] + df_plot['std'],
+                     alpha=0.4, color='#667eea', label='±1 Std Dev')
+    
+    # Mean line with markers
+    ax1.plot(df_plot['time'], df_plot['mean'], 'o-', color='#00ff88', 
+             linewidth=3, markersize=8, label='Mean', zorder=10,
+             markeredgecolor='white', markeredgewidth=1)
+    
+    # Add threshold lines
+    ax1.axhline(y=thresholds['min_120s'], color='#ff4444', linestyle='--', 
+                alpha=0.7, linewidth=2, label=f'Min Threshold ({thresholds["min_120s"]}V)')
+    ax1.axhline(y=thresholds['max_120s'], color='#ff4444', linestyle='--', 
+                alpha=0.7, linewidth=2, label=f'Max Threshold ({thresholds["max_120s"]}V)')
+    
+    # Formatting
+    ax1.set_title('Sensor Readings Over Time', fontsize=14, fontweight='bold', pad=20, 
+                  color='white' if st.get_option('theme.base') == 'dark' else 'black')
+    ax1.set_xlabel('Time (seconds)', fontsize=12)
+    ax1.set_ylabel('Voltage (V)', fontsize=12)
+    ax1.set_ylim(0, 5)
+    ax1.set_xlim(-5, 125)
+    ax1.grid(True, alpha=0.3, linestyle='--', color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+    ax1.legend(loc='best', framealpha=0.9, facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    # Box plot for 120s readings (right)
+    if '120' in job_data.columns:
+        readings_120 = job_data['120'].dropna()
+        bp = ax2.boxplot([readings_120], vert=True, patch_artist=True,
+                         widths=0.6, showmeans=True, meanline=True)
+        
+        # Style the boxplot with vibrant colors
+        for patch in bp['boxes']:
+            patch.set_facecolor('#7c8bff')
+            patch.set_alpha(0.8)
+            patch.set_edgecolor('white')
+            patch.set_linewidth(1.5)
+        
+        # Style whiskers and caps
+        for item in ['whiskers', 'caps']:
+            plt.setp(bp[item], color='white', linewidth=1.5)
+        
+        # Style medians
+        plt.setp(bp['medians'], color='#00ff88', linewidth=2)
+        
+        # Add threshold regions
+        ax2.axhspan(0, thresholds['min_120s'], alpha=0.2, color='#ff4444', label='Fail Low')
+        ax2.axhspan(thresholds['max_120s'], 5, alpha=0.2, color='#ff4444', label='Fail High')
+        ax2.axhspan(thresholds['min_120s'], thresholds['max_120s'], alpha=0.2, 
+                   color='#00ff88', label='Pass Range')
+        
+        ax2.set_title('120s Reading Distribution', fontsize=14, fontweight='bold', pad=20,
+                     color='white' if st.get_option('theme.base') == 'dark' else 'black')
+        ax2.set_ylabel('Voltage (V)', fontsize=12)
+        ax2.set_ylim(0, 5)
+        ax2.set_xticklabels(['120s'])
+        ax2.grid(True, alpha=0.3, axis='y', linestyle='--', 
+                color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+        ax2.legend(loc='upper right', framealpha=0.9, 
+                  facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    plt.suptitle(f'Job {matched_jobs[0].split(".")[0]} Analysis', 
+                fontsize=16, fontweight='bold', y=1.02,
+                color='white' if st.get_option('theme.base') == 'dark' else 'black')
+    plt.tight_layout()
+    
+    return fig
+
 def plot_individual_serial_data(df, job_number, serial_numbers):
     """Generate individual plots for each filtered serial number."""
     if len(df) == 0 or not serial_numbers:
