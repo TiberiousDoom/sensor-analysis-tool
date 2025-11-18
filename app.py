@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.patheffects as path_effects
 import io
 from datetime import datetime
 
@@ -17,10 +18,67 @@ st.set_page_config(
     }
 )
 
-# Custom CSS for modern UI
+# Custom CSS for modern UI with dark mode support
 st.markdown("""
 <style>
-    /* Main container styling */
+    /* Detect dark mode */
+    @media (prefers-color-scheme: dark) {
+        /* Dark mode overrides */
+        .stApp {
+            background-color: #1a1a1a;
+        }
+        
+        div[data-testid="metric-container"] {
+            background: #2d2d2d !important;
+            border-left: 4px solid #7c8bff !important;
+            color: #ffffff !important;
+        }
+        
+        div[data-testid="metric-container"] label {
+            color: #b0b0b0 !important;
+        }
+        
+        div[data-testid="metric-container"] div[data-testid="metric-delta"] {
+            color: #9ca3af !important;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            background-color: #2d2d2d !important;
+            border: 2px solid #3d3d3d !important;
+            color: #ffffff !important;
+        }
+        
+        .dataframe {
+            background-color: #2d2d2d !important;
+            color: #ffffff !important;
+        }
+        
+        .dataframe tbody tr:hover {
+            background-color: #3d3d3d !important;
+        }
+        
+        section[data-testid="stSidebar"] > div {
+            background-color: #2d2d2d !important;
+        }
+        
+        .main-header {
+            background: linear-gradient(135deg, #7c8bff 0%, #9b67d6 100%) !important;
+            box-shadow: 0 10px 30px rgba(124, 139, 255, 0.2) !important;
+        }
+        
+        .status-card {
+            background: #2d2d2d !important;
+            border: 1px solid #3d3d3d !important;
+        }
+        
+        .info-card {
+            background: #2d2d2d !important;
+            border: 1px solid #3d3d3d !important;
+            color: #ffffff !important;
+        }
+    }
+    
+    /* Light mode base styles */
     .main {
         background: #f8f9fa;
     }
@@ -35,50 +93,75 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
     }
     
-    /* Metric cards */
+    /* Metric cards - improved contrast */
     div[data-testid="metric-container"] {
-        background: white;
+        background: rgba(255, 255, 255, 0.95);
         padding: 1rem;
         border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         border-left: 4px solid #667eea;
     }
     
-    /* Status pills */
-    .status-pill {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
+    div[data-testid="metric-container"] label {
         font-weight: 600;
+        font-size: 0.9rem;
+        color: #4a5568;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    div[data-testid="metric-container"] > div[data-testid="metric-value"] {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    
+    /* Status pills with better contrast */
+    .status-pill {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
         display: inline-block;
-        margin: 2px;
+        margin: 3px;
+        letter-spacing: 0.5px;
     }
     
     .status-pass {
-        background: #d4f4dd;
-        color: #1e7e34;
+        background: #10b981;
+        color: white;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
     }
     
     .status-fail {
-        background: #ffd6d6;
-        color: #bd2130;
+        background: #ef4444;
+        color: white;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
     }
     
     .status-warning {
-        background: #fff3cd;
-        color: #856404;
+        background: #f59e0b;
+        color: white;
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
     }
     
-    /* Improved button styling */
+    .status-info {
+        background: #6b7280;
+        color: white;
+        box-shadow: 0 2px 4px rgba(107, 114, 128, 0.3);
+    }
+    
+    /* Enhanced button styling */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        color: white !important;
         border: none;
-        padding: 0.6rem 1.5rem;
+        padding: 0.7rem 1.8rem;
         border-radius: 25px;
-        font-weight: 600;
+        font-weight: 700;
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     .stButton > button:hover {
@@ -86,63 +169,130 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
     
-    /* Sidebar improvements */
+    /* Sidebar with better visibility */
     section[data-testid="stSidebar"] {
-        background: white;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.08);
     }
     
-    /* Success/Error messages */
-    .stSuccess, .stError, .stWarning, .stInfo {
+    /* Enhanced success/error messages */
+    .stSuccess {
+        background: #10b981;
+        color: white;
         border-radius: 10px;
         padding: 1rem;
+        font-weight: 600;
     }
     
-    /* Tab styling */
+    .stError {
+        background: #ef4444;
+        color: white;
+        border-radius: 10px;
+        padding: 1rem;
+        font-weight: 600;
+    }
+    
+    .stWarning {
+        background: #f59e0b;
+        color: white;
+        border-radius: 10px;
+        padding: 1rem;
+        font-weight: 600;
+    }
+    
+    .stInfo {
+        background: #3b82f6;
+        color: white;
+        border-radius: 10px;
+        padding: 1rem;
+        font-weight: 600;
+    }
+    
+    /* Tab styling with better contrast */
     .stTabs [data-baseweb="tab-list"] {
         gap: 24px;
+        background: transparent;
     }
     
     .stTabs [data-baseweb="tab"] {
         height: 50px;
         padding: 0px 24px;
-        background-color: white;
+        background-color: rgba(255, 255, 255, 0.95);
         border-radius: 10px;
         border: 2px solid #e0e0e0;
-        font-weight: 600;
+        font-weight: 700;
+        transition: all 0.2s ease;
     }
     
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        color: white !important;
         border: none;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
     
     /* Data table improvements */
     .dataframe {
         font-size: 14px;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
     }
     
     .dataframe tbody tr:hover {
-        background-color: #f0f7ff !important;
+        background-color: rgba(102, 126, 234, 0.1) !important;
     }
     
-    /* Legend box */
-    .legend-box {
-        background: white;
+    /* Info cards */
+    .info-card {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 1.2rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        margin-bottom: 1rem;
+    }
+    
+    .status-card {
+        background: rgba(255, 255, 255, 0.95);
         padding: 1rem;
         border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        margin: 1rem 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        margin-bottom: 0.8rem;
+        border: 1px solid #e0e0e0;
+        transition: transform 0.2s ease;
     }
     
-    /* Quick stats container */
-    .quick-stats {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 15px;
-        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
-        margin-bottom: 1.5rem;
+    .status-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+    
+    /* Select box styling */
+    div[data-baseweb="select"] > div {
+        background-color: rgba(255, 255, 255, 0.95);
+        border: 2px solid #667eea;
+        border-radius: 10px;
+    }
+    
+    /* Input field styling */
+    input[type="text"] {
+        border: 2px solid #667eea !important;
+        border-radius: 10px !important;
+        padding: 0.5rem !important;
+        font-weight: 500 !important;
+    }
+    
+    input[type="text"]:focus {
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -357,18 +507,18 @@ def get_job_data(df, job_number):
     return job_data
 
 def create_status_badge(status):
-    """Create HTML for a status badge with appropriate color."""
+    """Create HTML for a status badge with appropriate color and better visibility."""
     if status == 'PASS':
-        return f'<span class="status-pill status-pass">{status}</span>'
+        return f'<span class="status-pill status-pass">✓ {status}</span>'
     elif status in ['FL', 'FH']:
-        return f'<span class="status-pill status-fail">{status}</span>'
+        return f'<span class="status-pill status-fail">✗ {status}</span>'
     elif status in ['OT-', 'TT', 'OT+']:
-        return f'<span class="status-pill status-warning">{status}</span>'
+        return f'<span class="status-pill status-warning">⚠ {status}</span>'
     else:
-        return f'<span class="status-pill" style="background: #e9ecef; color: #6c757d;">{status}</span>'
+        return f'<span class="status-pill status-info">• {status}</span>'
 
 def create_enhanced_plot(df, job_number, threshold_set='Standard'):
-    """Generate enhanced visualization for a specific job."""
+    """Generate enhanced visualization for a specific job with dark mode compatibility."""
     job_data = get_job_data(df, job_number)
     
     if len(job_data) == 0:
@@ -398,36 +548,45 @@ def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     
     df_plot = pd.DataFrame(time_data)
     
-    # Create figure with subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    # Set style for better visibility
+    plt.style.use('dark_background' if st.get_option('theme.base') == 'dark' else 'default')
     
-    # Main trend plot (left)
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), facecolor='#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+    
+    # Set background colors based on theme
+    for ax in [ax1, ax2]:
+        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
+    
+    # Main trend plot (left) with vibrant colors
     ax1.fill_between(df_plot['time'], df_plot['p5'], df_plot['p95'],
-                     alpha=0.15, color='#667eea', label='5th-95th Percentile')
+                     alpha=0.2, color='#7c8bff', label='5th-95th Percentile')
     ax1.fill_between(df_plot['time'], df_plot['p25'], df_plot['p75'],
-                     alpha=0.25, color='#764ba2', label='25th-75th Percentile')
+                     alpha=0.3, color='#9b67d6', label='25th-75th Percentile')
     ax1.fill_between(df_plot['time'], df_plot['mean'] - df_plot['std'],
                      df_plot['mean'] + df_plot['std'],
-                     alpha=0.3, color='#667eea', label='±1 Std Dev')
+                     alpha=0.4, color='#667eea', label='±1 Std Dev')
     
-    # Mean line
-    ax1.plot(df_plot['time'], df_plot['mean'], 'o-', color='#764ba2', 
-             linewidth=3, markersize=8, label='Mean', zorder=10)
+    # Mean line with markers
+    ax1.plot(df_plot['time'], df_plot['mean'], 'o-', color='#00ff88', 
+             linewidth=3, markersize=8, label='Mean', zorder=10,
+             markeredgecolor='white', markeredgewidth=1)
     
     # Add threshold lines
-    ax1.axhline(y=thresholds['min_120s'], color='red', linestyle='--', 
-                alpha=0.5, label=f'Min Threshold ({thresholds["min_120s"]}V)')
-    ax1.axhline(y=thresholds['max_120s'], color='red', linestyle='--', 
-                alpha=0.5, label=f'Max Threshold ({thresholds["max_120s"]}V)')
+    ax1.axhline(y=thresholds['min_120s'], color='#ff4444', linestyle='--', 
+                alpha=0.7, linewidth=2, label=f'Min Threshold ({thresholds["min_120s"]}V)')
+    ax1.axhline(y=thresholds['max_120s'], color='#ff4444', linestyle='--', 
+                alpha=0.7, linewidth=2, label=f'Max Threshold ({thresholds["max_120s"]}V)')
     
     # Formatting
-    ax1.set_title('Sensor Readings Over Time', fontsize=14, fontweight='bold', pad=20)
+    ax1.set_title('Sensor Readings Over Time', fontsize=14, fontweight='bold', pad=20, 
+                  color='white' if st.get_option('theme.base') == 'dark' else 'black')
     ax1.set_xlabel('Time (seconds)', fontsize=12)
     ax1.set_ylabel('Voltage (V)', fontsize=12)
     ax1.set_ylim(0, 5)
     ax1.set_xlim(-5, 125)
-    ax1.grid(True, alpha=0.3, linestyle='--')
-    ax1.legend(loc='best', framealpha=0.9)
+    ax1.grid(True, alpha=0.3, linestyle='--', color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+    ax1.legend(loc='best', framealpha=0.9, facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
     
     # Box plot for 120s readings (right)
     if '120' in job_data.columns:
@@ -435,26 +594,39 @@ def create_enhanced_plot(df, job_number, threshold_set='Standard'):
         bp = ax2.boxplot([readings_120], vert=True, patch_artist=True,
                          widths=0.6, showmeans=True, meanline=True)
         
-        # Style the boxplot
+        # Style the boxplot with vibrant colors
         for patch in bp['boxes']:
-            patch.set_facecolor('#667eea')
-            patch.set_alpha(0.7)
+            patch.set_facecolor('#7c8bff')
+            patch.set_alpha(0.8)
+            patch.set_edgecolor('white')
+            patch.set_linewidth(1.5)
+        
+        # Style whiskers and caps
+        for item in ['whiskers', 'caps']:
+            plt.setp(bp[item], color='white', linewidth=1.5)
+        
+        # Style medians
+        plt.setp(bp['medians'], color='#00ff88', linewidth=2)
         
         # Add threshold regions
-        ax2.axhspan(0, thresholds['min_120s'], alpha=0.1, color='red', label='Fail Low')
-        ax2.axhspan(thresholds['max_120s'], 5, alpha=0.1, color='red', label='Fail High')
-        ax2.axhspan(thresholds['min_120s'], thresholds['max_120s'], alpha=0.1, 
-                   color='green', label='Pass Range')
+        ax2.axhspan(0, thresholds['min_120s'], alpha=0.2, color='#ff4444', label='Fail Low')
+        ax2.axhspan(thresholds['max_120s'], 5, alpha=0.2, color='#ff4444', label='Fail High')
+        ax2.axhspan(thresholds['min_120s'], thresholds['max_120s'], alpha=0.2, 
+                   color='#00ff88', label='Pass Range')
         
-        ax2.set_title('120s Reading Distribution', fontsize=14, fontweight='bold', pad=20)
+        ax2.set_title('120s Reading Distribution', fontsize=14, fontweight='bold', pad=20,
+                     color='white' if st.get_option('theme.base') == 'dark' else 'black')
         ax2.set_ylabel('Voltage (V)', fontsize=12)
         ax2.set_ylim(0, 5)
         ax2.set_xticklabels(['120s'])
-        ax2.grid(True, alpha=0.3, axis='y', linestyle='--')
-        ax2.legend(loc='upper right')
+        ax2.grid(True, alpha=0.3, axis='y', linestyle='--', 
+                color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+        ax2.legend(loc='upper right', framealpha=0.9, 
+                  facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
     
     plt.suptitle(f'Job {matched_jobs[0].split(".")[0]} Analysis', 
-                fontsize=16, fontweight='bold', y=1.02)
+                fontsize=16, fontweight='bold', y=1.02,
+                color='white' if st.get_option('theme.base') == 'dark' else 'black')
     plt.tight_layout()
     
     return fig
@@ -742,24 +914,52 @@ if len(df) > 0:
                         st.markdown(f"{badge_html} **{count}** ({pct:.1f}%)", unsafe_allow_html=True)
             
             with col2:
-                # Create pie chart for status distribution
+                # Create pie chart for status distribution with enhanced colors
                 fig, ax = plt.subplots(figsize=(8, 6))
+                
+                # Set background based on theme
+                fig.patch.set_facecolor('#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+                ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
                 
                 # Filter out zero counts
                 plot_labels = []
                 plot_sizes = []
                 plot_colors = []
                 
+                # Enhanced color mapping for better visibility
+                ENHANCED_COLORS = {
+                    'PASS': '#10b981',  # Emerald green
+                    'FL': '#ef4444',    # Red
+                    'FH': '#dc2626',    # Dark red
+                    'OT-': '#f59e0b',   # Amber
+                    'TT': '#eab308',    # Yellow
+                    'OT+': '#fb923c',   # Orange
+                    'DM': '#6b7280'     # Gray
+                }
+                
                 for status, count in info['status_counts'].items():
                     if count > 0:
                         plot_labels.append(f"{status} ({count})")
                         plot_sizes.append(count)
-                        plot_colors.append(STATUS_COLORS.get(status, '#6c757d'))
+                        plot_colors.append(ENHANCED_COLORS.get(status, '#6c757d'))
                 
                 if plot_sizes:
-                    ax.pie(plot_sizes, labels=plot_labels, colors=plot_colors, 
-                          autopct='%1.1f%%', startangle=90)
-                    ax.set_title('Status Distribution', fontsize=14, fontweight='bold', pad=20)
+                    wedges, texts, autotexts = ax.pie(
+                        plot_sizes, labels=plot_labels, colors=plot_colors, 
+                        autopct='%1.1f%%', startangle=90,
+                        textprops={'weight': 'bold', 'size': 10}
+                    )
+                    
+                    # Enhance text visibility for dark mode
+                    text_color = 'white' if st.get_option('theme.base') == 'dark' else 'black'
+                    for text in texts:
+                        text.set_color(text_color)
+                    for autotext in autotexts:
+                        autotext.set_color('white')
+                        autotext.set_path_effects([path_effects.withStroke(linewidth=2, foreground='black')])
+                    
+                    ax.set_title('Status Distribution', fontsize=14, fontweight='bold', pad=20,
+                               color='white' if st.get_option('theme.base') == 'dark' else 'black')
                     st.pyplot(fig)
                     plt.close()
         
