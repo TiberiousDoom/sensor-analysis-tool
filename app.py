@@ -693,6 +693,18 @@ Result: FL (highest priority)"""
     
     return fig
 
+def color_rows(row):
+    """Apply background color to table rows based on Pass/Fail status."""
+    if row['Pass/Fail'] in ['FL', 'FH']:
+        return ['background-color: #fee2e2'] * len(row)  # Light red for failures
+    elif row['Pass/Fail'] == 'PASS':
+        return ['background-color: #d1fae5'] * len(row)  # Light green for pass
+    elif row['Pass/Fail'] in ['OT-', 'TT', 'OT+']:
+        return ['background-color: #fed7aa'] * len(row)  # Light orange for warnings
+    elif row['Pass/Fail'] == 'DM':
+        return ['background-color: #e5e7eb'] * len(row)  # Light gray for data missing
+    return [''] * len(row)
+
 def analyze_job(df, job_number, threshold_set='Standard'):
     """Analyze data for a specific job number."""
     if len(df) == 0:
@@ -772,6 +784,8 @@ if 'current_job' not in st.session_state:
     st.session_state.current_job = None
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
+if 'job_history' not in st.session_state:
+    st.session_state.job_history = []
 
 # Sidebar for data loading
 with st.sidebar:
@@ -831,6 +845,20 @@ with st.sidebar:
                     "📊 Export",
                     use_container_width=True
                 )
+        
+        # Job History
+        if len(st.session_state.job_history) > 0:
+            st.markdown("---")
+            st.markdown("### 📜 Recent Jobs")
+            for idx, recent_job in enumerate(st.session_state.job_history):
+                if st.button(f"🔄 Job {recent_job}", key=f"hist_{idx}", use_container_width=True):
+                    # Re-analyze that job with current threshold
+                    analysis_info = analyze_job(df, recent_job, threshold_set)
+                    if analysis_info:
+                        st.session_state.analysis_results = analysis_info
+                        st.session_state.current_job = recent_job
+                        st.session_state.current_threshold = threshold_set
+                        st.rerun()
 
 # Main content area
 if len(df) > 0:
@@ -842,6 +870,33 @@ if len(df) > 0:
                 st.session_state.analysis_results = analysis_info
                 st.session_state.current_job = job_number
                 st.session_state.current_threshold = threshold_set
+                
+                # Update job history
+                if job_number not in st.session_state.job_history:
+                    st.session_state.job_history.insert(0, job_number)
+                    st.session_state.job_history = st.session_state.job_history[:5]  # Keep last 5
+    
+    # Handle export button
+    if export_button and st.session_state.analysis_results is not None:
+        info = st.session_state.analysis_results
+        
+        # Create export data
+        export_df = info['results'].copy()
+        
+        # Generate CSV
+        csv = export_df.to_csv(index=False)
+        
+        st.download_button(
+            label="📥 Download Results CSV",
+            data=csv,
+            file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_csv"
+        )
+        
+        st.success(f"✅ Export prepared for Job {st.session_state.current_job}")
+    elif export_button and st.session_state.analysis_results is None:
+        st.warning("⚠️ Please analyze a job first before exporting.")
     
     # Display results if available
     if st.session_state.analysis_results:
@@ -941,21 +996,43 @@ if len(df) > 0:
             # Display results count
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
             
+            # Smart Search
+            search_term = st.text_input(
+                "🔎 Quick Search Table:",
+                placeholder="Search any value in the table...",
+                help="Highlights cells containing your search term"
+            )
+            
             # Format and display data
             display_data = filtered_data.copy()
             if len(display_data) > 0:
+                # Format numeric columns
                 for col in display_data.columns:
                     if col.startswith('0s(') or col.startswith('90s(') or col.startswith('120s('):
                         display_data[col] = display_data[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
                     elif col == '120s(St.Dev.)':
                         display_data[col] = display_data[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
-            
-            st.dataframe(
-                display_data,
-                use_container_width=True,
-                hide_index=True,
-                height=400
-            )
+                
+                # Apply styling
+                styled_data = display_data.style.apply(color_rows, axis=1)
+                
+                # Apply search highlighting if search term exists
+                if search_term:
+                    def highlight_search(val):
+                        if search_term.lower() in str(val).lower():
+                            return 'background-color: #fef08a; font-weight: bold'  # Yellow highlight
+                        return ''
+                    
+                    styled_data = styled_data.applymap(highlight_search)
+                
+                st.dataframe(
+                    styled_data,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400
+                )
+            else:
+                st.warning("No data to display with current filters")
         
         # Tab 2: Visualization
         with tabs[1]:
