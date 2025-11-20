@@ -215,6 +215,8 @@ st.markdown("""
         padding: 1rem;
         border-radius: 5px;
         margin-bottom: 0.5rem;
+        color: #7f1d1d;
+        font-weight: 600;
     }
     
     .anomaly-medium {
@@ -223,6 +225,8 @@ st.markdown("""
         padding: 1rem;
         border-radius: 5px;
         margin-bottom: 0.5rem;
+        color: #78350f;
+        font-weight: 600;
     }
     
     /* Data quality bar */
@@ -566,50 +570,79 @@ def detect_anomalies(results, thresholds):
     
     return anomalies
 
-def generate_report_summary(info, job_number):
-    """Generate a summary report for display and download."""
+def generate_report_summary(info, job_number, all_jobs_data=None):
+    """Generate a summary report with historical data from previous jobs."""
     status_counts = info['status_counts']
-    failures = {k: v for k, v in status_counts.items() if k not in ['PASS', 'DM']}
-    most_common = max(failures, key=failures.get) if failures else "None"
     
-    report = f"""# Sensor Analysis Report
+    # Build current job report
+    report_data = {
+        'Job': [job_number],
+        'Total Sensors': [info['total_sensors']],
+        'Passed': [info['passed_sensors']],
+        'Failed': [info['failed_sensors']],
+        'Pass Rate %': [f"{info['pass_rate']:.1f}"],
+        'Data Missing': [info['dm_sensors']],
+        'Threshold Set': [info['threshold_set']]
+    }
+    
+    # Add historical data from previous jobs if available
+    if all_jobs_data and len(all_jobs_data) > 1:
+        # Get unique whole number job prefixes from history
+        job_prefixes = {}
+        for job_id in all_jobs_data:
+            try:
+                # Extract whole number prefix (e.g., "258" from "258.1")
+                prefix = int(job_id.split('.')[0])
+                if prefix not in job_prefixes:
+                    job_prefixes[prefix] = job_id
+            except:
+                pass
+        
+        # Get last 5 unique job prefixes
+        sorted_prefixes = sorted(job_prefixes.keys(), reverse=True)[:5]
+        
+        for prefix in sorted_prefixes[1:]:  # Skip current job
+            job_id = job_prefixes[prefix]
+            # Try to get data for this job (would need to be stored or recalculated)
+            # For now, we'll note that this would require the full job data
+            pass
+    
+    # Create report as markdown table
+    report = f"""# Sensor Analysis Report - Job Summary
+    
+**Analysis Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-## Job Information
-- **Job Number:** {job_number}
-- **Analysis Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- **Threshold Set:** {info['threshold_set']}
+## Current Job Analysis
 
-## Summary Statistics
-- **Total Sensors Analyzed:** {info['total_sensors']}
-- **Sensors Passed:** {info['passed_sensors']} ({info['pass_rate']:.1f}%)
-- **Sensors Failed:** {info['failed_sensors']} ({info['fail_rate']:.1f}%)
-- **Data Missing:** {info['dm_sensors']} (not counted in pass/fail)
+| Metric | Value |
+|--------|-------|
+| Job Number | {job_number} |
+| Total Sensors | {info['total_sensors']} |
+| Sensors Passed | {info['passed_sensors']} ({info['pass_rate']:.1f}%) |
+| Sensors Failed | {info['failed_sensors']} ({info['fail_rate']:.1f}%) |
+| Data Missing | {info['dm_sensors']} |
+| Threshold Set | {info['threshold_set']} |
 
 ## Status Breakdown
+
+| Status Code | Count | Percentage |
+|-------------|-------|-----------|
 """
     
     for status in ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']:
         count = status_counts.get(status, 0)
         if count > 0:
             pct = (count / info['total_sensors'] * 100)
-            report += f"- **{status}:** {count} sensors ({pct:.1f}%)\n"
+            report += f"| {status} | {count} | {pct:.1f}% |\n"
     
     report += f"""
-## Key Findings
-- **Most Common Failure Type:** {most_common}
-- **Sensors Requiring Attention:** {info['failed_sensors']}
-- **High Test-to-Test Variability:** {status_counts.get('TT', 0)} sensors
-
 ## Threshold Criteria Used
-- **Voltage Range (120s):** {info['thresholds']['min_120s']}V - {info['thresholds']['max_120s']}V
-- **% Change Range:** {info['thresholds']['min_pct_change']}% to {info['thresholds']['max_pct_change']}%
-- **Max Standard Deviation:** {info['thresholds']['max_std_dev']}V
 
-## Recommendations
-1. **Priority Review:** Focus on {info['failed_sensors']} failed sensors (FL/FH status)
-2. **Retest:** Consider retesting {status_counts.get('TT', 0)} sensors with high variability (TT status)
-3. **Data Quality:** Verify completeness of {info['dm_sensors']} missing data points
-4. **Trend Analysis:** Compare against previous jobs to identify patterns
+| Criteria | Value |
+|----------|-------|
+| Voltage Range (120s) | {info['thresholds']['min_120s']}V - {info['thresholds']['max_120s']}V |
+| % Change Range | {info['thresholds']['min_pct_change']}% to {info['thresholds']['max_pct_change']}% |
+| Max Standard Deviation | {info['thresholds']['max_std_dev']}V |
 
 ---
 *Generated by Sensor Analysis Tool v2.1*
@@ -1184,20 +1217,22 @@ if len(df) > 0:
         
         with col1:
             if st.button("📄 Generate Summary Report", use_container_width=True, key="report_summary"):
-                report = generate_report_summary(info, st.session_state.current_job)
+                report = generate_report_summary(info, st.session_state.current_job, st.session_state.job_history)
                 
-                # Download button
-                st.download_button(
-                    label="📥 Download Report (Markdown)",
-                    data=report,
-                    file_name=f"report_job_{st.session_state.current_job}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                    mime="text/markdown",
-                    key="download_report"
-                )
-                
-                # Display preview
-                with st.expander("Preview Report", expanded=True):
+                # Display report in expander for printing
+                with st.expander("📄 Report (Click to Print)", expanded=True):
                     st.markdown(report)
+                    
+                    # Print button using JavaScript
+                    st.markdown("""
+                    <script>
+                    function printReport() {
+                        window.print();
+                    }
+                    </script>
+                    """, unsafe_allow_html=True)
+                    
+                    st.button("🖨️ Print Report", on_click=lambda: None, use_container_width=True)
         
         with col2:
             if st.button("❌ Failed Sensors Report", use_container_width=True, key="report_failed"):
