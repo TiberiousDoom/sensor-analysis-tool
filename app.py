@@ -1225,16 +1225,23 @@ if len(df) > 0:
                 with st.expander("📄 Report (Click to Print)", expanded=True):
                     st.markdown(report)
                     
-                    # Print button using JavaScript
+                    # Print button with JavaScript
                     st.markdown("""
-                    <script>
-                    function printReport() {
-                        window.print();
-                    }
-                    </script>
+                    <div style="text-align: center;">
+                    <button onclick="window.print();" style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 0.7rem 1.8rem;
+                        border-radius: 25px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        font-size: 1rem;
+                        width: 100%;
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                    ">🖨️ Print Report</button>
+                    </div>
                     """, unsafe_allow_html=True)
-                    
-                    st.button("🖨️ Print Report", on_click=lambda: None, use_container_width=True)
         
         with col2:
             if st.button("❌ Failed Sensors Report", use_container_width=True, key="report_failed"):
@@ -1316,13 +1323,6 @@ if len(df) > 0:
             
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
             
-            # Smart Search
-            search_term = st.text_input(
-                "🔎 Quick Search Table:",
-                placeholder="Search any value in the table...",
-                help="Highlights cells containing your search term"
-            )
-            
             # Format and display data
             display_data = filtered_data.copy()
             if len(display_data) > 0:
@@ -1333,14 +1333,6 @@ if len(df) > 0:
                         display_data[col] = display_data[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
                 
                 styled_data = display_data.style.apply(color_rows, axis=1)
-                
-                if search_term:
-                    def highlight_search(val):
-                        if search_term.lower() in str(val).lower():
-                            return 'background-color: #fef08a; color: #713f12; font-weight: bold'
-                        return ''
-                    
-                    styled_data = styled_data.applymap(highlight_search)
                 
                 st.dataframe(
                     styled_data,
@@ -1393,32 +1385,30 @@ if len(df) > 0:
                 
                 for status, count in info['status_counts'].items():
                     if count > 0:
-                        plot_labels.append(f"{status}\n({count})")
+                        pct = (count / info['total_sensors'] * 100)
+                        plot_labels.append(f"{status} ({count}) {pct:.1f}%")
                         plot_sizes.append(count)
                         plot_colors.append(ENHANCED_COLORS.get(status, '#6c757d'))
                 
                 if plot_sizes:
-                    explode = [0.1 if size/sum(plot_sizes) < 0.05 else 0.02 for size in plot_sizes]
+                    explode = [0.05 for _ in plot_sizes]
                     
                     wedges, texts, autotexts = ax.pie(
                         plot_sizes,
-                        labels=plot_labels,
                         colors=plot_colors,
-                        autopct='%1.1f%%',
                         startangle=90,
                         explode=explode,
-                        textprops={'weight': 'bold', 'size': 11},
-                        pctdistance=0.85
+                        textprops={'weight': 'bold'},
+                        pctdistance=1.1
                     )
                     
-                    for text in texts:
-                        text.set_color('white' if st.get_option('theme.base') == 'dark' else 'black')
+                    # Remove percentages from pie (we'll use legend instead)
                     for autotext in autotexts:
-                        autotext.set_color('white')
-                        autotext.set_path_effects([path_effects.withStroke(linewidth=2, foreground='black')])
+                        autotext.set_visible(False)
                     
-                    centre_circle = plt.Circle((0, 0), 0.70, fc='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
-                    fig.gca().add_artist(centre_circle)
+                    # Add legend with all info outside pie
+                    ax.legend(plot_labels, loc='center left', bbox_to_anchor=(1, 0, 0.5, 1), 
+                             fontsize=10, framealpha=0.95)
                     
                     ax.set_title('Status Distribution', fontsize=16, fontweight='bold', pad=20,
                                color='white' if st.get_option('theme.base') == 'dark' else 'black')
