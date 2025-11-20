@@ -696,13 +696,13 @@ Result: FL (highest priority)"""
 def color_rows(row):
     """Apply background color to table rows based on Pass/Fail status."""
     if row['Pass/Fail'] in ['FL', 'FH']:
-        return ['background-color: #fee2e2'] * len(row)  # Light red for failures
+        return ['background-color: #fee2e2; color: #991b1b; font-weight: 600'] * len(row)  # Light red bg, dark red text
     elif row['Pass/Fail'] == 'PASS':
-        return ['background-color: #d1fae5'] * len(row)  # Light green for pass
+        return ['background-color: #d1fae5; color: #065f46; font-weight: 600'] * len(row)  # Light green bg, dark green text
     elif row['Pass/Fail'] in ['OT-', 'TT', 'OT+']:
-        return ['background-color: #fed7aa'] * len(row)  # Light orange for warnings
+        return ['background-color: #fed7aa; color: #92400e; font-weight: 600'] * len(row)  # Light orange bg, dark orange text
     elif row['Pass/Fail'] == 'DM':
-        return ['background-color: #e5e7eb'] * len(row)  # Light gray for data missing
+        return ['background-color: #e5e7eb; color: #1f2937; font-weight: 600'] * len(row)  # Light gray bg, dark gray text
     return [''] * len(row)
 
 def analyze_job(df, job_number, threshold_set='Standard'):
@@ -1020,7 +1020,7 @@ if len(df) > 0:
                 if search_term:
                     def highlight_search(val):
                         if search_term.lower() in str(val).lower():
-                            return 'background-color: #fef08a; font-weight: bold'  # Yellow highlight
+                            return 'background-color: #fef08a; color: #713f12; font-weight: bold'  # Yellow highlight with dark text
                         return ''
                     
                     styled_data = styled_data.applymap(highlight_search)
