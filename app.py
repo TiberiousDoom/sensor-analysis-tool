@@ -1107,22 +1107,33 @@ if len(df) > 0:
                 if job_number not in st.session_state.job_history:
                     st.session_state.job_history.insert(0, job_number)
                     st.session_state.job_history = st.session_state.job_history[:5]
+            else:
+                # Clear previous results if job not found
+                st.session_state.analysis_results = None
+                st.session_state.current_job = None
     
     # Handle export button
     if export_button and st.session_state.analysis_results is not None:
         info = st.session_state.analysis_results
+        st.info(f"📊 Exporting data for Job {st.session_state.current_job}...")
+        
         export_df = info['results'].copy()
         csv = export_df.to_csv(index=False)
         
-        st.download_button(
-            label="📥 Download Results CSV",
-            data=csv,
-            file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            key="download_csv"
-        )
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.download_button(
+                label="📥 Download Results CSV",
+                data=csv,
+                file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="download_csv",
+                use_container_width=True
+            )
+        with col2:
+            st.caption(f"{len(export_df)} sensors")
         
-        st.success(f"✅ Export prepared for Job {st.session_state.current_job}")
+        st.success(f"✅ Click button above to download {len(export_df)} sensor records")
     elif export_button and st.session_state.analysis_results is None:
         st.warning("⚠️ Please analyze a job first before exporting.")
     
@@ -1130,37 +1141,28 @@ if len(df) > 0:
     if st.session_state.analysis_results:
         info = st.session_state.analysis_results
         
-        # ====== NEW FEATURE: Data Quality Indicator ======
-        with st.expander("📊 Data Quality", expanded=True):
-            quality_score = calculate_data_quality(info['results'])
-            display_data_quality(quality_score)
-        
         # ====== NEW FEATURE: Anomaly Detection ======
         anomalies = detect_anomalies(info['results'], info['thresholds'])
         if anomalies:
-            with st.expander(f"⚠️ Anomalies Detected ({len(anomalies)})", expanded=True):
+            with st.expander(f"⚠️ Anomalies Detected ({len(anomalies)})", expanded=False):
                 high_severity = [a for a in anomalies if a['severity'] == 'High']
                 medium_severity = [a for a in anomalies if a['severity'] == 'Medium']
                 
                 if high_severity:
-                    st.markdown("### 🔴 High Severity")
+                    st.markdown("### 🔴 High Variability")
                     for anomaly in high_severity:
                         st.markdown(f"""
                         <div class="anomaly-high">
-                            <strong>Serial:</strong> {anomaly['serial']} | <strong>Channel:</strong> {anomaly['channel']}<br>
-                            <strong>Issue:</strong> {anomaly['type']}<br>
-                            <strong>Details:</strong> {anomaly['message']}
+                            <strong>{anomaly['serial']}</strong> (Channel: {anomaly['channel']}) — {anomaly['type']} — {anomaly['message']}
                         </div>
                         """, unsafe_allow_html=True)
                 
                 if medium_severity:
-                    st.markdown("### 🟡 Medium Severity")
+                    st.markdown("### 🟡 Medium Variability")
                     for anomaly in medium_severity:
                         st.markdown(f"""
                         <div class="anomaly-medium">
-                            <strong>Serial:</strong> {anomaly['serial']} | <strong>Channel:</strong> {anomaly['channel']}<br>
-                            <strong>Issue:</strong> {anomaly['type']}<br>
-                            <strong>Details:</strong> {anomaly['message']}
+                            <strong>{anomaly['serial']}</strong> (Channel: {anomaly['channel']}) — {anomaly['type']} — {anomaly['message']}
                         </div>
                         """, unsafe_allow_html=True)
         
