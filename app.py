@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -496,6 +497,44 @@ tutorial = TutorialSystem()
 # Custom CSS for modern UI with dark mode support
 st.markdown("""
 <style>
+    /* Print-specific styles - hide UI elements when printing */
+    @media print {
+        /* Hide Streamlit UI elements */
+        header, footer, .stApp > header, .stDeployButton, 
+        section[data-testid="stSidebar"], .stButton, 
+        .stDownloadButton, .stTabs [data-baseweb="tab-list"] {
+            display: none !important;
+        }
+        
+        /* Hide tutorial elements */
+        .tutorial-overlay, .tutorial-card {
+            display: none !important;
+        }
+        
+        /* Optimize page for printing */
+        body, .main, .block-container {
+            margin: 0 !important;
+            padding: 10px !important;
+            max-width: 100% !important;
+        }
+        
+        /* Prevent page breaks inside tables */
+        table, .dataframe {
+            page-break-inside: avoid;
+        }
+        
+        /* Better contrast for print */
+        * {
+            color: black !important;
+            background: white !important;
+        }
+        
+        /* Keep table borders visible */
+        table, th, td {
+            border: 1px solid black !important;
+        }
+    }
+    
     /* Detect dark mode */
     @media (prefers-color-scheme: dark) {
         /* Dark mode overrides */
@@ -1746,29 +1785,36 @@ if len(df) > 0:
                         
                         st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
                     
-                    # Print button
+                    # Print button - Using components for proper JavaScript execution
                     st.markdown("")
                     col_print_left, col_print_center, col_print_right = st.columns([1, 2, 1])
                     with col_print_center:
-                        st.markdown("""
-                        <script>
-                        function printReport() {
-                            window.print();
-                        }
-                        </script>
-                        <button onclick="printReport()" style="
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            border: none;
-                            padding: 0.7rem 1.8rem;
-                            border-radius: 25px;
-                            font-weight: bold;
-                            cursor: pointer;
-                            font-size: 1rem;
-                            width: 100%;
-                            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-                        ">🖨️ Print Report (Ctrl+P)</button>
-                        """, unsafe_allow_html=True)
+                        components.html(
+                            """
+                            <button onclick="window.print()" style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 0.7rem 1.8rem;
+                                border-radius: 25px;
+                                font-weight: bold;
+                                cursor: pointer;
+                                font-size: 1rem;
+                                width: 100%;
+                                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                                transition: transform 0.2s;
+                            ">
+                                🖨️ Print Report (Ctrl+P)
+                            </button>
+                            <style>
+                                button:hover {
+                                    transform: translateY(-2px);
+                                    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+                                }
+                            </style>
+                            """,
+                            height=60
+                        )
         
         with col2:
             if st.button("❌ Failed Sensors Report", use_container_width=True, key="report_failed"):
