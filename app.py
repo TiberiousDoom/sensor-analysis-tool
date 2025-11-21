@@ -118,9 +118,11 @@ class TutorialSystem:
                 **For this tutorial:** Select "Use Database" and click the **"Load Database"** button.
                 
                 Once you see "✅ Loaded" message, click **Next** to continue.
+                
+                **Note:** You can skip ahead if you prefer to explore on your own!
                 """,
-                'action_required': 'data_loaded',
-                'completion_check': lambda: len(st.session_state.get('df', pd.DataFrame())) > 0
+                'action_required': None,  # Changed from 'data_loaded' to allow progression
+                'completion_check': None  # Removed check to allow clicking Next
             },
             {
                 'id': 'enter_job',
@@ -155,9 +157,11 @@ class TutorialSystem:
                 - Generate visualizations and statistics
                 
                 **Click the "🔍 Analyze" button** in the sidebar, then click **Next** here.
+                
+                **Note:** If you haven't loaded data yet, you can skip ahead and come back later!
                 """,
-                'action_required': 'analysis_complete',
-                'completion_check': lambda: st.session_state.get('analysis_results') is not None
+                'action_required': None,  # Changed from 'analysis_complete'
+                'completion_check': None  # Removed strict check
             },
             {
                 'id': 'summary',
@@ -419,8 +423,9 @@ class TutorialSystem:
             
             # Check if step is completed
             step_completed = self.check_step_completion()
+            # Always allow progression - user can skip ahead if they want
             if not step_completed and current_step.get('action_required'):
-                st.warning(f"⏳ Please complete the action above before proceeding.")
+                st.info(f"💡 **Tip:** Complete the action above for the full experience, or skip ahead to explore on your own!")
             
             st.markdown("---")
             
@@ -463,9 +468,9 @@ class TutorialSystem:
             
             with col5:
                 if step_num < total_steps:
-                    button_label = "Next ➡️" if step_completed else "Next ➡️"
+                    button_label = "Next ➡️"
                     if st.button(button_label, key="tutorial_next", type="primary", 
-                               use_container_width=True, disabled=not step_completed):
+                               use_container_width=True):
                         self.next_step()
                         st.rerun()
                 else:
