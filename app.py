@@ -772,9 +772,9 @@ st.markdown("""
     .anomaly-high {
         background-color: #fee2e2;
         border-left: 4px solid #dc2626;
-        padding: 1rem;
+        padding: 0.5rem;
         border-radius: 5px;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
         color: #7f1d1d;
         font-weight: 600;
     }
@@ -782,9 +782,9 @@ st.markdown("""
     .anomaly-medium {
         background-color: #fef3c7;
         border-left: 4px solid #f59e0b;
-        padding: 1rem;
+        padding: 0.5rem;
         border-radius: 5px;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
         color: #78350f;
         font-weight: 600;
     }
@@ -1970,28 +1970,21 @@ if len(df) > 0:
     elif submit_button:
         st.warning("⚠️ Please enter a job number.")
     
-    # Handle export button
+    # Handle export button - provide immediate download
     if export_button and st.session_state.analysis_results is not None:
         info = st.session_state.analysis_results
-        st.info(f"📊 Exporting data for Job {st.session_state.current_job}...")
-        
         export_df = info['results'].copy()
         csv = export_df.to_csv(index=False)
         
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.download_button(
-                label="📥 Download Results CSV",
-                data=csv,
-                file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-                key="download_csv",
-                use_container_width=True
-            )
-        with col2:
-            st.caption(f"{len(export_df)} sensors")
-        
-        st.success(f"✅ Click button above to download {len(export_df)} sensor records")
+        st.success(f"✅ Ready to download {len(export_df)} sensor records")
+        st.download_button(
+            label="📥 Download Results CSV",
+            data=csv,
+            file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_csv_export",
+            use_container_width=True
+        )
     elif export_button and st.session_state.analysis_results is None:
         st.warning("⚠️ Please analyze a job first before exporting.")
     
@@ -2250,27 +2243,113 @@ if len(df) > 0:
                 failed_sensors = info['results'][info['results']['Pass/Fail'].isin(['FL', 'FH'])]
                 
                 if len(failed_sensors) > 0:
-                    failed_report = "# Failed Sensors Report\n\n"
-                    failed_report += f"**Job:** {st.session_state.current_job}\n"
-                    failed_report += f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                    failed_report += f"## Summary\n- **Total Failed:** {len(failed_sensors)} sensors\n\n"
-                    failed_report += "## Detailed List\n\n"
-                    failed_report += "| Serial Number | Channel | Status | Std Dev |\n"
-                    failed_report += "|---|---|---|---|\n"
-                    
-                    for idx, row in failed_sensors.iterrows():
-                        failed_report += f"| {row['Serial Number']} | {row.get('Channel', 'N/A')} | {row['Pass/Fail']} | {row['120s(St.Dev.)']:.3f} |\n"
-                    
-                    st.download_button(
-                        label="📥 Download Failed Report (Markdown)",
-                        data=failed_report,
-                        file_name=f"failed_sensors_job_{st.session_state.current_job}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                        mime="text/markdown",
-                        key="download_failed_report"
-                    )
-                    
-                    with st.expander("Preview Failed Sensors", expanded=True):
-                        st.markdown(failed_report)
+                    with st.expander("❌ Failed Sensors Report (Use Browser Print)", expanded=True):
+                        st.markdown(f"## Failed Sensors Report")
+                        st.markdown(f"**Job:** {st.session_state.current_job}")
+                        st.markdown(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                        st.markdown(f"**Total Failed:** {len(failed_sensors)} sensors")
+                        st.markdown("")
+                        
+                        # Display as table
+                        display_cols = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)']
+                        display_df = failed_sensors[display_cols].copy()
+                        display_df['120s(St.Dev.)'] = display_df['120s(St.Dev.)'].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        st.markdown("")
+                        
+                        # Generate HTML for printing
+                        failed_report_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Failed Sensors Report - Job {st.session_state.current_job}</title>
+    <style>
+        @page {{ margin: 1in; }}
+        body {{ font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; }}
+        h1, h2 {{ color: #333; page-break-after: avoid; }}
+        h1 {{ font-size: 24px; margin-bottom: 10px; border-bottom: 3px solid #dc2626; padding-bottom: 10px; }}
+        .header-info {{ color: #666; font-size: 14px; margin-bottom: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; page-break-inside: avoid; }}
+        th, td {{ padding: 8px; text-align: left; border: 1px solid #ddd; }}
+        th {{ background-color: #fee2e2; font-weight: bold; color: #7f1d1d; }}
+        tr:nth-child(even) {{ background-color: #f9f9f9; }}
+    </style>
+</head>
+<body>
+    <h1>Failed Sensors Report</h1>
+    <p class="header-info">Job: {st.session_state.current_job}</p>
+    <p class="header-info">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    <p class="header-info">Total Failed: {len(failed_sensors)} sensors</p>
+    
+    <table>
+        <tr>
+            <th>Serial Number</th>
+            <th>Channel</th>
+            <th>Status</th>
+            <th>Std Dev</th>
+        </tr>
+"""
+                        
+                        for idx, row in failed_sensors.iterrows():
+                            failed_report_html += f"""        <tr>
+            <td>{row['Serial Number']}</td>
+            <td>{row.get('Channel', 'N/A')}</td>
+            <td>{row['Pass/Fail']}</td>
+            <td>{row['120s(St.Dev.)']:.3f}</td>
+        </tr>
+"""
+                        
+                        failed_report_html += """    </table>
+</body>
+</html>
+"""
+                        
+                        # Print button
+                        col_print_left, col_print_center, col_print_right = st.columns([1, 2, 1])
+                        with col_print_center:
+                            escaped_html = json.dumps(failed_report_html)
+                            
+                            components.html(
+                                f"""
+                                <button onclick="printReport()" style="
+                                    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+                                    color: white;
+                                    border: none;
+                                    padding: 0.7rem 1.8rem;
+                                    border-radius: 25px;
+                                    font-weight: bold;
+                                    cursor: pointer;
+                                    font-size: 1rem;
+                                    width: 100%;
+                                    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+                                    transition: transform 0.2s;
+                                ">
+                                    🖨️ Print Failed Sensors Report
+                                </button>
+                                <style>
+                                    button:hover {{
+                                        transform: translateY(-2px);
+                                        box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
+                                    }}
+                                </style>
+                                <script>
+                                    function printReport() {{
+                                        var reportContent = {escaped_html};
+                                        var printWindow = window.open('', '', 'height=800,width=1000');
+                                        printWindow.document.write(reportContent);
+                                        printWindow.document.close();
+                                        printWindow.focus();
+                                        setTimeout(function() {{
+                                            printWindow.print();
+                                            printWindow.close();
+                                        }}, {PRINT_DIALOG_DELAY_MS});
+                                    }}
+                                </script>
+                                """,
+                                height=60
+                            )
                 else:
                     st.success("✅ No failed sensors found!")
         
@@ -2303,7 +2382,8 @@ if len(df) > 0:
                 serial_text = st.text_input(
                     "Serial Number(s):",
                     placeholder="Enter serial numbers separated by commas...",
-                    help="Filter by serial numbers. Supports partial matching."
+                    help="Filter by serial numbers. Supports partial matching.",
+                    key="serial_filter_input"
                 )
             
             st.caption("💡 Filters apply automatically. Remove status pills or clear text to reset.")
