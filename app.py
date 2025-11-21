@@ -1380,6 +1380,34 @@ if len(df) > 0:
                     historical = get_historical_jobs(df, st.session_state.current_job, num_jobs=50)
                     
                     if historical and len(historical) > 0:
+                        # Group jobs by whole number prefix
+                        job_groups = {}
+                        
+                        for job in historical:
+                            # Extract whole number prefix
+                            job_str = str(job['job']).strip()
+                            try:
+                                # For jobs like "267.1", get "267"
+                                if '.' in job_str:
+                                    prefix = job_str.split('.')[0]
+                                else:
+                                    prefix = job_str
+                            except:
+                                prefix = job_str
+                            
+                            # Group by prefix
+                            if prefix not in job_groups:
+                                job_groups[prefix] = {
+                                    'total': 0,
+                                    'passed': 0,
+                                    'failed': 0
+                                }
+                            
+                            job_groups[prefix]['total'] += job['total']
+                            job_groups[prefix]['passed'] += job['passed']
+                            job_groups[prefix]['failed'] += job['failed']
+                        
+                        # Build comparison table
                         comparison_data = {
                             'Job Number': [],
                             'Total Sensors': [],
@@ -1391,27 +1419,34 @@ if len(df) > 0:
                         
                         totals = {'total': 0, 'passed': 0, 'failed': 0}
                         
-                        for job in historical:
-                            comparison_data['Job Number'].append(job['job'])
-                            comparison_data['Total Sensors'].append(job['total'])
-                            comparison_data['Passed Qty'].append(job['passed'])
-                            comparison_data['Passed %'].append(f"{job['pass_pct']:.2f}%")
-                            comparison_data['Failed Qty'].append(job['failed'])
-                            comparison_data['Failed %'].append(f"{job['fail_pct']:.2f}%")
+                        # Sort job groups (numeric first, then non-numeric)
+                        sorted_prefixes = sorted(job_groups.keys(), key=lambda x: (not x.replace('.','').isdigit(), x.replace('.','').zfill(10) if x.replace('.','').isdigit() else x))
+                        
+                        for prefix in sorted_prefixes:
+                            group = job_groups[prefix]
+                            passed_pct = (group['passed'] / group['total'] * 100) if group['total'] > 0 else 0
+                            failed_pct = 100 - passed_pct
                             
-                            totals['total'] += job['total']
-                            totals['passed'] += job['passed']
-                            totals['failed'] += job['failed']
+                            comparison_data['Job Number'].append(prefix)
+                            comparison_data['Total Sensors'].append(group['total'])
+                            comparison_data['Passed Qty'].append(group['passed'])
+                            comparison_data['Passed %'].append(f"{passed_pct:.2f}%")
+                            comparison_data['Failed Qty'].append(group['failed'])
+                            comparison_data['Failed %'].append(f"{failed_pct:.2f}%")
+                            
+                            totals['total'] += group['total']
+                            totals['passed'] += group['passed']
+                            totals['failed'] += group['failed']
                         
                         # Add average row
-                        if len(historical) > 1:
-                            avg_pass_pct = (totals['passed'] / (totals['passed'] + totals['failed']) * 100) if (totals['passed'] + totals['failed']) > 0 else 0
+                        if len(job_groups) > 1:
+                            avg_pass_pct = (totals['passed'] / totals['total'] * 100) if totals['total'] > 0 else 0
                             avg_fail_pct = 100 - avg_pass_pct
                             comparison_data['Job Number'].append('Average:')
-                            comparison_data['Total Sensors'].append(int(totals['total']/len(historical)))
-                            comparison_data['Passed Qty'].append(int(totals['passed']/len(historical)))
+                            comparison_data['Total Sensors'].append(int(totals['total']/len(job_groups)))
+                            comparison_data['Passed Qty'].append(int(totals['passed']/len(job_groups)))
                             comparison_data['Passed %'].append(f"{avg_pass_pct:.2f}%")
-                            comparison_data['Failed Qty'].append(int(totals['failed']/len(historical)))
+                            comparison_data['Failed Qty'].append(int(totals['failed']/len(job_groups)))
                             comparison_data['Failed %'].append(f"{avg_fail_pct:.2f}%")
                         
                         st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
