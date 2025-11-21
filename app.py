@@ -571,71 +571,49 @@ def detect_anomalies(results, thresholds):
     return anomalies
 
 def get_historical_jobs(df, current_job, num_jobs=50):
-    """Get analysis data for all available whole-numbered jobs, sorted oldest first (newest at bottom)."""
+    """Get ALL available jobs from database for aggregation by whole number prefix."""
     historical_data = []
     
     try:
-        # Extract all unique jobs from database
+        # Extract ALL unique jobs from database (not limited to one per prefix)
         unique_jobs = df['Job #'].unique()
-        job_dict = {}
         
+        # Process each unique job
         for job_id in unique_jobs:
             try:
-                # Try to extract numeric prefix - handles both "256.1" and non-numeric like "HR904"
-                job_str = str(job_id).strip()
+                job_data = get_job_data(df, job_id)
                 
-                # For numeric jobs like "256.1", extract the prefix
-                if '.' in job_str:
-                    prefix_str = job_str.split('.')[0]
-                    try:
-                        prefix = int(prefix_str)
-                    except:
-                        # For non-numeric prefixes, use the whole string as key
-                        prefix = job_str
-                else:
-                    try:
-                        prefix = int(job_str)
-                    except:
-                        prefix = job_str
-                
-                if prefix not in job_dict:
-                    job_dict[prefix] = job_id
+                if len(job_data) > 0:
+                    job_data = calculate_metrics(job_data)
+                    results = determine_pass_fail(job_data, 'Standard')
+                    
+                    # Calculate stats
+                    total = len(results)
+                    passed = len(results[results['Pass/Fail'].isin(['PASS', 'OT-', 'TT', 'OT+'])])
+                    failed = len(results[results['Pass/Fail'].isin(['FL', 'FH'])])
+                    counted = passed + failed
+                    
+                    pass_pct = (passed / counted * 100) if counted > 0 else 0
+                    fail_pct = (failed / counted * 100) if counted > 0 else 0
+                    
+                    historical_data.append({
+                        'job': str(job_id),
+                        'total': total,
+                        'passed': passed,
+                        'pass_pct': pass_pct,
+                        'failed': failed,
+                        'fail_pct': fail_pct,
+                        'is_current': str(job_id) == str(current_job)
+                    })
             except:
                 pass
         
-        # Get all available jobs sorted by key
-        all_keys = sorted(job_dict.keys(), key=lambda x: (isinstance(x, str), x), reverse=True)[:num_jobs]
+        # Sort by job ID for consistency (oldest first)
+        historical_data.sort(key=lambda x: (isinstance(x['job'], str), x['job']))
         
-        # Sort in ascending order so oldest is at top, newest at bottom
-        sorted_keys = sorted(all_keys, key=lambda x: (isinstance(x, str), x))
-        
-        for key in sorted_keys:
-            job_id = job_dict[key]
-            job_data = get_job_data(df, job_id)
-            
-            if len(job_data) > 0:
-                job_data = calculate_metrics(job_data)
-                results = determine_pass_fail(job_data, 'Standard')
-                
-                # Calculate stats (using Standard threshold for consistency)
-                total = len(results)
-                passed = len(results[results['Pass/Fail'].isin(['PASS', 'OT-', 'TT', 'OT+'])])
-                failed = len(results[results['Pass/Fail'].isin(['FL', 'FH'])])
-                counted = passed + failed
-                
-                pass_pct = (passed / counted * 100) if counted > 0 else 0
-                fail_pct = (failed / counted * 100) if counted > 0 else 0
-                
-                historical_data.append({
-                    'job': str(job_id),
-                    'prefix': key,
-                    'total': total,
-                    'passed': passed,
-                    'pass_pct': pass_pct,
-                    'failed': failed,
-                    'fail_pct': fail_pct,
-                    'is_current': str(job_id) == str(current_job)
-                })
+        # Limit to most recent N jobs
+        historical_data = historical_data[-num_jobs:]
+    
     except:
         pass
     
