@@ -2369,6 +2369,10 @@ if len(df) > 0:
             # Create simple filter columns without complex state management
             col1, col2 = st.columns([3, 3])
             
+            # Initialize session state for serial filter if not exists
+            if 'serial_filter' not in st.session_state:
+                st.session_state.serial_filter = ""
+            
             with col1:
                 selected_statuses = st.pills(
                     "Select Status:",
@@ -2381,10 +2385,14 @@ if len(df) > 0:
             with col2:
                 serial_text = st.text_input(
                     "Serial Number(s):",
+                    value=st.session_state.serial_filter,
                     placeholder="Enter serial numbers separated by commas...",
-                    help="Filter by serial numbers. Supports partial matching.",
-                    key="serial_filter_input"
+                    help="Filter by serial numbers. Supports partial matching. Updates automatically as you type!",
+                    key="serial_filter_input",
+                    on_change=lambda: None  # Triggers rerun on every keystroke
                 )
+                # Update session state
+                st.session_state.serial_filter = serial_text
             
             st.caption("💡 Filters apply automatically. Remove status pills or clear text to reset.")
             
@@ -2432,6 +2440,105 @@ if len(df) > 0:
                 if fig:
                     st.pyplot(fig)
                     plt.close(fig)  # Explicit cleanup
+            
+            # Show individual sensor plots if serial number filter is active
+            if st.session_state.get('serial_filter', '').strip():
+                serial_text = st.session_state.serial_filter
+                serials = [s.strip() for s in serial_text.split(',') if s.strip()]
+                
+                if serials:
+                    with st.expander(f"📊 Individual Sensor Plots ({len(serials)} filter{'s' if len(serials) > 1 else ''})", expanded=True):
+                        st.markdown("**Showing detailed readings for filtered sensors:**")
+                        
+                        # Get filtered data
+                        pattern = '|'.join([re.escape(s) for s in serials])
+                        filtered_sensors = info['results'][
+                            info['results']['Serial Number'].str.contains(pattern, case=False, na=False, regex=True)
+                        ]
+                        
+                        if len(filtered_sensors) == 0:
+                            st.warning("No sensors match the filter.")
+                        else:
+                            # Get job data for these specific sensors
+                            job_data = get_job_data(df, st.session_state.current_job)
+                            
+                            # Create plots for each sensor
+                            for idx, (_, sensor_row) in enumerate(filtered_sensors.iterrows()):
+                                serial = sensor_row['Serial Number']
+                                
+                                # Get all test data for this sensor
+                                sensor_tests = job_data[job_data['Serial Number'] == serial]
+                                
+                                if len(sensor_tests) > 0:
+                                    # Create subplot
+                                    with create_plot(figsize=(12, 4)) as fig:
+                                        ax = fig.add_subplot(111)
+                                        
+                                        # Style based on theme
+                                        fig.patch.set_facecolor('#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+                                        ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
+                                        
+                                        # Get thresholds
+                                        thresholds = info['thresholds']
+                                        
+                                        # Plot each test for this sensor
+                                        colors = ['#667eea', '#764ba2', '#f59e0b', '#10b981', '#ef4444']
+                                        for test_idx, (_, test_row) in enumerate(sensor_tests.iterrows()):
+                                            time_points = []
+                                            readings = []
+                                            
+                                            for tp in TIME_POINTS:
+                                                if tp in test_row and pd.notna(test_row[tp]):
+                                                    time_points.append(float(tp))
+                                                    readings.append(test_row[tp])
+                                            
+                                            if len(time_points) > 0:
+                                                color = colors[test_idx % len(colors)]
+                                                ax.plot(time_points, readings, 'o-', 
+                                                       color=color, linewidth=2, markersize=6,
+                                                       label=f'Test {test_idx + 1}',
+                                                       markeredgecolor='white', markeredgewidth=1)
+                                        
+                                        # Add threshold lines
+                                        ax.axhline(y=thresholds['min_120s'], color='#ff4444', 
+                                                  linestyle='--', alpha=0.7, linewidth=2,
+                                                  label=f'Min Threshold ({thresholds["min_120s"]}V)')
+                                        ax.axhline(y=thresholds['max_120s'], color='#ff4444',
+                                                  linestyle='--', alpha=0.7, linewidth=2,
+                                                  label=f'Max Threshold ({thresholds["max_120s"]}V)')
+                                        
+                                        # Formatting
+                                        status = sensor_row['Pass/Fail']
+                                        status_color = StatusBadge.get_color(status)
+                                        
+                                        ax.set_title(f'Serial: {serial} - Status: {status}',
+                                                   fontsize=14, fontweight='bold', pad=15,
+                                                   color=status_color)
+                                        ax.set_xlabel('Time (seconds)', fontsize=11)
+                                        ax.set_ylabel('Voltage (V)', fontsize=11)
+                                        ax.set_ylim(PLOT_VOLTAGE_LIMITS)
+                                        ax.grid(True, alpha=0.3, linestyle='--',
+                                               color='#4a4a4a' if st.get_option('theme.base') == 'dark' else '#cccccc')
+                                        ax.legend(loc='best', framealpha=0.9,
+                                                facecolor='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white',
+                                                fontsize=9)
+                                        
+                                        plt.tight_layout()
+                                        st.pyplot(fig)
+                                    
+                                    # Show test details in compact format
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.caption(f"**Tests:** {len(sensor_tests)}")
+                                    with col2:
+                                        std_dev = sensor_row['120s(St.Dev.)']
+                                        st.caption(f"**Std Dev:** {std_dev:.3f}V")
+                                    with col3:
+                                        badge_html = StatusBadge.get_html(status)
+                                        st.markdown(badge_html, unsafe_allow_html=True)
+                                    
+                                    if idx < len(filtered_sensors) - 1:
+                                        st.markdown("---")
         
         # Tab 3: Status Breakdown
         with tabs[2]:
