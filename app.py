@@ -8,6 +8,7 @@ import matplotlib.patches as mpatches
 import matplotlib.patheffects as path_effects
 import io
 import re
+import json
 from datetime import datetime
 
 # Page configuration with custom theme
@@ -1082,6 +1083,251 @@ def get_historical_jobs(df, current_job, num_jobs=50):
     
     return historical_data
 
+def generate_report_summary(info, job_number, df=None):
+    """Generate a complete HTML report with proper styling for printing."""
+    status_counts = info['status_counts']
+    
+    # Build HTML report with inline CSS
+    report = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sensor Analysis Report - Job {job_number}</title>
+    <style>
+        @page {{
+            margin: 1in;
+        }}
+        
+        body {{
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 100%;
+            margin: 0 auto;
+            color: #000;
+            background: #fff;
+        }}
+        
+        h1, h2, h3 {{
+            color: #333;
+            page-break-after: avoid;
+        }}
+        
+        h1 {{
+            font-size: 24px;
+            margin-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }}
+        
+        h2 {{
+            font-size: 20px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            color: #667eea;
+        }}
+        
+        h3 {{
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }}
+        
+        .header-info {{
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }}
+        
+        .section {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }}
+        
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }}
+        
+        th, td {{
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }}
+        
+        th {{
+            background-color: #f5f5f5;
+            font-weight: bold;
+            color: #333;
+        }}
+        
+        tr:nth-child(even) {{
+            background-color: #f9f9f9;
+        }}
+        
+        .highlight-row {{
+            background-color: #fff3cd !important;
+            font-weight: bold;
+        }}
+        
+        .no-print {{
+            display: none;
+        }}
+    </style>
+</head>
+<body>
+    <h1>Sensor Analysis Report - Job Summary</h1>
+    <p class="header-info">Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    
+    <div class="section">
+        <div>
+            <h2>Job {info['matched_jobs'][0].split('.')[0]} Analysis</h2>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Job Number</td>
+                    <td>{job_number}</td>
+                </tr>
+                <tr>
+                    <td>Total Sensors</td>
+                    <td>{info['total_sensors']}</td>
+                </tr>
+                <tr>
+                    <td>Sensors Passed</td>
+                    <td>{info['passed_sensors']} ({info['pass_rate']:.1f}%)</td>
+                </tr>
+                <tr>
+                    <td>Sensors Failed</td>
+                    <td>{info['failed_sensors']} ({info['fail_rate']:.1f}%)</td>
+                </tr>
+                <tr>
+                    <td>Data Missing</td>
+                    <td>{info['dm_sensors']}</td>
+                </tr>
+                <tr>
+                    <td>Threshold Set</td>
+                    <td>{info['threshold_set']}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div>
+            <h2>Status Breakdown</h2>
+            <table>
+                <tr>
+                    <th>Status Code</th>
+                    <th>Count</th>
+                    <th>Percentage</th>
+                </tr>
+"""
+    
+    # Add status rows
+    for status in ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']:
+        count = status_counts.get(status, 0)
+        if count > 0:
+            pct = (count / info['total_sensors'] * 100)
+            report += f"""                <tr>
+                    <td>{status}</td>
+                    <td>{count}</td>
+                    <td>{pct:.1f}%</td>
+                </tr>
+"""
+    
+    report += """            </table>
+        </div>
+    </div>
+    
+    <h2>Job Analysis Comparison</h2>
+    <table>
+        <tr>
+            <th>Job Number</th>
+            <th>Total Sensors</th>
+            <th>Passed Qty</th>
+            <th>Passed %</th>
+            <th>Failed Qty</th>
+            <th>Failed %</th>
+        </tr>
+"""
+    
+    # Add historical job comparison
+    if df is not None and len(df) > 0:
+        historical = get_historical_jobs(df, job_number, num_jobs=50)
+        
+        if historical and len(historical) > 0:
+            # Group jobs by whole number prefix
+            job_groups = {}
+            
+            for job in historical:
+                job_str = str(job['job']).strip()
+                try:
+                    if '.' in job_str:
+                        prefix = job_str.split('.')[0]
+                    else:
+                        prefix = job_str
+                except:
+                    prefix = job_str
+                
+                if prefix not in job_groups:
+                    job_groups[prefix] = {'total': 0, 'passed': 0, 'failed': 0}
+                
+                job_groups[prefix]['total'] += job['total']
+                job_groups[prefix]['passed'] += job['passed']
+                job_groups[prefix]['failed'] += job['failed']
+            
+            totals = {'total': 0, 'passed': 0, 'failed': 0}
+            sorted_prefixes = sorted(job_groups.keys(), key=lambda x: (not x.replace('.','').isdigit(), x.replace('.','').zfill(10) if x.replace('.','').isdigit() else x))
+            
+            for prefix in sorted_prefixes:
+                group = job_groups[prefix]
+                passed_pct = (group['passed'] / group['total'] * 100) if group['total'] > 0 else 0
+                failed_pct = 100 - passed_pct
+                
+                # Highlight current job
+                row_class = ' class="highlight-row"' if prefix == str(job_number).split('.')[0] else ''
+                
+                report += f"""        <tr{row_class}>
+            <td>{prefix}</td>
+            <td>{group['total']}</td>
+            <td>{group['passed']}</td>
+            <td>{passed_pct:.2f}%</td>
+            <td>{group['failed']}</td>
+            <td>{failed_pct:.2f}%</td>
+        </tr>
+"""
+                totals['total'] += group['total']
+                totals['passed'] += group['passed']
+                totals['failed'] += group['failed']
+            
+            # Add average row
+            if len(job_groups) > 1:
+                avg_pass_pct = (totals['passed'] / totals['total'] * 100) if totals['total'] > 0 else 0
+                avg_fail_pct = 100 - avg_pass_pct
+                report += f"""        <tr style="border-top: 2px solid #333; font-weight: bold;">
+            <td>Average:</td>
+            <td>{totals['total']/len(job_groups):.0f}</td>
+            <td>{totals['passed']/len(job_groups):.0f}</td>
+            <td>{avg_pass_pct:.2f}%</td>
+            <td>{totals['failed']/len(job_groups):.0f}</td>
+            <td>{avg_fail_pct:.2f}%</td>
+        </tr>
+"""
+    
+    report += """    </table>
+</body>
+</html>
+"""
+    
+    return report
+
 def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     """Generate enhanced visualization for a specific job with dark mode compatibility."""
     job_data = get_job_data(df, job_number)
@@ -1785,13 +2031,21 @@ if len(df) > 0:
                         
                         st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
                     
-                    # Print button - Using components for proper JavaScript execution
+                    # Print button - Create HTML report and print it
                     st.markdown("")
+                    
+                    # Generate printable HTML report
+                    report_html = generate_report_summary(info, st.session_state.current_job, df)
+                    
                     col_print_left, col_print_center, col_print_right = st.columns([1, 2, 1])
                     with col_print_center:
+                        # Escape the HTML for JavaScript
+                        import json
+                        escaped_html = json.dumps(report_html)
+                        
                         components.html(
-                            """
-                            <button onclick="window.parent.print()" style="
+                            f"""
+                            <button onclick="printReport()" style="
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                 color: white;
                                 border: none;
@@ -1807,11 +2061,24 @@ if len(df) > 0:
                                 🖨️ Print Report (Ctrl+P)
                             </button>
                             <style>
-                                button:hover {
+                                button:hover {{
                                     transform: translateY(-2px);
                                     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-                                }
+                                }}
                             </style>
+                            <script>
+                                function printReport() {{
+                                    var reportContent = {escaped_html};
+                                    var printWindow = window.open('', '', 'height=800,width=1000');
+                                    printWindow.document.write(reportContent);
+                                    printWindow.document.close();
+                                    printWindow.focus();
+                                    setTimeout(function() {{
+                                        printWindow.print();
+                                        printWindow.close();
+                                    }}, 250);
+                                }}
+                            </script>
                             """,
                             height=60
                         )
