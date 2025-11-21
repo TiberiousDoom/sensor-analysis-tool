@@ -19,6 +19,480 @@ st.set_page_config(
     }
 )
 
+# ==================== TUTORIAL SYSTEM ====================
+
+class TutorialSystem:
+    """Interactive tutorial system for the Sensor Analysis Dashboard"""
+    
+    def __init__(self):
+        self.tutorial_steps = [
+            {
+                'id': 'welcome',
+                'title': '👋 Welcome to Sensor Analysis Dashboard!',
+                'content': """
+                This tutorial will guide you through analyzing your sensor data in just a few minutes.
+                
+                **You'll learn how to:**
+                - 📁 Load your sensor data
+                - 🔍 Analyze a specific job
+                - 📊 Navigate and interpret results
+                - 💾 Export your findings
+                
+                **Estimated time:** 3-4 minutes
+                
+                Click **Next** to begin!
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'load_data',
+                'title': '📁 Step 1: Load Your Data',
+                'content': """
+                First, let's load some sensor data.
+                
+                **Look at the sidebar on the left** ⬅️
+                
+                You have two options:
+                1. **📤 Upload CSV** - Upload your own sensor data file
+                2. **💾 Use Database** - Load from the sample database
+                
+                **For this tutorial:** Select "Use Database" and click the **"Load Database"** button.
+                
+                Once you see "✅ Loaded" message, click **Next** to continue.
+                """,
+                'action_required': 'data_loaded',
+                'completion_check': lambda: len(st.session_state.get('df', pd.DataFrame())) > 0
+            },
+            {
+                'id': 'enter_job',
+                'title': '🔍 Step 2: Enter a Job Number',
+                'content': """
+                Great! Your data is loaded.
+                
+                **In the sidebar,** find the "Job Number" input field under **⚙️ Analysis Settings**.
+                
+                **Try this:** Type `258` in the Job Number field.
+                
+                💡 **Tip:** The system supports prefix matching, so "258" will find all jobs starting with 258 (like 258.1, 258.2, etc.)
+                
+                After entering the job number, click **Next**.
+                """,
+                'action_required': 'job_entered',
+                'completion_check': None
+            },
+            {
+                'id': 'analyze',
+                'title': '▶️ Step 3: Run Analysis',
+                'content': """
+                Perfect! Now let's analyze the data.
+                
+                **In the sidebar,** you'll see:
+                - **Threshold Set:** Choose "Standard" (default) or "High Range"
+                - **🔍 Analyze button:** Click this to process the data
+                
+                The analysis will:
+                - Calculate pass/fail rates for each sensor
+                - Identify any issues or anomalies
+                - Generate visualizations and statistics
+                
+                **Click the "🔍 Analyze" button** in the sidebar, then click **Next** here.
+                """,
+                'action_required': 'analysis_complete',
+                'completion_check': lambda: st.session_state.get('analysis_results') is not None
+            },
+            {
+                'id': 'summary',
+                'title': '📊 Step 4: Understanding the Summary',
+                'content': """
+                Excellent! Your analysis is complete.
+                
+                **Look at the Quick Summary cards** at the top of the page:
+                
+                - **Total Sensors** - Number of sensors analyzed
+                - **Pass Rate** - Percentage that passed (🟢 Green is good!)
+                - **Fail Rate** - Percentage that failed (🔴 Red needs attention)
+                - **Data Missing** - Sensors with incomplete readings
+                - **Job(s)** - Number of job records found
+                
+                **Color coding:**
+                - 🟢 **Green metrics** = Good performance
+                - 🔴 **Red metrics** = Issues detected
+                
+                Take a moment to review these numbers, then click **Next**.
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'data_table',
+                'title': '📋 Step 5: Exploring the Data Table',
+                'content': """
+                Now let's look at the detailed results.
+                
+                **Click on the "📋 Data Table" tab** (if not already selected).
+                
+                You'll see:
+                - **Serial Number** - Unique sensor identifier
+                - **Pass/Fail** - Overall status for each sensor
+                - **Test readings** - Voltage measurements at different time points
+                - **Color-coded rows:**
+                  - 🟢 Green = Passed
+                  - 🔴 Red = Failed (FL/FH)
+                  - 🟡 Yellow = Warnings (OT-/TT/OT+)
+                  - ⚪ Gray = Missing data
+                
+                **Try clicking on the status pills** in the filter section to show/hide specific statuses!
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'filters',
+                'title': '🔍 Step 6: Using Filters',
+                'content': """
+                Filters help you focus on what matters most.
+                
+                **At the top of the Data Table tab**, you'll see:
+                
+                1. **Status Pills** - Click to toggle specific statuses on/off
+                   - Try clicking **"PASS"** to hide all passing sensors
+                   - This shows only the problem cases!
+                
+                2. **Serial Number Search** - Find specific sensors
+                   - Enter comma-separated serial numbers
+                   - Supports partial matching
+                
+                **Filters apply automatically** - no need to click a button!
+                
+                Experiment with the filters, then click **Next**.
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'visualization',
+                'title': '📈 Step 7: Visualization Tab',
+                'content': """
+                Visual data helps spot trends and patterns quickly.
+                
+                **Click the "📈 Visualization" tab** to see:
+                
+                **Left Plot - Sensor Readings Over Time:**
+                - Shows how readings change from 0s to 120s
+                - Colored bands show acceptable ranges
+                - Mean line with confidence intervals
+                
+                **Right Plot - 120s Reading Distribution:**
+                - Box plot showing the spread of final readings
+                - Green zone = passing range
+                - Red zones = failure thresholds
+                
+                Visual patterns can reveal issues that aren't obvious in tables!
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'export',
+                'title': '💾 Step 8: Exporting Results',
+                'content': """
+                Need to share your analysis? Export it!
+                
+                **In the sidebar,** find the **📊 Export** button.
+                
+                When you click it:
+                1. A download button will appear
+                2. Click "📥 Download Results CSV"
+                3. The file includes all your filtered data
+                
+                **Quick Reports** (in main area):
+                - 📄 **Summary Report** - Comprehensive analysis overview
+                - ❌ **Failed Sensors Report** - List of problematic sensors
+                
+                These reports are ready to print or share with your team!
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'advanced',
+                'title': '⚡ Step 9: Advanced Features',
+                'content': """
+                You're almost a pro! Here are some advanced features:
+                
+                **⚠️ Anomaly Detection** (top of main area)
+                - Automatically flags high variability
+                - Detects inconsistent test results
+                - Expands when issues are found
+                
+                **📊 Status Breakdown** tab
+                - Pie chart of status distribution
+                - Detailed counts and percentages
+                
+                **ℹ️ Thresholds** tab
+                - View current threshold settings
+                - Status code reference
+                - Decision logic flowchart
+                
+                **📜 Recent Jobs** (sidebar)
+                - Quick access to previously analyzed jobs
+                """,
+                'action_required': None,
+                'completion_check': None
+            },
+            {
+                'id': 'complete',
+                'title': '🎉 Tutorial Complete!',
+                'content': """
+                Congratulations! You're now ready to analyze sensor data like a pro! 🚀
+                
+                **Quick Reference:**
+                1. Load Data → 2. Enter Job → 3. Analyze → 4. Review → 5. Export
+                
+                **Remember:**
+                - Use filters to focus on problems
+                - Colors indicate status at a glance
+                - Export filtered results for reporting
+                - Check anomaly alerts for unusual patterns
+                
+                **Need help later?**
+                - Click **"❓ Need Help?"** in the sidebar
+                - Click **"🎓 Restart Tutorial"** anytime
+                
+                Click **Finish** to start analyzing your data!
+                """,
+                'action_required': None,
+                'completion_check': None
+            }
+        ]
+        
+        # Initialize tutorial state
+        if 'tutorial_state' not in st.session_state:
+            st.session_state.tutorial_state = {
+                'active': False,
+                'current_step': 0,
+                'completed_steps': [],
+                'show_on_start': True,
+                'first_visit': True,
+                'dismissed': False
+            }
+    
+    def should_show_tutorial(self):
+        """Determine if tutorial should auto-start"""
+        if st.session_state.tutorial_state['dismissed']:
+            return False
+        if not st.session_state.tutorial_state['show_on_start']:
+            return False
+        if st.session_state.tutorial_state['first_visit']:
+            return True
+        return False
+    
+    def start_tutorial(self):
+        """Begin the tutorial"""
+        st.session_state.tutorial_state['active'] = True
+        st.session_state.tutorial_state['current_step'] = 0
+        st.session_state.tutorial_state['first_visit'] = False
+    
+    def stop_tutorial(self):
+        """End the tutorial"""
+        st.session_state.tutorial_state['active'] = False
+    
+    def dismiss_tutorial(self):
+        """Dismiss tutorial permanently for this session"""
+        st.session_state.tutorial_state['dismissed'] = True
+        st.session_state.tutorial_state['active'] = False
+    
+    def next_step(self):
+        """Move to next tutorial step"""
+        current = st.session_state.tutorial_state['current_step']
+        if current not in st.session_state.tutorial_state['completed_steps']:
+            st.session_state.tutorial_state['completed_steps'].append(current)
+        
+        if current < len(self.tutorial_steps) - 1:
+            st.session_state.tutorial_state['current_step'] += 1
+        else:
+            self.stop_tutorial()
+    
+    def previous_step(self):
+        """Go back to previous step"""
+        if st.session_state.tutorial_state['current_step'] > 0:
+            st.session_state.tutorial_state['current_step'] -= 1
+    
+    def check_step_completion(self):
+        """Check if current step's action is completed"""
+        current_step = self.tutorial_steps[st.session_state.tutorial_state['current_step']]
+        if current_step.get('completion_check'):
+            return current_step['completion_check']()
+        return True
+    
+    def render_tutorial_dialog(self):
+        """Display the current tutorial step as a dialog"""
+        if not st.session_state.tutorial_state['active']:
+            return
+        
+        current_idx = st.session_state.tutorial_state['current_step']
+        current_step = self.tutorial_steps[current_idx]
+        step_num = current_idx + 1
+        total_steps = len(self.tutorial_steps)
+        
+        # Create a dialog-like experience using container
+        with st.container():
+            # Progress indicator
+            progress = step_num / total_steps
+            st.progress(progress, text=f"Step {step_num} of {total_steps}")
+            
+            # Tutorial card
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 2rem;
+                border-radius: 15px;
+                color: white;
+                margin: 1rem 0;
+                box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            ">
+                <h2 style="margin: 0 0 1rem 0; color: white;">{current_step['title']}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Content
+            st.markdown(current_step['content'])
+            
+            # Check if step is completed
+            step_completed = self.check_step_completion()
+            if not step_completed and current_step.get('action_required'):
+                st.warning(f"⏳ Please complete the action above before proceeding.")
+            
+            st.markdown("---")
+            
+            # Navigation buttons
+            col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+            
+            with col1:
+                if step_num > 1:
+                    if st.button("⬅️ Previous", key="tutorial_prev", use_container_width=True):
+                        self.previous_step()
+                        st.rerun()
+            
+            with col2:
+                if st.button("⏭️ Skip All", key="tutorial_skip", use_container_width=True):
+                    self.dismiss_tutorial()
+                    st.rerun()
+            
+            with col3:
+                # Progress dots
+                dots_html = ""
+                for i in range(total_steps):
+                    if i == current_idx:
+                        dots_html += "🔵 "
+                    elif i in st.session_state.tutorial_state['completed_steps']:
+                        dots_html += "✅ "
+                    else:
+                        dots_html += "⚪ "
+                st.markdown(f"<div style='text-align: center; padding: 0.5rem;'>{dots_html}</div>", 
+                           unsafe_allow_html=True)
+            
+            with col4:
+                # Show later checkbox
+                show_again = st.checkbox(
+                    "Show on startup",
+                    value=st.session_state.tutorial_state['show_on_start'],
+                    key="tutorial_show_again",
+                    help="Toggle whether tutorial appears when you open the app"
+                )
+                st.session_state.tutorial_state['show_on_start'] = show_again
+            
+            with col5:
+                if step_num < total_steps:
+                    button_label = "Next ➡️" if step_completed else "Next ➡️"
+                    if st.button(button_label, key="tutorial_next", type="primary", 
+                               use_container_width=True, disabled=not step_completed):
+                        self.next_step()
+                        st.rerun()
+                else:
+                    if st.button("🎉 Finish", key="tutorial_finish", type="primary", 
+                               use_container_width=True):
+                        st.session_state.tutorial_state['completed_steps'].append(current_idx)
+                        self.stop_tutorial()
+                        st.balloons()
+                        st.rerun()
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+    
+    def render_help_sidebar(self):
+        """Render help menu in sidebar"""
+        with st.expander("🎓 Tutorial & Help", expanded=False):
+            st.markdown("### Interactive Tutorial")
+            
+            # Tutorial controls
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("▶️ Start Tutorial", use_container_width=True, key="start_tutorial_btn"):
+                    self.start_tutorial()
+                    st.rerun()
+            
+            with col2:
+                if st.button("🔄 Reset Progress", use_container_width=True, key="reset_tutorial_btn"):
+                    st.session_state.tutorial_state['completed_steps'] = []
+                    st.session_state.tutorial_state['current_step'] = 0
+                    st.session_state.tutorial_state['first_visit'] = True
+                    st.session_state.tutorial_state['dismissed'] = False
+                    st.success("Tutorial reset!")
+            
+            st.markdown("---")
+            
+            # Quick reference
+            st.markdown("""
+            ### 📚 Quick Reference
+            
+            **Workflow:**
+            1. Load data (CSV or Database)
+            2. Enter job number
+            3. Click "Analyze"
+            4. Review results
+            5. Export as needed
+            
+            **Status Codes:**
+            - **PASS** ✅ - All checks passed
+            - **FL** ❌ - Failed Low voltage
+            - **FH** ❌ - Failed High voltage
+            - **OT-** ⚠️ - Out of Tolerance (Low %)
+            - **TT** ⚠️ - Test-to-Test variability
+            - **OT+** ⚠️ - Out of Tolerance (High %)
+            - **DM** ⚪ - Data Missing
+            
+            **Tips:**
+            - Use filters to focus on issues
+            - Click status pills to toggle
+            - Export includes filtered data
+            - Check anomaly alerts
+            """)
+            
+            st.markdown("---")
+            
+            # Keyboard shortcuts
+            with st.expander("⌨️ Keyboard Shortcuts", expanded=False):
+                st.markdown("""
+                - **Ctrl/Cmd + P** - Print report
+                - **Tab** - Navigate between fields
+                - **Enter** - Submit form
+                """)
+            
+            # Settings
+            st.markdown("### ⚙️ Tutorial Settings")
+            show_startup = st.checkbox(
+                "Show tutorial on app startup",
+                value=st.session_state.tutorial_state['show_on_start'],
+                key="tutorial_settings_checkbox"
+            )
+            st.session_state.tutorial_state['show_on_start'] = show_startup
+
+# Initialize tutorial system
+tutorial = TutorialSystem()
+
+# ==================== END TUTORIAL SYSTEM ====================
+
 # Custom CSS for modern UI with dark mode support
 st.markdown("""
 <style>
@@ -191,21 +665,6 @@ st.markdown("""
         color: white !important;
         border: none;
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-    
-    /* Tooltip styles */
-    .tooltip-icon {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        background: #667eea;
-        color: white;
-        border-radius: 50%;
-        text-align: center;
-        line-height: 20px;
-        font-weight: bold;
-        cursor: help;
-        margin-left: 5px;
     }
     
     /* Anomaly alert styling */
@@ -478,41 +937,6 @@ def create_status_badge(status):
     else:
         return f'<span class="status-pill status-info">• {status}</span>'
 
-def calculate_data_quality(results):
-    """Calculate data quality score based on completeness."""
-    # Expected data points
-    num_sensors = len(results)
-    num_time_points = 7  # 0, 5, 15, 30, 60, 90, 120
-    num_tests = 2  # Typically 2 tests per sensor (estimate)
-    
-    total_expected = num_sensors * num_time_points * num_tests
-    
-    # Count actual non-null data points
-    data_cols = [col for col in results.columns 
-                 if any(x in col for x in ['0s(', '90s(', '120s('])]
-    total_actual = results[data_cols].notna().sum().sum()
-    
-    quality_score = (total_actual / total_expected * 100) if total_expected > 0 else 0
-    
-    return quality_score
-
-def display_data_quality(quality_score):
-    """Display visual data quality indicator."""
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.progress(min(quality_score / 100, 1.0))
-    
-    with col2:
-        if quality_score > 95:
-            st.markdown('<div class="quality-badge quality-excellent">✓ Excellent</div>', unsafe_allow_html=True)
-        elif quality_score > 80:
-            st.markdown('<div class="quality-badge quality-good">✓ Good</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="quality-badge quality-poor">⚠ Check Data</div>', unsafe_allow_html=True)
-    
-    st.caption(f"Data Quality: {quality_score:.1f}%")
-
 def detect_anomalies(results, thresholds):
     """Detect anomalies in sensor data."""
     anomalies = []
@@ -618,131 +1042,6 @@ def get_historical_jobs(df, current_job, num_jobs=50):
         pass
     
     return historical_data
-
-def generate_report_summary(info, job_number, df=None):
-    """Generate a summary report with HTML side-by-side layout."""
-    status_counts = info['status_counts']
-    
-    # Build HTML report with side-by-side layout
-    report = f"""
-<div style="font-family: Arial, sans-serif; padding: 20px;">
-    <h2 style="margin: 0 0 10px 0;">Sensor Analysis Report - Job Summary</h2>
-    <p style="margin: 0 0 20px 0; color: #666;">Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-    
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
-        <!-- Left Column: Job Analysis -->
-        <div>
-            <h3 style="margin: 0 0 15px 0;">Job {info['matched_jobs'][0].split('.')[0]} Analysis</h3>
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px; font-weight: bold;">Metric</td>
-                    <td style="padding: 8px;">Value</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">Job Number</td>
-                    <td style="padding: 8px;">{job_number}</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">Total Sensors</td>
-                    <td style="padding: 8px;">{info['total_sensors']}</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">Sensors Passed</td>
-                    <td style="padding: 8px;">{info['passed_sensors']} ({info['pass_rate']:.1f}%)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">Sensors Failed</td>
-                    <td style="padding: 8px;">{info['failed_sensors']} ({info['fail_rate']:.1f}%)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">Data Missing</td>
-                    <td style="padding: 8px;">{info['dm_sensors']}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px;">Threshold Set</td>
-                    <td style="padding: 8px;">{info['threshold_set']}</td>
-                </tr>
-            </table>
-        </div>
-        
-        <!-- Right Column: Status Breakdown -->
-        <div>
-            <h3 style="margin: 0 0 15px 0;">Status Breakdown</h3>
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px; font-weight: bold;">Status Code</td>
-                    <td style="padding: 8px; font-weight: bold;">Count</td>
-                    <td style="padding: 8px; font-weight: bold;">Percentage</td>
-                </tr>
-"""
-    
-    # Add status rows
-    for status in ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']:
-        count = status_counts.get(status, 0)
-        if count > 0:
-            pct = (count / info['total_sensors'] * 100)
-            report += f"""                <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">{status}</td>
-                    <td style="padding: 8px;">{count}</td>
-                    <td style="padding: 8px;">{pct:.1f}%</td>
-                </tr>
-"""
-    
-    report += """            </table>
-        </div>
-    </div>
-    
-    <h3 style="margin: 30px 0 15px 0;">Job Analysis Comparison</h3>
-    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-        <tr style="border-bottom: 2px solid #333;">
-            <td style="padding: 8px; font-weight: bold;">Job Number</td>
-            <td style="padding: 8px; font-weight: bold;">Total Sensors</td>
-            <td style="padding: 8px; font-weight: bold;">Passed Qty</td>
-            <td style="padding: 8px; font-weight: bold;">Passed %</td>
-            <td style="padding: 8px; font-weight: bold;">Failed Qty</td>
-            <td style="padding: 8px; font-weight: bold;">Failed %</td>
-        </tr>
-"""
-    
-    # Add historical job comparison
-    if df is not None and len(df) > 0:
-        historical = get_historical_jobs(df, job_number, num_jobs=50)
-        
-        if historical and len(historical) > 0:
-            totals = {'total': 0, 'passed': 0, 'failed': 0}
-            
-            for job in historical:
-                report += f"""        <tr style="border-bottom: 1px solid #ddd;">
-                    <td style="padding: 8px;">{job['job']}</td>
-                    <td style="padding: 8px;">{job['total']}</td>
-                    <td style="padding: 8px;">{job['passed']}</td>
-                    <td style="padding: 8px;">{job['pass_pct']:.2f}%</td>
-                    <td style="padding: 8px;">{job['failed']}</td>
-                    <td style="padding: 8px;">{job['fail_pct']:.2f}%</td>
-                </tr>
-"""
-                totals['total'] += job['total']
-                totals['passed'] += job['passed']
-                totals['failed'] += job['failed']
-            
-            if len(historical) > 1:
-                avg_pass_pct = (totals['passed'] / (totals['passed'] + totals['failed']) * 100) if (totals['passed'] + totals['failed']) > 0 else 0
-                avg_fail_pct = 100 - avg_pass_pct
-                report += f"""        <tr style="border-top: 2px solid #333; border-bottom: 2px solid #333; font-weight: bold;">
-                    <td style="padding: 8px;">Average:</td>
-                    <td style="padding: 8px;">{totals['total']/len(historical):.0f}</td>
-                    <td style="padding: 8px;">{totals['passed']/len(historical):.0f}</td>
-                    <td style="padding: 8px;">{avg_pass_pct:.2f}%</td>
-                    <td style="padding: 8px;">{totals['failed']/len(historical):.0f}</td>
-                    <td style="padding: 8px;">{avg_fail_pct:.2f}%</td>
-                </tr>
-"""
-    
-    report += """    </table>
-</div>
-"""
-    
-    return report
 
 def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     """Generate enhanced visualization for a specific job with dark mode compatibility."""
@@ -1093,7 +1392,17 @@ def analyze_job(df, job_number, threshold_set='Standard'):
 
     return analysis_info
 
-# Main app
+# ==================== MAIN APP ====================
+
+# Show tutorial dialog at the top if active
+if tutorial.should_show_tutorial() and not st.session_state.tutorial_state.get('dismissed', False):
+    tutorial.start_tutorial()
+
+if st.session_state.tutorial_state['active']:
+    tutorial.render_tutorial_dialog()
+    st.markdown("---")
+
+# Main app header
 st.markdown("""
 <div class="main-header">
     <h1 style="color: white; margin: 0;">🔬 Sensor Analysis Dashboard</h1>
@@ -1112,6 +1421,8 @@ if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
 if 'job_history' not in st.session_state:
     st.session_state.job_history = []
+if 'df' not in st.session_state:
+    st.session_state.df = pd.DataFrame()
 
 # Sidebar for data loading
 with st.sidebar:
@@ -1123,7 +1434,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     
-    df = pd.DataFrame()
+    df = st.session_state.df
     
     if data_source == "📤 Upload CSV":
         uploaded_file = st.file_uploader(
@@ -1135,12 +1446,14 @@ with st.sidebar:
             with st.spinner("Loading data..."):
                 df = load_data_from_csv(uploaded_file)
                 if len(df) > 0:
+                    st.session_state.df = df
                     st.success(f"✅ Loaded {len(df):,} records")
     else:
         if st.button("🔄 Load Database", use_container_width=True):
             with st.spinner("Connecting to database..."):
                 df = load_data_from_db('sensor_data.db')
                 if len(df) > 0:
+                    st.session_state.df = df
                     st.success(f"✅ Loaded {len(df):,} records")
     
     if len(df) > 0:
@@ -1184,6 +1497,10 @@ with st.sidebar:
                         st.session_state.current_job = recent_job
                         st.session_state.current_threshold = threshold_set
                         st.rerun()
+    
+    # Tutorial & Help in sidebar
+    st.markdown("---")
+    tutorial.render_help_sidebar()
 
 # Main content area
 if len(df) > 0:
@@ -1234,7 +1551,7 @@ if len(df) > 0:
     if st.session_state.analysis_results:
         info = st.session_state.analysis_results
         
-        # ====== NEW FEATURE: Anomaly Detection ======
+        # Anomaly Detection
         anomalies = detect_anomalies(info['results'], info['thresholds'])
         if anomalies:
             with st.expander(f"⚠️ Anomalies Detected ({len(anomalies)})", expanded=False):
@@ -1306,7 +1623,7 @@ if len(df) > 0:
         
         st.markdown("---")
         
-        # ====== NEW FEATURE: One-Click Reports ======
+        # Quick Reports
         st.markdown("### 📋 Quick Reports")
         col1, col2 = st.columns(2)
         
@@ -1624,7 +1941,6 @@ if len(df) > 0:
         
         # Tab 4: Thresholds
         with tabs[3]:
-            # ====== NEW FEATURE: Collapsible Sections ======
             with st.expander("⚙️ Threshold Settings", expanded=True):
                 col1, col2 = st.columns(2)
                 
@@ -1661,52 +1977,62 @@ if len(df) > 0:
                 flowchart_fig = create_status_flowchart()
                 st.pyplot(flowchart_fig)
                 plt.close()
-        
-        # ====== NEW FEATURE: Help Sidebar ======
-        with st.sidebar.expander("❓ Need Help?", expanded=False):
-            st.markdown("""
-            ### Quick Tips
-            - 🔍 **Filter by Status:** Use pills to show/hide specific status codes
-            - 📊 **Export Data:** Download filtered results as CSV
-            - 🎨 **Color Codes:** 
-              - 🟢 Green = PASS
-              - 🔴 Red = FAIL (FL/FH)
-              - 🟡 Yellow = Warnings (OT-/TT/OT+)
-              - ⚪ Gray = Missing Data
-            - 📈 **Visualizations:** View trend analysis and distribution charts
-            - ⚠️ **Anomalies:** Check for automatically detected issues
-            
-            ### Status Codes Explained
-            **Failures (FL, FH)** - Voltage out of acceptable range
-            **Warnings (OT-, TT, OT+)** - Counted as pass but need attention
-            **Missing (DM)** - No data available for this sensor
-            
-            ### Keyboard Tips
-            - Type job numbers with prefix matching (e.g., "258" finds "258.1", "258.2")
-            - Use commas to filter multiple serial numbers
-            """)
 
 else:
-    # Welcome screen
+    # Welcome screen with tutorial prompt
     st.info("👈 Please load data using the sidebar to begin analysis")
     
-    with st.expander("📖 How to use this tool"):
+    # First-time user tutorial prompt
+    if tutorial.should_show_tutorial():
         st.markdown("""
-        1. **Load your data** using the sidebar (CSV upload or database)
-        2. **Enter a Job Number** to analyze
-        3. **Select threshold criteria** (Standard or High Range)
-        4. **Click Analyze** to generate results
-        5. **Explore the tabs** for different views of your data
+        <div style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+            border-radius: 15px;
+            color: white;
+            margin: 2rem 0;
+            text-align: center;
+        ">
+            <h2 style="color: white; margin: 0 0 1rem 0;">👋 Welcome to Sensor Analysis Dashboard!</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 1.5rem;">
+                It looks like this is your first time here. Would you like a quick tour?
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        ### Features Included
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("🎓 Start Tutorial (3 minutes)", use_container_width=True, type="primary"):
+                tutorial.start_tutorial()
+                st.rerun()
+            if st.button("⏭️ Skip for now", use_container_width=True):
+                tutorial.dismiss_tutorial()
+                st.rerun()
+    
+    with st.expander("📖 How to use this tool", expanded=True):
+        st.markdown("""
+        ### Quick Start Guide
+        
+        1. **📁 Load your data** using the sidebar (CSV upload or database)
+        2. **🔍 Enter a Job Number** to analyze
+        3. **⚙️ Select threshold criteria** (Standard or High Range)
+        4. **▶️ Click Analyze** to generate results
+        5. **📊 Explore the tabs** for different views of your data
+        
+        ### Key Features
+        
         - 📊 **Data Quality Indicator** - See data completeness at a glance
         - ⚠️ **Anomaly Detection** - Automatic alerts for unusual patterns
         - 📄 **One-Click Reports** - Generate and download professional reports
         - 🔀 **Decision Logic** - Understand how pass/fail status is determined
+        - 🎓 **Interactive Tutorial** - Learn the system step-by-step
         
-        The tool will automatically:
-        - Calculate pass/fail rates
-        - Show status breakdowns
-        - Generate visualizations
-        - Allow filtering and searching
+        ### Color Coding
+        
+        - 🟢 **Green** - Passed sensors
+        - 🔴 **Red** - Failed sensors (FL/FH)
+        - 🟡 **Yellow** - Warnings (OT-/TT/OT+)
+        - ⚪ **Gray** - Missing data
+        
+        **Need help?** Click the **"🎓 Tutorial & Help"** section in the sidebar!
         """)
