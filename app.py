@@ -1791,7 +1791,7 @@ if len(df) > 0:
                     with col_print_center:
                         components.html(
                             """
-                            <button onclick="window.print()" style="
+                            <button onclick="window.parent.print()" style="
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                 color: white;
                                 border: none;
