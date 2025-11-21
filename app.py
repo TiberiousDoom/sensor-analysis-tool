@@ -570,29 +570,47 @@ def detect_anomalies(results, thresholds):
     
     return anomalies
 
-def get_historical_jobs(df, current_job, num_jobs=20):
-    """Get analysis data for previous whole-numbered jobs, sorted oldest first (newest at bottom)."""
+def get_historical_jobs(df, current_job, num_jobs=50):
+    """Get analysis data for all available whole-numbered jobs, sorted oldest first (newest at bottom)."""
     historical_data = []
     
     try:
-        # Extract whole number prefixes from all jobs in database
+        # Extract all unique jobs from database
         unique_jobs = df['Job #'].unique()
-        job_prefixes = {}
+        job_dict = {}
         
         for job_id in unique_jobs:
             try:
-                prefix = int(str(job_id).split('.')[0])
-                if prefix not in job_prefixes:
-                    job_prefixes[prefix] = job_id
+                # Try to extract numeric prefix - handles both "256.1" and non-numeric like "HR904"
+                job_str = str(job_id).strip()
+                
+                # For numeric jobs like "256.1", extract the prefix
+                if '.' in job_str:
+                    prefix_str = job_str.split('.')[0]
+                    try:
+                        prefix = int(prefix_str)
+                    except:
+                        # For non-numeric prefixes, use the whole string as key
+                        prefix = job_str
+                else:
+                    try:
+                        prefix = int(job_str)
+                    except:
+                        prefix = job_str
+                
+                if prefix not in job_dict:
+                    job_dict[prefix] = job_id
             except:
                 pass
         
-        # Get last N unique whole-number jobs (most recent)
-        sorted_prefixes = sorted(job_prefixes.keys(), reverse=True)[:num_jobs]
+        # Get all available jobs sorted by key
+        all_keys = sorted(job_dict.keys(), key=lambda x: (isinstance(x, str), x), reverse=True)[:num_jobs]
         
         # Sort in ascending order so oldest is at top, newest at bottom
-        for prefix in sorted(sorted_prefixes):
-            job_id = job_prefixes[prefix]
+        sorted_keys = sorted(all_keys, key=lambda x: (isinstance(x, str), x))
+        
+        for key in sorted_keys:
+            job_id = job_dict[key]
             job_data = get_job_data(df, job_id)
             
             if len(job_data) > 0:
@@ -610,7 +628,7 @@ def get_historical_jobs(df, current_job, num_jobs=20):
                 
                 historical_data.append({
                     'job': str(job_id),
-                    'prefix': prefix,
+                    'prefix': key,
                     'total': total,
                     'passed': passed,
                     'pass_pct': pass_pct,
@@ -624,59 +642,107 @@ def get_historical_jobs(df, current_job, num_jobs=20):
     return historical_data
 
 def generate_report_summary(info, job_number, df=None):
-    """Generate a summary report matching the reference layout."""
+    """Generate a summary report with HTML side-by-side layout."""
     status_counts = info['status_counts']
     
-    # Build title and date
-    report = f"""Sensor Analysis Report - Job Summary
-
-Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-Job {info['matched_jobs'][0].split('.')[0]} Analysis
-
-| Metric | Value |
-|--------|-------|
-| Job Number | {job_number} |
-| Total Sensors | {info['total_sensors']} |
-| Sensors Passed | {info['passed_sensors']} ({info['pass_rate']:.1f}%) |
-| Sensors Failed | {info['failed_sensors']} ({info['fail_rate']:.1f}%) |
-| Data Missing | {info['dm_sensors']} |
-| Threshold Set | {info['threshold_set']} |
-
-Status Breakdown
-
-| Status Code | Count | Percentage |
-|-------------|-------|-----------|
+    # Build HTML report with side-by-side layout
+    report = f"""
+<div style="font-family: Arial, sans-serif; padding: 20px;">
+    <h2 style="margin: 0 0 10px 0;">Sensor Analysis Report - Job Summary</h2>
+    <p style="margin: 0 0 20px 0; color: #666;">Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+        <!-- Left Column: Job Analysis -->
+        <div>
+            <h3 style="margin: 0 0 15px 0;">Job {info['matched_jobs'][0].split('.')[0]} Analysis</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; font-weight: bold;">Metric</td>
+                    <td style="padding: 8px;">Value</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">Job Number</td>
+                    <td style="padding: 8px;">{job_number}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">Total Sensors</td>
+                    <td style="padding: 8px;">{info['total_sensors']}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">Sensors Passed</td>
+                    <td style="padding: 8px;">{info['passed_sensors']} ({info['pass_rate']:.1f}%)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">Sensors Failed</td>
+                    <td style="padding: 8px;">{info['failed_sensors']} ({info['fail_rate']:.1f}%)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">Data Missing</td>
+                    <td style="padding: 8px;">{info['dm_sensors']}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px;">Threshold Set</td>
+                    <td style="padding: 8px;">{info['threshold_set']}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Right Column: Status Breakdown -->
+        <div>
+            <h3 style="margin: 0 0 15px 0;">Status Breakdown</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; font-weight: bold;">Status Code</td>
+                    <td style="padding: 8px; font-weight: bold;">Count</td>
+                    <td style="padding: 8px; font-weight: bold;">Percentage</td>
+                </tr>
 """
     
-    # Add status breakdown
+    # Add status rows
     for status in ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']:
         count = status_counts.get(status, 0)
         if count > 0:
             pct = (count / info['total_sensors'] * 100)
-            report += f"| {status} | {count} | {pct:.1f}% |\n"
+            report += f"""                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">{status}</td>
+                    <td style="padding: 8px;">{count}</td>
+                    <td style="padding: 8px;">{pct:.1f}%</td>
+                </tr>
+"""
     
-    # Add historical job comparison with last 20 jobs
+    report += """            </table>
+        </div>
+    </div>
+    
+    <h3 style="margin: 30px 0 15px 0;">Job Analysis Comparison</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr style="border-bottom: 2px solid #333;">
+            <td style="padding: 8px; font-weight: bold;">Job Number</td>
+            <td style="padding: 8px; font-weight: bold;">Total Sensors</td>
+            <td style="padding: 8px; font-weight: bold;">Passed Qty</td>
+            <td style="padding: 8px; font-weight: bold;">Passed %</td>
+            <td style="padding: 8px; font-weight: bold;">Failed Qty</td>
+            <td style="padding: 8px; font-weight: bold;">Failed %</td>
+        </tr>
+"""
+    
+    # Add historical job comparison
     if df is not None and len(df) > 0:
-        historical = get_historical_jobs(df, job_number, num_jobs=20)
+        historical = get_historical_jobs(df, job_number, num_jobs=50)
         
         if historical and len(historical) > 0:
-            report += """
-Job Analysis Comparison
-
-| Job Number | Total Sensors | Passed Qty | Passed % | Failed Qty | Failed % |
-|-----------|---|---|---|---|---|
-"""
-            
             totals = {'total': 0, 'passed': 0, 'failed': 0}
             
-            # Sort so newest is at bottom (reverse current sort)
             for job in historical:
-                job_str = job['job'].strip()
-                
-                row = f"| {job['job']} | {job['total']} | {job['passed']} | {job['pass_pct']:.2f}% | {job['failed']} | {job['fail_pct']:.2f}% |\n"
-                report += row
-                
+                report += f"""        <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px;">{job['job']}</td>
+                    <td style="padding: 8px;">{job['total']}</td>
+                    <td style="padding: 8px;">{job['passed']}</td>
+                    <td style="padding: 8px;">{job['pass_pct']:.2f}%</td>
+                    <td style="padding: 8px;">{job['failed']}</td>
+                    <td style="padding: 8px;">{job['fail_pct']:.2f}%</td>
+                </tr>
+"""
                 totals['total'] += job['total']
                 totals['passed'] += job['passed']
                 totals['failed'] += job['failed']
@@ -684,7 +750,19 @@ Job Analysis Comparison
             if len(historical) > 1:
                 avg_pass_pct = (totals['passed'] / (totals['passed'] + totals['failed']) * 100) if (totals['passed'] + totals['failed']) > 0 else 0
                 avg_fail_pct = 100 - avg_pass_pct
-                report += f"| Average: | {totals['total']/len(historical):.0f} | {totals['passed']/len(historical):.0f} | {avg_pass_pct:.2f}% | {totals['failed']/len(historical):.0f} | {avg_fail_pct:.2f}% |\n"
+                report += f"""        <tr style="border-top: 2px solid #333; border-bottom: 2px solid #333; font-weight: bold;">
+                    <td style="padding: 8px;">Average:</td>
+                    <td style="padding: 8px;">{totals['total']/len(historical):.0f}</td>
+                    <td style="padding: 8px;">{totals['passed']/len(historical):.0f}</td>
+                    <td style="padding: 8px;">{avg_pass_pct:.2f}%</td>
+                    <td style="padding: 8px;">{totals['failed']/len(historical):.0f}</td>
+                    <td style="padding: 8px;">{avg_fail_pct:.2f}%</td>
+                </tr>
+"""
+    
+    report += """    </table>
+</div>
+"""
     
     return report
 
@@ -1260,7 +1338,8 @@ if len(df) > 0:
                 
                 # Display report in expander for printing
                 with st.expander("📄 Report (Use Browser Print)", expanded=True):
-                    st.markdown(report)
+                    # Render HTML report
+                    st.markdown(report, unsafe_allow_html=True)
                     
                     # Print button using JavaScript
                     st.write("")
