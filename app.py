@@ -1334,15 +1334,90 @@ if len(df) > 0:
         
         with col1:
             if st.button("📄 Generate Summary Report", use_container_width=True, key="report_summary"):
-                report = generate_report_summary(info, st.session_state.current_job, df)
-                
                 # Display report in expander for printing
                 with st.expander("📄 Report (Use Browser Print)", expanded=True):
-                    # Render HTML report
-                    st.markdown(report, unsafe_allow_html=True)
+                    # Display title and date
+                    st.markdown(f"## Sensor Analysis Report - Job Summary")
+                    st.markdown(f"**Analysis Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    st.markdown("")
                     
-                    # Print button using JavaScript
-                    st.write("")
+                    # Side-by-side columns
+                    col_left, col_right = st.columns(2)
+                    
+                    with col_left:
+                        st.markdown(f"### Job {info['matched_jobs'][0].split('.')[0]} Analysis")
+                        left_data = {
+                            'Metric': ['Job Number', 'Total Sensors', 'Sensors Passed', 'Sensors Failed', 'Data Missing', 'Threshold Set'],
+                            'Value': [
+                                str(st.session_state.current_job),
+                                str(info['total_sensors']),
+                                f"{info['passed_sensors']} ({info['pass_rate']:.1f}%)",
+                                f"{info['failed_sensors']} ({info['fail_rate']:.1f}%)",
+                                str(info['dm_sensors']),
+                                info['threshold_set']
+                            ]
+                        }
+                        st.dataframe(pd.DataFrame(left_data), use_container_width=True, hide_index=True)
+                    
+                    with col_right:
+                        st.markdown("### Status Breakdown")
+                        status_counts = info['status_counts']
+                        right_data = {'Status Code': [], 'Count': [], 'Percentage': []}
+                        
+                        for status in ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']:
+                            count = status_counts.get(status, 0)
+                            if count > 0:
+                                right_data['Status Code'].append(status)
+                                right_data['Count'].append(count)
+                                right_data['Percentage'].append(f"{(count / info['total_sensors'] * 100):.1f}%")
+                        
+                        st.dataframe(pd.DataFrame(right_data), use_container_width=True, hide_index=True)
+                    
+                    st.markdown("")
+                    st.markdown("### Job Analysis Comparison")
+                    
+                    # Get historical jobs
+                    historical = get_historical_jobs(df, st.session_state.current_job, num_jobs=50)
+                    
+                    if historical and len(historical) > 0:
+                        comparison_data = {
+                            'Job Number': [],
+                            'Total Sensors': [],
+                            'Passed Qty': [],
+                            'Passed %': [],
+                            'Failed Qty': [],
+                            'Failed %': []
+                        }
+                        
+                        totals = {'total': 0, 'passed': 0, 'failed': 0}
+                        
+                        for job in historical:
+                            comparison_data['Job Number'].append(job['job'])
+                            comparison_data['Total Sensors'].append(job['total'])
+                            comparison_data['Passed Qty'].append(job['passed'])
+                            comparison_data['Passed %'].append(f"{job['pass_pct']:.2f}%")
+                            comparison_data['Failed Qty'].append(job['failed'])
+                            comparison_data['Failed %'].append(f"{job['fail_pct']:.2f}%")
+                            
+                            totals['total'] += job['total']
+                            totals['passed'] += job['passed']
+                            totals['failed'] += job['failed']
+                        
+                        # Add average row
+                        if len(historical) > 1:
+                            avg_pass_pct = (totals['passed'] / (totals['passed'] + totals['failed']) * 100) if (totals['passed'] + totals['failed']) > 0 else 0
+                            avg_fail_pct = 100 - avg_pass_pct
+                            comparison_data['Job Number'].append('Average:')
+                            comparison_data['Total Sensors'].append(int(totals['total']/len(historical)))
+                            comparison_data['Passed Qty'].append(int(totals['passed']/len(historical)))
+                            comparison_data['Passed %'].append(f"{avg_pass_pct:.2f}%")
+                            comparison_data['Failed Qty'].append(int(totals['failed']/len(historical)))
+                            comparison_data['Failed %'].append(f"{avg_fail_pct:.2f}%")
+                        
+                        st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
+                    
+                    # Print button
+                    st.markdown("")
                     col_print_left, col_print_center, col_print_right = st.columns([1, 2, 1])
                     with col_print_center:
                         st.markdown("""
