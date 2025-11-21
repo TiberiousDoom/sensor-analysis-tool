@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
-        'About': "Sensor Data Analysis Tool v2.0"
+        'About': "Sensor Data Analysis Tool v2.1 - Advanced Features"
     }
 )
 
@@ -193,10 +193,64 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
     
-    /* Highlighted search results */
-    .highlight-search {
-        background-color: #fef08a !important;
+    /* Tooltip styles */
+    .tooltip-icon {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        background: #667eea;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 20px;
         font-weight: bold;
+        cursor: help;
+        margin-left: 5px;
+    }
+    
+    /* Anomaly alert styling */
+    .anomaly-high {
+        background-color: #fee2e2;
+        border-left: 4px solid #dc2626;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        color: #7f1d1d;
+        font-weight: 600;
+    }
+    
+    .anomaly-medium {
+        background-color: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        color: #78350f;
+        font-weight: 600;
+    }
+    
+    /* Data quality bar */
+    .quality-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: bold;
+        margin: 0.5rem 0;
+    }
+    
+    .quality-excellent {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .quality-good {
+        background: #dbeafe;
+        color: #0c4a6e;
+    }
+    
+    .quality-poor {
+        background: #fed7aa;
+        color: #92400e;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -424,25 +478,229 @@ def create_status_badge(status):
     else:
         return f'<span class="status-pill status-info">• {status}</span>'
 
-def color_rows_by_status(row):
-    """Apply color coding to dataframe rows based on Pass/Fail status."""
-    if 'Pass/Fail' in row:
-        status = row['Pass/Fail']
-        if status in ['FL', 'FH']:
-            return ['background-color: #fee2e2'] * len(row)  # Light red
-        elif status == 'PASS':
-            return ['background-color: #d1fae5'] * len(row)  # Light green
-        elif status in ['OT-', 'TT', 'OT+']:
-            return ['background-color: #fed7aa'] * len(row)  # Light orange
-        elif status == 'DM':
-            return ['background-color: #e5e7eb'] * len(row)  # Light gray
-    return [''] * len(row)
+def calculate_data_quality(results):
+    """Calculate data quality score based on completeness."""
+    # Expected data points
+    num_sensors = len(results)
+    num_time_points = 7  # 0, 5, 15, 30, 60, 90, 120
+    num_tests = 2  # Typically 2 tests per sensor (estimate)
+    
+    total_expected = num_sensors * num_time_points * num_tests
+    
+    # Count actual non-null data points
+    data_cols = [col for col in results.columns 
+                 if any(x in col for x in ['0s(', '90s(', '120s('])]
+    total_actual = results[data_cols].notna().sum().sum()
+    
+    quality_score = (total_actual / total_expected * 100) if total_expected > 0 else 0
+    
+    return quality_score
 
-def highlight_search_term(val, search_term):
-    """Highlight cells containing search term."""
-    if search_term and str(val).lower().find(search_term.lower()) >= 0:
-        return 'background-color: #fef08a; font-weight: bold'
-    return ''
+def display_data_quality(quality_score):
+    """Display visual data quality indicator."""
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.progress(min(quality_score / 100, 1.0))
+    
+    with col2:
+        if quality_score > 95:
+            st.markdown('<div class="quality-badge quality-excellent">✓ Excellent</div>', unsafe_allow_html=True)
+        elif quality_score > 80:
+            st.markdown('<div class="quality-badge quality-good">✓ Good</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="quality-badge quality-poor">⚠ Check Data</div>', unsafe_allow_html=True)
+    
+    st.caption(f"Data Quality: {quality_score:.1f}%")
+
+def detect_anomalies(results, thresholds):
+    """Detect anomalies in sensor data."""
+    anomalies = []
+    
+    for idx, row in results.iterrows():
+        serial = row['Serial Number']
+        
+        # High variability check (2x threshold)
+        std_dev = row['120s(St.Dev.)']
+        if pd.notna(std_dev) and std_dev > thresholds['max_std_dev'] * 2:
+            anomalies.append({
+                'serial': serial,
+                'channel': row.get('Channel', 'N/A'),
+                'type': 'High Variability',
+                'severity': 'High',
+                'message': f'Std Dev {std_dev:.3f}V exceeds 2× threshold ({thresholds["max_std_dev"]*2:.3f}V)'
+            })
+        
+        # Check for sudden jumps in test results
+        test_cols = [col for col in results.columns if col.startswith('120s(')]
+        test_values = []
+        for col in test_cols:
+            val = row[col]
+            if pd.notna(val):
+                try:
+                    test_values.append(float(val))
+                except:
+                    pass
+        
+        if len(test_values) > 1:
+            max_val = max(test_values)
+            min_val = min(test_values)
+            if (max_val - min_val) > 3.0:
+                anomalies.append({
+                    'serial': serial,
+                    'channel': row.get('Channel', 'N/A'),
+                    'type': 'Large Delta',
+                    'severity': 'Medium',
+                    'message': f'Voltage range {min_val:.1f}V - {max_val:.1f}V exceeds 3V threshold'
+                })
+        
+        # Inconsistent test results
+        status_cols = [col for col in results.columns if col.startswith('Status(')]
+        if len(status_cols) > 1:
+            statuses = [row[col] for col in status_cols if pd.notna(row[col])]
+            if len(statuses) > 1:
+                if any('PASS' in str(s) for s in statuses) and any('F' in str(s) for s in statuses):
+                    anomalies.append({
+                        'serial': serial,
+                        'channel': row.get('Channel', 'N/A'),
+                        'type': 'Inconsistent Tests',
+                        'severity': 'Medium',
+                        'message': f'Test results vary significantly: {", ".join(statuses)}'
+                    })
+    
+    return anomalies
+
+def get_historical_jobs(df, current_job, num_jobs=5):
+    """Get analysis data for previous whole-numbered jobs."""
+    historical_data = []
+    
+    try:
+        # Extract whole number prefixes from all jobs in database
+        unique_jobs = df['Job #'].unique()
+        job_prefixes = {}
+        
+        for job_id in unique_jobs:
+            try:
+                prefix = int(str(job_id).split('.')[0])
+                if prefix not in job_prefixes:
+                    job_prefixes[prefix] = job_id
+            except:
+                pass
+        
+        # Get last N unique whole-number jobs (including current)
+        sorted_prefixes = sorted(job_prefixes.keys(), reverse=True)[:num_jobs]
+        
+        for prefix in sorted(sorted_prefixes, reverse=True):
+            job_id = job_prefixes[prefix]
+            job_data = get_job_data(df, job_id)
+            
+            if len(job_data) > 0:
+                job_data = calculate_metrics(job_data)
+                results = determine_pass_fail(job_data, 'Standard')
+                
+                # Calculate stats (using Standard threshold for consistency)
+                total = len(results)
+                passed = len(results[results['Pass/Fail'].isin(['PASS', 'OT-', 'TT', 'OT+'])])
+                failed = len(results[results['Pass/Fail'].isin(['FL', 'FH'])])
+                counted = passed + failed
+                
+                pass_pct = (passed / counted * 100) if counted > 0 else 0
+                fail_pct = (failed / counted * 100) if counted > 0 else 0
+                
+                historical_data.append({
+                    'job': str(job_id),
+                    'prefix': prefix,
+                    'total': total,
+                    'passed': passed,
+                    'pass_pct': pass_pct,
+                    'failed': failed,
+                    'fail_pct': fail_pct,
+                    'is_current': str(job_id) == str(current_job)
+                })
+    except:
+        pass
+    
+    return historical_data
+
+def generate_report_summary(info, job_number, df=None):
+    """Generate a summary report with historical job comparison table."""
+    status_counts = info['status_counts']
+    
+    # Build current job report
+    report = f"""# Sensor Analysis Report - Job Summary
+    
+**Analysis Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Current Job Analysis
+
+| Metric | Value |
+|--------|-------|
+| Job Number | {job_number} |
+| Total Sensors | {info['total_sensors']} |
+| Sensors Passed | {info['passed_sensors']} ({info['pass_rate']:.1f}%) |
+| Sensors Failed | {info['failed_sensors']} ({info['fail_rate']:.1f}%) |
+| Data Missing | {info['dm_sensors']} |
+| Threshold Set | {info['threshold_set']} |
+
+## Status Breakdown
+
+| Status Code | Count | Percentage |
+|-------------|-------|-----------|
+"""
+    
+    for status in ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']:
+        count = status_counts.get(status, 0)
+        if count > 0:
+            pct = (count / info['total_sensors'] * 100)
+            report += f"| {status} | {count} | {pct:.1f}% |\n"
+    
+    # Add historical job comparison if we have dataframe
+    if df is not None and len(df) > 0:
+        historical = get_historical_jobs(df, job_number, num_jobs=5)
+        
+        if historical and len(historical) > 0:
+            report += """
+## Job Analysis Comparison
+
+| Job Number | Total Sensors | Passed Qty | Passed % | Failed Qty | Failed % |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+"""
+            
+            totals = {'total': 0, 'passed': 0, 'failed': 0}
+            current_job_str = str(job_number).strip()
+            
+            for job in historical:
+                job_str = job['job'].strip()
+                is_current = '✓ ' if job_str == current_job_str or job['is_current'] else ''
+                marker = '*' if job_str == current_job_str or job['is_current'] else ''
+                
+                row = f"| {marker}{is_current}{job['job']}{marker} | {job['total']} | {job['passed']} | {job['pass_pct']:.1f}% | {job['failed']} | {job['fail_pct']:.1f}% |\n"
+                report += row
+                
+                totals['total'] += job['total']
+                totals['passed'] += job['passed']
+                totals['failed'] += job['failed']
+            
+            if len(historical) > 1:
+                avg_pass_pct = (totals['passed'] / (totals['passed'] + totals['failed']) * 100) if (totals['passed'] + totals['failed']) > 0 else 0
+                avg_fail_pct = 100 - avg_pass_pct
+                report += f"| **Average:** | {totals['total']/len(historical):.0f} | {totals['passed']/len(historical):.0f} | {avg_pass_pct:.1f}% | {totals['failed']/len(historical):.0f} | {avg_fail_pct:.1f}% |\n"
+    
+    report += f"""
+## Threshold Criteria Used
+
+| Criteria | Value |
+|----------|-------|
+| Voltage Range (120s) | {info['thresholds']['min_120s']}V - {info['thresholds']['max_120s']}V |
+| % Change Range | {info['thresholds']['min_pct_change']}% to {info['thresholds']['max_pct_change']}% |
+| Max Standard Deviation | {info['thresholds']['max_std_dev']}V |
+
+---
+*Generated by Sensor Analysis Tool v2.1*
+*{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+    
+    return report
 
 def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     """Generate enhanced visualization for a specific job with dark mode compatibility."""
@@ -558,6 +816,179 @@ def create_enhanced_plot(df, job_number, threshold_set='Standard'):
     
     return fig
 
+def create_status_flowchart():
+    """Generate the status determination logic flowchart."""
+    # Color scheme
+    color_start = '#667eea'
+    color_process = '#4ECDC4'
+    color_decision = '#FFD93D'
+    color_result = '#FF6B6B'
+    color_final = '#95E1D3'
+    
+    def draw_box(ax, x, y, width, height, text, color, fontsize=10, bold=False):
+        """Draw a rounded rectangle with text"""
+        from matplotlib.patches import FancyBboxPatch
+        box = FancyBboxPatch((x, y), width, height, 
+                              boxstyle="round,pad=0.1", 
+                              edgecolor='black', 
+                              facecolor=color, 
+                              linewidth=2)
+        ax.add_patch(box)
+        weight = 'bold' if bold else 'normal'
+        ax.text(x + width/2, y + height/2, text, 
+                ha='center', va='center', 
+                fontsize=fontsize, weight=weight,
+                wrap=True)
+    
+    def draw_arrow(ax, x1, y1, x2, y2):
+        """Draw an arrow between two points"""
+        from matplotlib.patches import FancyArrowPatch
+        arrow = FancyArrowPatch((x1, y1), (x2, y2),
+                               arrowstyle='->', 
+                               mutation_scale=20, 
+                               linewidth=2,
+                               color='black')
+        ax.add_patch(arrow)
+    
+    def draw_label(ax, x, y, text, fontsize=9):
+        """Draw a label at a specific position"""
+        ax.text(x, y, text, fontsize=fontsize, style='italic', 
+                ha='center', va='center',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='none', alpha=0.8))
+    
+    # Create figure
+    fig, ax = plt.subplots(1, 1, figsize=(14, 20))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(-2, 21)
+    ax.axis('off')
+    
+    # Title
+    ax.text(5, 20, 'Sensor Status Determination Logic', 
+            ha='center', fontsize=16, weight='bold')
+    
+    # Start
+    draw_box(ax, 3.5, 18.5, 3, 0.8, 'START\n(Per Serial Number)', color_start, fontsize=11, bold=True)
+    draw_arrow(ax, 5, 18.5, 5, 17.8)
+    
+    # Step 1
+    draw_box(ax, 2.5, 17, 5, 0.7, 'Collect all 120s readings\nfrom all tests', color_process, fontsize=9)
+    draw_arrow(ax, 5, 17, 5, 16.3)
+    
+    # Step 2
+    draw_box(ax, 2.5, 15.5, 5, 0.7, 'Calculate std_dev_120\nacross all tests', color_process, fontsize=9)
+    draw_arrow(ax, 5, 15.5, 5, 14.8)
+    
+    # Step 3
+    draw_box(ax, 2, 14, 6, 0.7, 'FOR EACH TEST (T1, T2, T3...)', color_start, fontsize=10, bold=True)
+    draw_arrow(ax, 5, 14, 5, 13.3)
+    
+    # Check 1
+    draw_box(ax, 2.5, 12.5, 5, 0.7, '120s reading < 1.5V?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 12.85, 1.5, 12.85)
+    draw_label(ax, 2.0, 13.05, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 12.5, 1.1, 0.4, 'Add FL', color_result, fontsize=8)
+    draw_arrow(ax, 5, 12.5, 5, 11.8)
+    draw_label(ax, 5.3, 12.15, 'NO', fontsize=8)
+    
+    # Check 2
+    draw_box(ax, 2.5, 11.0, 5, 0.7, '120s reading > 4.9V?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 11.35, 1.5, 11.35)
+    draw_label(ax, 2.0, 11.55, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 11.0, 1.1, 0.4, 'Add FH', color_result, fontsize=8)
+    draw_arrow(ax, 5, 11.0, 5, 10.3)
+    draw_label(ax, 5.3, 10.65, 'NO', fontsize=8)
+    
+    # Check 3
+    draw_box(ax, 2.5, 9.5, 5, 0.7, '120s reading missing?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 9.85, 1.5, 9.85)
+    draw_label(ax, 2.0, 10.05, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 9.5, 1.1, 0.4, 'Add DM', color_result, fontsize=8)
+    draw_arrow(ax, 5, 9.5, 5, 8.8)
+    
+    # Step 4
+    draw_box(ax, 2.5, 8, 5, 0.7, 'Calculate % Change:\n(120s - 90s) / (90s - 0s) × 100', color_process, fontsize=8)
+    draw_arrow(ax, 5, 8, 5, 7.3)
+    
+    # Check 4
+    draw_box(ax, 2.5, 6.5, 5, 0.7, '% Change < -6%?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 6.85, 1.5, 6.85)
+    draw_label(ax, 2.0, 7.05, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 6.5, 1.1, 0.4, 'Add OT-', color_result, fontsize=8)
+    draw_arrow(ax, 5, 6.5, 5, 5.8)
+    draw_label(ax, 5.3, 6.15, 'NO', fontsize=8)
+    
+    # Check 5
+    draw_box(ax, 2.5, 5.0, 5, 0.7, '% Change > 30%?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 5.35, 1.5, 5.35)
+    draw_label(ax, 2.0, 5.55, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 5.0, 1.1, 0.4, 'Add OT+', color_result, fontsize=8)
+    draw_arrow(ax, 5, 5.0, 5, 4.3)
+    
+    # End of test loop
+    draw_box(ax, 2.5, 3.5, 5, 0.7, 'Collect all failure codes\nfrom this test', color_process, fontsize=9)
+    draw_arrow(ax, 5, 3.5, 5, 2.8)
+    
+    # Loop back arrow
+    loop_x = 8.2
+    ax.plot([loop_x, loop_x], [3.85, 13.35], 'k-', linewidth=2)
+    ax.plot([loop_x, 7.9], [13.35, 13.35], 'k-', linewidth=2)
+    ax.plot([loop_x, 7.9], [3.85, 3.85], 'k-', linewidth=2)
+    ax.annotate('', xy=(7.9, 13.35), xytext=(loop_x, 13.35),
+                arrowprops=dict(arrowstyle='->', lw=2, color='black'))
+    ax.text(8.7, 8.6, 'LOOP\nBACK', ha='center', fontsize=8, style='italic')
+    
+    # Step 5
+    draw_box(ax, 2.5, 2.0, 5, 0.7, 'std_dev_120 > 0.3V?', color_decision, fontsize=9)
+    draw_arrow(ax, 2.5, 2.35, 1.5, 2.35)
+    draw_label(ax, 2.0, 2.55, 'YES', fontsize=8)
+    draw_box(ax, 0.3, 2.0, 1.1, 0.4, 'Add TT', color_result, fontsize=8)
+    draw_arrow(ax, 5, 2.0, 5, 1.3)
+    
+    # Step 6
+    draw_box(ax, 2, 0.5, 6, 0.7, 'Sort all failure codes by priority:\nFL > FH > OT- > TT > OT+ > DM > PASS', color_process, fontsize=8)
+    draw_arrow(ax, 5, 0.5, 5, -0.2)
+    
+    # Final result
+    draw_box(ax, 3, -1.0, 4, 0.7, 'Pass/Fail = Highest Priority Code', color_final, fontsize=10, bold=True)
+    
+    # Legend
+    legend_elements = [
+        mpatches.Patch(color=color_start, label='Start/Loop'),
+        mpatches.Patch(color=color_process, label='Process'),
+        mpatches.Patch(color=color_decision, label='Decision'),
+        mpatches.Patch(color=color_result, label='Status Code'),
+        mpatches.Patch(color=color_final, label='Final Result')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=9)
+    
+    # Example box
+    example_text = """Example (Standard Thresholds):
+Test 1: 120s=1.2V (FL), %Chg=5%
+Test 2: 120s=1.8V, %Chg=35% (OT+)
+Test 3: 120s=1.5V, %Chg=8%
+std_dev=0.35V (TT triggered)
+
+Codes: FL, OT+, TT
+Result: FL (highest priority)"""
+    
+    draw_box(ax, 0.2, -1.8, 2.5, 2.5, example_text, '#E8F5E9', fontsize=12)
+    
+    plt.tight_layout()
+    
+    return fig
+
+def color_rows(row):
+    """Apply background color to table rows based on Pass/Fail status."""
+    if row['Pass/Fail'] in ['FL', 'FH']:
+        return ['background-color: #fee2e2; color: #991b1b; font-weight: 600'] * len(row)
+    elif row['Pass/Fail'] == 'PASS':
+        return ['background-color: #d1fae5; color: #065f46; font-weight: 600'] * len(row)
+    elif row['Pass/Fail'] in ['OT-', 'TT', 'OT+']:
+        return ['background-color: #fed7aa; color: #92400e; font-weight: 600'] * len(row)
+    elif row['Pass/Fail'] == 'DM':
+        return ['background-color: #e5e7eb; color: #1f2937; font-weight: 600'] * len(row)
+    return [''] * len(row)
+
 def analyze_job(df, job_number, threshold_set='Standard'):
     """Analyze data for a specific job number."""
     if len(df) == 0:
@@ -625,7 +1056,7 @@ st.markdown("""
 <div class="main-header">
     <h1 style="color: white; margin: 0;">🔬 Sensor Analysis Dashboard</h1>
     <p style="color: rgba(255,255,255,0.9); margin-top: 0.5rem; font-size: 1.1rem;">
-        Advanced sensor data analysis with real-time insights
+        Advanced sensor data analysis with anomaly detection and reporting
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -678,13 +1109,13 @@ with st.sidebar:
             job_number = st.text_input(
                 "Job Number:",
                 placeholder="Enter job number...",
-                help="Enter the job number to analyze"
+                help="Enter the job number to analyze. Supports prefix matching (e.g., '258' matches '258.1', '258.2')"
             )
             
             threshold_set = st.radio(
                 "Threshold Set:",
                 ["Standard", "High Range"],
-                help="Select the threshold criteria set"
+                help="Standard: Typical voltage range analysis. High Range: Extended voltage analysis"
             )
             
             col1, col2 = st.columns(2)
@@ -699,17 +1130,17 @@ with st.sidebar:
                     use_container_width=True
                 )
         
-        # Show job history
-        if st.session_state.job_history:
+        # Job History
+        if len(st.session_state.job_history) > 0:
             st.markdown("---")
             st.markdown("### 📜 Recent Jobs")
-            for recent_job in st.session_state.job_history[:5]:
-                if st.button(f"📁 Job {recent_job}", key=f"hist_{recent_job}"):
-                    # Re-analyze that job
-                    analysis_info = analyze_job(df, recent_job, st.session_state.current_threshold)
+            for idx, recent_job in enumerate(st.session_state.job_history):
+                if st.button(f"🔄 Job {recent_job}", key=f"hist_{idx}", use_container_width=True):
+                    analysis_info = analyze_job(df, recent_job, threshold_set)
                     if analysis_info:
                         st.session_state.analysis_results = analysis_info
                         st.session_state.current_job = recent_job
+                        st.session_state.current_threshold = threshold_set
                         st.rerun()
 
 # Main content area
@@ -723,32 +1154,68 @@ if len(df) > 0:
                 st.session_state.current_job = job_number
                 st.session_state.current_threshold = threshold_set
                 
-                # Add to job history
+                # Update job history
                 if job_number not in st.session_state.job_history:
                     st.session_state.job_history.insert(0, job_number)
                     st.session_state.job_history = st.session_state.job_history[:5]
+            else:
+                # Clear previous results if job not found
+                st.session_state.analysis_results = None
+                st.session_state.current_job = None
     
-    # Handle export
-    if export_button and st.session_state.analysis_results:
+    # Handle export button
+    if export_button and st.session_state.analysis_results is not None:
         info = st.session_state.analysis_results
+        st.info(f"📊 Exporting data for Job {st.session_state.current_job}...")
         
-        # Generate CSV
-        csv = info['results'].to_csv(index=False)
+        export_df = info['results'].copy()
+        csv = export_df.to_csv(index=False)
         
-        # Create download button
-        st.download_button(
-            label="📥 Download Analysis Results CSV",
-            data=csv,
-            file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            help="Download the analysis results as a CSV file"
-        )
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.download_button(
+                label="📥 Download Results CSV",
+                data=csv,
+                file_name=f"job_{st.session_state.current_job}_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="download_csv",
+                use_container_width=True
+            )
+        with col2:
+            st.caption(f"{len(export_df)} sensors")
         
-        st.success("✅ Export ready! Click the download button above.")
+        st.success(f"✅ Click button above to download {len(export_df)} sensor records")
+    elif export_button and st.session_state.analysis_results is None:
+        st.warning("⚠️ Please analyze a job first before exporting.")
     
     # Display results if available
     if st.session_state.analysis_results:
         info = st.session_state.analysis_results
+        
+        # ====== NEW FEATURE: Anomaly Detection ======
+        anomalies = detect_anomalies(info['results'], info['thresholds'])
+        if anomalies:
+            with st.expander(f"⚠️ Anomalies Detected ({len(anomalies)})", expanded=False):
+                high_severity = [a for a in anomalies if a['severity'] == 'High']
+                medium_severity = [a for a in anomalies if a['severity'] == 'Medium']
+                
+                if high_severity:
+                    st.markdown("### 🔴 High Variability")
+                    for anomaly in high_severity:
+                        st.markdown(f"""
+                        <div class="anomaly-high">
+                            <strong>{anomaly['serial']}</strong> (Channel: {anomaly['channel']}) — {anomaly['type']} — {anomaly['message']}
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                if medium_severity:
+                    st.markdown("### 🟡 Medium Variability")
+                    for anomaly in medium_severity:
+                        st.markdown(f"""
+                        <div class="anomaly-medium">
+                            <strong>{anomaly['serial']}</strong> (Channel: {anomaly['channel']}) — {anomaly['type']} — {anomaly['message']}
+                        </div>
+                        """, unsafe_allow_html=True)
         
         # Quick Summary Cards
         st.markdown("### 📊 Quick Summary")
@@ -759,36 +1226,102 @@ if len(df) > 0:
             st.metric(
                 label="Total Sensors",
                 value=f"{info['total_sensors']:,}",
-                delta=None
+                delta=None,
+                help="Total number of unique sensors in this job"
             )
         
         with col2:
             st.metric(
                 label="Pass Rate",
                 value=f"{info['pass_rate']:.1f}%",
-                delta=f"{info['passed_sensors']} passed"
+                delta=f"{info['passed_sensors']} passed",
+                help="Percentage of sensors that passed (includes PASS, OT-, TT, OT+)"
             )
         
         with col3:
             st.metric(
                 label="Fail Rate",
                 value=f"{info['fail_rate']:.1f}%",
-                delta=f"{info['failed_sensors']} failed"
+                delta=f"{info['failed_sensors']} failed",
+                help="Percentage of sensors that failed (FL, FH only)"
             )
         
         with col4:
             st.metric(
                 label="Data Missing",
                 value=f"{info['dm_sensors']}",
-                delta="Not counted"
+                delta="Not counted",
+                help="Number of sensors with missing readings (not included in pass/fail calculation)"
             )
         
         with col5:
             st.metric(
                 label="Job(s)",
                 value=len(info['matched_jobs']),
-                delta=info['matched_jobs'][0].split('.')[0]
+                delta=info['matched_jobs'][0].split('.')[0],
+                help="Number of matching job records found"
             )
+        
+        st.markdown("---")
+        
+        # ====== NEW FEATURE: One-Click Reports ======
+        st.markdown("### 📋 Quick Reports")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📄 Generate Summary Report", use_container_width=True, key="report_summary"):
+                report = generate_report_summary(info, st.session_state.current_job, df)
+                
+                # Display report in expander for printing
+                with st.expander("📄 Report (Click to Print)", expanded=True):
+                    st.markdown(report)
+                    
+                    # Print button with JavaScript
+                    st.markdown("""
+                    <div style="text-align: center;">
+                    <button onclick="window.print();" style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 0.7rem 1.8rem;
+                        border-radius: 25px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        font-size: 1rem;
+                        width: 100%;
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                    ">🖨️ Print Report</button>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        with col2:
+            if st.button("❌ Failed Sensors Report", use_container_width=True, key="report_failed"):
+                failed_sensors = info['results'][info['results']['Pass/Fail'].isin(['FL', 'FH'])]
+                
+                if len(failed_sensors) > 0:
+                    failed_report = "# Failed Sensors Report\n\n"
+                    failed_report += f"**Job:** {st.session_state.current_job}\n"
+                    failed_report += f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    failed_report += f"## Summary\n- **Total Failed:** {len(failed_sensors)} sensors\n\n"
+                    failed_report += "## Detailed List\n\n"
+                    failed_report += "| Serial Number | Channel | Status | Std Dev |\n"
+                    failed_report += "|---|---|---|---|\n"
+                    
+                    for idx, row in failed_sensors.iterrows():
+                        failed_report += f"| {row['Serial Number']} | {row.get('Channel', 'N/A')} | {row['Pass/Fail']} | {row['120s(St.Dev.)']:.3f} |\n"
+                    
+                    st.download_button(
+                        label="📥 Download Failed Report (Markdown)",
+                        data=failed_report,
+                        file_name=f"failed_sensors_job_{st.session_state.current_job}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                        mime="text/markdown",
+                        key="download_failed_report"
+                    )
+                    
+                    with st.expander("Preview Failed Sensors", expanded=True):
+                        st.markdown(failed_report)
+                else:
+                    st.success("✅ No failed sensors found!")
         
         st.markdown("---")
         
@@ -796,53 +1329,42 @@ if len(df) > 0:
         tab_list = ["📋 Data Table", "📈 Visualization", "📊 Status Breakdown", "ℹ️ Thresholds"]
         tabs = st.tabs(tab_list)
         
-        # Tab 1: Data Table with enhanced filters and search
+        # Tab 1: Data Table with simple filters
         with tabs[0]:
-            st.markdown("#### 🔍 Filters & Search")
+            st.markdown("#### 🔍 Filters")
             
             # Get unique Pass/Fail statuses
             all_statuses = sorted(info['results']['Pass/Fail'].unique().tolist())
             
-            # Create filter columns
-            col1, col2, col3 = st.columns([2, 2, 2])
+            # Create simple filter columns without complex state management
+            col1, col2 = st.columns([3, 3])
             
             with col1:
-                # Status filter with pills
                 selected_statuses = st.pills(
                     "Select Status:",
                     options=all_statuses,
                     default=all_statuses,
-                    selection_mode="multi"
+                    selection_mode="multi",
+                    help="Filter table by status codes. PASS includes OT-, TT, OT+ statuses."
                 )
             
             with col2:
-                # Serial number filter
                 serial_text = st.text_input(
                     "Serial Number(s):",
-                    placeholder="Enter serial numbers separated by commas..."
+                    placeholder="Enter serial numbers separated by commas...",
+                    help="Filter by serial numbers. Supports partial matching."
                 )
             
-            with col3:
-                # Quick search across all columns
-                search_term = st.text_input(
-                    "🔎 Quick Search:",
-                    placeholder="Search any value in table...",
-                    help="Searches across all columns and highlights matches"
-                )
-            
-            # Note about filters
             st.caption("💡 Filters apply automatically. Remove status pills or clear text to reset.")
             
             # Apply filters
             filtered_data = info['results'].copy()
             
-            # Apply status filter
             if selected_statuses:
                 filtered_data = filtered_data[filtered_data['Pass/Fail'].isin(selected_statuses)]
             else:
                 filtered_data = pd.DataFrame(columns=filtered_data.columns)
             
-            # Apply serial filter
             if serial_text:
                 serials = [s.strip() for s in serial_text.split(',') if s.strip()]
                 if serials:
@@ -850,31 +1372,18 @@ if len(df) > 0:
                     mask = filtered_data['Serial Number'].str.contains(pattern, case=False, na=False, regex=True)
                     filtered_data = filtered_data[mask]
             
-            # Apply quick search
-            if search_term and len(filtered_data) > 0:
-                # Search across all columns
-                mask = filtered_data.apply(lambda row: any(search_term.lower() in str(val).lower() for val in row), axis=1)
-                filtered_data = filtered_data[mask]
-            
-            # Display results count
             st.info(f"Showing {len(filtered_data)} of {len(info['results'])} sensors")
             
-            # Format and display data with color coding
+            # Format and display data
             display_data = filtered_data.copy()
             if len(display_data) > 0:
-                # Format numeric columns
                 for col in display_data.columns:
                     if col.startswith('0s(') or col.startswith('90s(') or col.startswith('120s('):
                         display_data[col] = display_data[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
                     elif col == '120s(St.Dev.)':
                         display_data[col] = display_data[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
                 
-                # Apply styling
-                styled_data = display_data.style.apply(color_rows_by_status, axis=1)
-                
-                # Highlight search results if search term exists
-                if search_term:
-                    styled_data = styled_data.applymap(lambda val: highlight_search_term(val, search_term))
+                styled_data = display_data.style.apply(color_rows, axis=1)
                 
                 st.dataframe(
                     styled_data,
@@ -883,19 +1392,15 @@ if len(df) > 0:
                     height=400
                 )
             else:
-                st.dataframe(
-                    display_data,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=400
-                )
+                st.warning("No data to display with current filters")
         
         # Tab 2: Visualization
         with tabs[1]:
-            fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
-            if fig:
-                st.pyplot(fig)
-                plt.close()
+            with st.expander("📈 Sensor Trend Analysis", expanded=True):
+                fig = create_enhanced_plot(df, st.session_state.current_job, st.session_state.current_threshold)
+                if fig:
+                    st.pyplot(fig)
+                    plt.close()
         
         # Tab 3: Status Breakdown
         with tabs[2]:
@@ -910,7 +1415,6 @@ if len(df) > 0:
                         st.markdown(f"{badge_html} **{count}** ({pct:.1f}%)", unsafe_allow_html=True)
             
             with col2:
-                # Enhanced pie chart
                 fig, ax = plt.subplots(figsize=(10, 7))
                 
                 fig.patch.set_facecolor('#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
@@ -932,32 +1436,25 @@ if len(df) > 0:
                 
                 for status, count in info['status_counts'].items():
                     if count > 0:
-                        plot_labels.append(f"{status}\n({count})")
+                        pct = (count / info['total_sensors'] * 100)
+                        plot_labels.append(f"{status} ({count}) {pct:.1f}%")
                         plot_sizes.append(count)
                         plot_colors.append(ENHANCED_COLORS.get(status, '#6c757d'))
                 
                 if plot_sizes:
-                    explode = [0.1 if size/sum(plot_sizes) < 0.05 else 0.02 for size in plot_sizes]
+                    explode = [0.05 for _ in plot_sizes]
                     
-                    wedges, texts, autotexts = ax.pie(
+                    wedges, texts = ax.pie(
                         plot_sizes,
-                        labels=plot_labels,
                         colors=plot_colors,
-                        autopct='%1.1f%%',
                         startangle=90,
                         explode=explode,
-                        textprops={'weight': 'bold', 'size': 11},
-                        pctdistance=0.85
+                        textprops={'weight': 'bold'}
                     )
                     
-                    for text in texts:
-                        text.set_color('white' if st.get_option('theme.base') == 'dark' else 'black')
-                    for autotext in autotexts:
-                        autotext.set_color('white')
-                        autotext.set_path_effects([path_effects.withStroke(linewidth=2, foreground='black')])
-                    
-                    centre_circle = plt.Circle((0, 0), 0.70, fc='#2d2d2d' if st.get_option('theme.base') == 'dark' else 'white')
-                    fig.gca().add_artist(centre_circle)
+                    # Add legend with all info outside pie
+                    ax.legend(plot_labels, loc='center left', bbox_to_anchor=(1, 0, 0.5, 1), 
+                             fontsize=10, framealpha=0.95)
                     
                     ax.set_title('Status Distribution', fontsize=16, fontweight='bold', pad=20,
                                color='white' if st.get_option('theme.base') == 'dark' else 'black')
@@ -968,41 +1465,70 @@ if len(df) > 0:
         
         # Tab 4: Thresholds
         with tabs[3]:
-            st.markdown("#### Current Threshold Settings")
+            # ====== NEW FEATURE: Collapsible Sections ======
+            with st.expander("⚙️ Threshold Settings", expanded=True):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"**Threshold Set:** {info['threshold_set']}")
+                    st.markdown(f"**120s Voltage Range:** {info['thresholds']['min_120s']} - {info['thresholds']['max_120s']}V")
+                    st.markdown(f"**Max Std Dev:** {info['thresholds']['max_std_dev']}V")
+                
+                with col2:
+                    st.markdown(f"**% Change Range:** {info['thresholds']['min_pct_change']}% to {info['thresholds']['max_pct_change']}%")
+                    st.markdown(f"**Applied to:** {info['total_sensors']} sensors")
             
-            col1, col2 = st.columns(2)
+            with st.expander("📋 Status Code Reference", expanded=True):
+                legend_data = {
+                    'Code': ['FL', 'FH', 'OT-', 'TT', 'OT+', 'DM', 'PASS'],
+                    'Description': [
+                        'Failed Low (< min voltage)',
+                        'Failed High (> max voltage)',
+                        'Out of Tolerance Negative (< min % change)',
+                        'Test-to-Test Variability (> max std dev)',
+                        'Out of Tolerance Positive (> max % change)',
+                        'Data Missing (not counted)',
+                        'All criteria met'
+                    ],
+                    'Category': ['FAIL', 'FAIL', 'PASS*', 'PASS*', 'PASS*', 'N/A', 'PASS']
+                }
+                
+                legend_df = pd.DataFrame(legend_data)
+                st.table(legend_df)
+                st.caption("*OT-, TT, and OT+ are counted as PASS in statistics")
             
-            with col1:
-                st.markdown(f"**Threshold Set:** {info['threshold_set']}")
-                st.markdown(f"**120s Voltage Range:** {info['thresholds']['min_120s']} - {info['thresholds']['max_120s']}V")
-                st.markdown(f"**Max Std Dev:** {info['thresholds']['max_std_dev']}V")
+            with st.expander("🔀 Decision Logic Flowchart", expanded=False):
+                st.caption("Visual representation of the status determination process")
+                flowchart_fig = create_status_flowchart()
+                st.pyplot(flowchart_fig)
+                plt.close()
+        
+        # ====== NEW FEATURE: Help Sidebar ======
+        with st.sidebar.expander("❓ Need Help?", expanded=False):
+            st.markdown("""
+            ### Quick Tips
+            - 🔍 **Filter by Status:** Use pills to show/hide specific status codes
+            - 📊 **Export Data:** Download filtered results as CSV
+            - 🎨 **Color Codes:** 
+              - 🟢 Green = PASS
+              - 🔴 Red = FAIL (FL/FH)
+              - 🟡 Yellow = Warnings (OT-/TT/OT+)
+              - ⚪ Gray = Missing Data
+            - 📈 **Visualizations:** View trend analysis and distribution charts
+            - ⚠️ **Anomalies:** Check for automatically detected issues
             
-            with col2:
-                st.markdown(f"**% Change Range:** {info['thresholds']['min_pct_change']}% to {info['thresholds']['max_pct_change']}%")
-                st.markdown(f"**Applied to:** {info['total_sensors']} sensors")
+            ### Status Codes Explained
+            **Failures (FL, FH)** - Voltage out of acceptable range
+            **Warnings (OT-, TT, OT+)** - Counted as pass but need attention
+            **Missing (DM)** - No data available for this sensor
             
-            st.markdown("---")
-            st.markdown("#### 📋 Status Code Reference")
-            
-            legend_data = {
-                'Code': ['FL', 'FH', 'OT-', 'TT', 'OT+', 'DM', 'PASS'],
-                'Description': [
-                    'Failed Low (< min voltage)',
-                    'Failed High (> max voltage)',
-                    'Out of Tolerance Negative (< min % change)',
-                    'Test-to-Test Variability (> max std dev)',
-                    'Out of Tolerance Positive (> max % change)',
-                    'Data Missing (not counted)',
-                    'All criteria met'
-                ],
-                'Category': ['FAIL', 'FAIL', 'PASS*', 'PASS*', 'PASS*', 'N/A', 'PASS']
-            }
-            
-            legend_df = pd.DataFrame(legend_data)
-            st.table(legend_df)
-            st.caption("*OT-, TT, and OT+ are counted as PASS in statistics")
+            ### Keyboard Tips
+            - Type job numbers with prefix matching (e.g., "258" finds "258.1", "258.2")
+            - Use commas to filter multiple serial numbers
+            """)
 
 else:
+    # Welcome screen
     st.info("👈 Please load data using the sidebar to begin analysis")
     
     with st.expander("📖 How to use this tool"):
@@ -1012,6 +1538,12 @@ else:
         3. **Select threshold criteria** (Standard or High Range)
         4. **Click Analyze** to generate results
         5. **Explore the tabs** for different views of your data
+        
+        ### Features Included
+        - 📊 **Data Quality Indicator** - See data completeness at a glance
+        - ⚠️ **Anomaly Detection** - Automatic alerts for unusual patterns
+        - 📄 **One-Click Reports** - Generate and download professional reports
+        - 🔀 **Decision Logic** - Understand how pass/fail status is determined
         
         The tool will automatically:
         - Calculate pass/fail rates
