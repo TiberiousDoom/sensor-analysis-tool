@@ -42,15 +42,23 @@ def save_job_history(history):
 def get_query_param(key, default=None):
     """Safely get query parameter value."""
     try:
-        value = st.query_params.get(key, default)
-        return value
+        params = st.query_params
+        # Handle both dict-like and object access
+        if hasattr(params, 'get'):
+            return params.get(key, default)
+        elif hasattr(params, key):
+            return getattr(params, key, default)
+        else:
+            return default
     except:
         return default
 
 def set_query_param(key, value):
-    """Safely set query parameter value."""
+    """Safely set query parameter value with immediate write."""
     try:
         st.query_params[key] = str(value)
+        # Force a small rerun to ensure params are saved
+        time.sleep(0.1)
     except:
         pass
 
@@ -923,11 +931,31 @@ def validate_job_number(job_input):
 
 # ==================== DATA LOADING WITH IMPROVED ERROR HANDLING ====================
 @st.cache_data
-def load_data_from_db(db_path='sensor_data.db'):
+def load_data_from_db(db_path=None):
     """Load sensor data from SQLite database with robust error handling."""
+    # Try multiple possible locations
+    if db_path is None:
+        possible_paths = [
+            'sensor_data.db',  # Current directory
+            './sensor_data.db',  # Explicit current directory
+            '/mnt/user-data/outputs/sensor_data.db',  # Outputs directory
+            os.path.join(os.getcwd(), 'sensor_data.db'),  # Working directory
+        ]
+        
+        db_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                db_path = path
+                break
+        
+        if db_path is None:
+            st.error(f"❌ Database file not found. Tried locations:\n" + 
+                    "\n".join(f"  - {p}" for p in possible_paths))
+            return pd.DataFrame()
+    
     conn = None
     try:
-        # Check if file exists first
+        # Check if file exists
         if not os.path.exists(db_path):
             st.error(f"❌ Database file not found: {db_path}")
             return pd.DataFrame()
@@ -1928,7 +1956,7 @@ if 'data_source' not in st.session_state:
 # Auto-load data on startup if previously loaded
 if st.session_state.data_source == 'database' and not st.session_state.data_loaded:
     with st.spinner("Auto-loading database..."):
-        df = load_data_from_db('sensor_data.db')
+        df = load_data_from_db()  # Let function find the database
         if len(df) > 0:
             st.session_state.df = df
             st.session_state.data_loaded = True
@@ -1967,7 +1995,7 @@ with st.sidebar:
         
         if st.button("🔄 Load Database", use_container_width=True):
             with st.spinner("Connecting to database..."):
-                df = load_data_from_db('sensor_data.db')
+                df = load_data_from_db()  # Let function find the database
                 if len(df) > 0:
                     st.session_state.df = df
                     st.session_state.data_loaded = True
