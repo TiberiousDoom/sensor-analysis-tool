@@ -13,6 +13,46 @@ import os
 import time
 from datetime import datetime
 from contextlib import contextmanager
+from pathlib import Path
+
+# ==================== PERSISTENCE HELPER FUNCTIONS ====================
+
+# Job history file location
+HISTORY_FILE = Path.home() / '.sensor_analysis_history.json'
+
+def load_job_history():
+    """Load job history from persistent file."""
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+                return history[:5] if isinstance(history, list) else []
+    except Exception:
+        pass
+    return []
+
+def save_job_history(history):
+    """Save job history to persistent file."""
+    try:
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(history[:5], f)
+    except Exception:
+        pass
+
+def get_query_param(key, default=None):
+    """Safely get query parameter value."""
+    try:
+        value = st.query_params.get(key, default)
+        return value
+    except:
+        return default
+
+def set_query_param(key, value):
+    """Safely set query parameter value."""
+    try:
+        st.query_params[key] = str(value)
+    except:
+        pass
 
 # Page configuration with custom theme
 st.set_page_config(
@@ -20,7 +60,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
-        'About': "Sensor Data Analysis Tool v2.2 - Optimized Performance"
+        'About': "Sensor Data Analysis Tool v2.3 - With Persistence Features"
     }
 )
 
@@ -121,8 +161,8 @@ class TutorialSystem:
                 
                 **Note:** You can skip ahead if you prefer to explore on your own!
                 """,
-                'action_required': None,  # Changed from 'data_loaded' to allow progression
-                'completion_check': None  # Removed check to allow clicking Next
+                'action_required': None,
+                'completion_check': None
             },
             {
                 'id': 'enter_job',
@@ -160,8 +200,8 @@ class TutorialSystem:
                 
                 **Note:** If you haven't loaded data yet, you can skip ahead and come back later!
                 """,
-                'action_required': None,  # Changed from 'analysis_complete'
-                'completion_check': None  # Removed strict check
+                'action_required': None,
+                'completion_check': None
             },
             {
                 'id': 'summary',
@@ -329,13 +369,17 @@ class TutorialSystem:
             }
         ]
         
-        # Initialize tutorial state
+        # Initialize tutorial state with query param support
         if 'tutorial_state' not in st.session_state:
+            # Check query param for show_on_start preference
+            show_on_start_param = get_query_param('show_tutorial', 'true')
+            show_on_start = show_on_start_param.lower() == 'true'
+            
             st.session_state.tutorial_state = {
                 'active': False,
                 'current_step': 0,
                 'completed_steps': [],
-                'show_on_start': True,
+                'show_on_start': show_on_start,
                 'first_visit': True,
                 'dismissed': False
             }
@@ -423,7 +467,6 @@ class TutorialSystem:
             
             # Check if step is completed
             step_completed = self.check_step_completion()
-            # Always allow progression - user can skip ahead if they want
             if not step_completed and current_step.get('action_required'):
                 st.info(f"💡 **Tip:** Complete the action above for the full experience, or skip ahead to explore on your own!")
             
@@ -457,14 +500,18 @@ class TutorialSystem:
                            unsafe_allow_html=True)
             
             with col4:
-                # Show later checkbox
+                # Show later checkbox with persistence
                 show_again = st.checkbox(
                     "Show on startup",
                     value=st.session_state.tutorial_state['show_on_start'],
                     key="tutorial_show_again",
                     help="Toggle whether tutorial appears when you open the app"
                 )
-                st.session_state.tutorial_state['show_on_start'] = show_again
+                if show_again != st.session_state.tutorial_state['show_on_start']:
+                    st.session_state.tutorial_state['show_on_start'] = show_again
+                    # Persist to query params
+                    set_query_param('show_tutorial', str(show_again).lower())
+                    st.toast(f"✅ Tutorial {'enabled' if show_again else 'disabled'} on startup!")
             
             with col5:
                 if step_num < total_steps:
@@ -549,7 +596,10 @@ class TutorialSystem:
                 value=st.session_state.tutorial_state['show_on_start'],
                 key="tutorial_settings_checkbox"
             )
-            st.session_state.tutorial_state['show_on_start'] = show_startup
+            if show_startup != st.session_state.tutorial_state['show_on_start']:
+                st.session_state.tutorial_state['show_on_start'] = show_startup
+                set_query_param('show_tutorial', str(show_startup).lower())
+                st.toast(f"✅ Tutorial {'enabled' if show_startup else 'disabled'} on startup!")
 
 # Initialize tutorial system
 tutorial = TutorialSystem()
@@ -1849,14 +1899,14 @@ if st.session_state.tutorial_state['active']:
 # Main app header
 st.markdown("""
 <div class="main-header">
-    <h1 style="color: white; margin: 0;">🔬 Sensor Analysis Dashboard v2.2</h1>
+    <h1 style="color: white; margin: 0;">🔬 Sensor Analysis Dashboard v2.3</h1>
     <p style="color: rgba(255,255,255,0.9); margin-top: 0.5rem; font-size: 1.1rem;">
-        Advanced sensor data analysis with optimized performance
+        Advanced sensor data analysis with persistence features
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# Initialize session state
+# Initialize session state with persistence
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
 if 'current_job' not in st.session_state:
@@ -1864,9 +1914,25 @@ if 'current_job' not in st.session_state:
 if 'current_threshold' not in st.session_state:
     st.session_state.current_threshold = 'Standard'
 if 'job_history' not in st.session_state:
-    st.session_state.job_history = []
+    # Load from persistent file
+    st.session_state.job_history = load_job_history()
 if 'df' not in st.session_state:
     st.session_state.df = pd.DataFrame()
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
+if 'data_source' not in st.session_state:
+    # Check query param for data source
+    data_source_param = get_query_param('data_source', None)
+    st.session_state.data_source = data_source_param
+
+# Auto-load data on startup if previously loaded
+if st.session_state.data_source == 'database' and not st.session_state.data_loaded:
+    with st.spinner("Auto-loading database..."):
+        df = load_data_from_db('sensor_data.db')
+        if len(df) > 0:
+            st.session_state.df = df
+            st.session_state.data_loaded = True
+            st.toast("✅ Database auto-loaded from previous session!")
 
 # Sidebar for data loading
 with st.sidebar:
@@ -1875,7 +1941,8 @@ with st.sidebar:
     data_source = st.radio(
         "Select input method:",
         ["📤 Upload CSV", "💾 Use Database"],
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        index=1 if st.session_state.data_source == 'database' else 0
     )
     
     df = st.session_state.df
@@ -1891,12 +1958,22 @@ with st.sidebar:
                 df = load_data_from_csv(uploaded_file)
                 if len(df) > 0:
                     st.session_state.df = df
+                    st.session_state.data_loaded = True
+                    st.session_state.data_source = 'csv'
+                    set_query_param('data_source', 'csv')
     else:
+        if len(df) > 0 and st.session_state.data_loaded:
+            st.success("💾 Auto-load enabled - Database will reload on refresh")
+        
         if st.button("🔄 Load Database", use_container_width=True):
             with st.spinner("Connecting to database..."):
                 df = load_data_from_db('sensor_data.db')
                 if len(df) > 0:
                     st.session_state.df = df
+                    st.session_state.data_loaded = True
+                    st.session_state.data_source = 'database'
+                    set_query_param('data_source', 'database')
+                    st.toast("✅ Database loaded! (Will auto-load on refresh)")
     
     if len(df) > 0:
         st.markdown("---")
@@ -1927,10 +2004,11 @@ with st.sidebar:
                     use_container_width=True
                 )
         
-        # Job History
+        # Job History with persistence indicator
         if len(st.session_state.job_history) > 0:
             st.markdown("---")
             st.markdown("### 📜 Recent Jobs")
+            st.caption("💾 Saved across sessions")
             for idx, recent_job in enumerate(st.session_state.job_history):
                 if st.button(f"🔄 Job {recent_job}", key=f"hist_{idx}", use_container_width=True):
                     analysis_info = analyze_job(df, recent_job, threshold_set)
@@ -1959,10 +2037,11 @@ if len(df) > 0:
                     st.session_state.current_job = job_number
                     st.session_state.current_threshold = threshold_set
                     
-                    # Update job history
+                    # Update job history with persistence
                     if job_number not in st.session_state.job_history:
                         st.session_state.job_history.insert(0, job_number)
                         st.session_state.job_history = st.session_state.job_history[:5]
+                        save_job_history(st.session_state.job_history)
                 else:
                     # Clear previous results if job not found
                     st.session_state.analysis_results = None
@@ -2678,6 +2757,7 @@ else:
         - 📄 **One-Click Reports** - Generate and download professional reports
         - 🔀 **Decision Logic** - Understand how pass/fail status is determined
         - 🎓 **Interactive Tutorial** - Learn the system step-by-step
+        - 💾 **Persistence** - Data, preferences, and history saved across sessions
         
         ### Color Coding
         
