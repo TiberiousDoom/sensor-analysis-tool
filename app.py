@@ -377,11 +377,10 @@ class TutorialSystem:
             }
         ]
         
-        # Initialize tutorial state with query param support
+        # Initialize tutorial state with session state preference
         if 'tutorial_state' not in st.session_state:
-            # Check query param for show_on_start preference
-            show_on_start_param = get_query_param('show_tutorial', 'true')
-            show_on_start = show_on_start_param.lower() == 'true'
+            # Use the show_tutorial from session state (already initialized from query param)
+            show_on_start = st.session_state.get('show_tutorial', True)
             
             st.session_state.tutorial_state = {
                 'active': False,
@@ -508,7 +507,7 @@ class TutorialSystem:
                            unsafe_allow_html=True)
             
             with col4:
-                # Show later checkbox with persistence
+                # Show later checkbox with proper persistence
                 show_again = st.checkbox(
                     "Show on startup",
                     value=st.session_state.tutorial_state['show_on_start'],
@@ -516,10 +515,14 @@ class TutorialSystem:
                     help="Toggle whether tutorial appears when you open the app"
                 )
                 if show_again != st.session_state.tutorial_state['show_on_start']:
+                    # Update both session state values
                     st.session_state.tutorial_state['show_on_start'] = show_again
-                    # Persist to query params
+                    st.session_state.show_tutorial = show_again
+                    # Also update query param for URL sharing
                     set_query_param('show_tutorial', str(show_again).lower())
                     st.toast(f"✅ Tutorial {'enabled' if show_again else 'disabled'} on startup!")
+                    # Force rerun to update URL
+                    st.rerun()
             
             with col5:
                 if step_num < total_steps:
@@ -605,9 +608,13 @@ class TutorialSystem:
                 key="tutorial_settings_checkbox"
             )
             if show_startup != st.session_state.tutorial_state['show_on_start']:
+                # Update both session state values
                 st.session_state.tutorial_state['show_on_start'] = show_startup
+                st.session_state.show_tutorial = show_startup
+                # Also update query param
                 set_query_param('show_tutorial', str(show_startup).lower())
                 st.toast(f"✅ Tutorial {'enabled' if show_startup else 'disabled'} on startup!")
+                st.rerun()
 
 # Initialize tutorial system
 tutorial = TutorialSystem()
@@ -933,7 +940,11 @@ def validate_job_number(job_input):
 @st.cache_data
 def load_data_from_db(db_path=None):
     """Load sensor data from SQLite database with robust error handling."""
-    # Try multiple possible locations
+    # Check if custom path is set in session state
+    if db_path is None and 'db_path' in st.session_state and st.session_state.db_path:
+        db_path = st.session_state.db_path
+    
+    # Try multiple possible locations if no path specified
     if db_path is None:
         possible_paths = [
             'sensor_data.db',  # Current directory
@@ -951,6 +962,7 @@ def load_data_from_db(db_path=None):
         if db_path is None:
             st.error(f"❌ Database file not found. Tried locations:\n" + 
                     "\n".join(f"  - {p}" for p in possible_paths))
+            st.info("💡 Tip: Set a custom database path in **⚙️ Settings** (sidebar)")
             return pd.DataFrame()
     
     conn = None
@@ -958,6 +970,7 @@ def load_data_from_db(db_path=None):
         # Check if file exists
         if not os.path.exists(db_path):
             st.error(f"❌ Database file not found: {db_path}")
+            st.info("💡 Tip: Check the path in **⚙️ Settings** or use auto-detect")
             return pd.DataFrame()
         
         conn = sqlite3.connect(db_path)
@@ -1952,6 +1965,12 @@ if 'data_source' not in st.session_state:
     # Check query param for data source
     data_source_param = get_query_param('data_source', None)
     st.session_state.data_source = data_source_param
+if 'db_path' not in st.session_state:
+    st.session_state.db_path = None  # User can set custom path
+if 'show_tutorial' not in st.session_state:
+    # Initialize from query param, default to True for first visit
+    tutorial_param = get_query_param('show_tutorial', 'true')
+    st.session_state.show_tutorial = tutorial_param.lower() == 'true'
 
 # Auto-load data on startup if previously loaded
 if st.session_state.data_source == 'database' and not st.session_state.data_loaded:
@@ -2045,6 +2064,60 @@ with st.sidebar:
                         st.session_state.current_job = recent_job
                         st.session_state.current_threshold = threshold_set
                         st.rerun()
+    
+    # Settings section in sidebar
+    st.markdown("---")
+    with st.expander("⚙️ Settings", expanded=False):
+        st.markdown("### 📁 Database Configuration")
+        
+        # Database path setting
+        custom_db_path = st.text_input(
+            "Custom Database Path:",
+            value=st.session_state.db_path if st.session_state.db_path else "",
+            placeholder="e.g., /path/to/sensor_data.db",
+            help="Specify a custom path to your sensor_data.db file"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("💾 Save Path", use_container_width=True, key="save_db_path"):
+                if custom_db_path:
+                    if os.path.exists(custom_db_path):
+                        st.session_state.db_path = custom_db_path
+                        st.success(f"✅ Database path saved!")
+                        st.info(f"Path: {custom_db_path}")
+                    else:
+                        st.error(f"❌ File not found: {custom_db_path}")
+                else:
+                    st.session_state.db_path = None
+                    st.info("Using auto-detect mode")
+        
+        with col2:
+            if st.button("🔄 Clear Path", use_container_width=True, key="clear_db_path"):
+                st.session_state.db_path = None
+                st.info("✅ Cleared - will auto-detect")
+        
+        # Show current detection
+        if st.session_state.db_path:
+            st.caption(f"📌 Using: `{st.session_state.db_path}`")
+        else:
+            st.caption("🔍 Auto-detecting database location")
+        
+        st.markdown("---")
+        
+        # Tutorial preference setting (moved here from help)
+        st.markdown("### 🎓 Tutorial Preferences")
+        show_tutorial_setting = st.checkbox(
+            "Show tutorial on app startup",
+            value=st.session_state.get('show_tutorial', True),
+            key="settings_tutorial_checkbox"
+        )
+        if show_tutorial_setting != st.session_state.get('show_tutorial', True):
+            st.session_state.show_tutorial = show_tutorial_setting
+            st.session_state.tutorial_state['show_on_start'] = show_tutorial_setting
+            set_query_param('show_tutorial', str(show_tutorial_setting).lower())
+            st.toast(f"✅ Tutorial {'enabled' if show_tutorial_setting else 'disabled'}!")
+            st.rerun()
     
     # Tutorial & Help in sidebar
     st.markdown("---")
