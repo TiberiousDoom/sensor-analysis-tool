@@ -377,28 +377,20 @@ class TutorialSystem:
             }
         ]
         
-        # Initialize tutorial state with session state preference
+        # Initialize tutorial state - defaults to closed
         if 'tutorial_state' not in st.session_state:
-            # Use the show_tutorial from session state (already initialized from query param)
-            show_on_start = st.session_state.get('show_tutorial', True)
-            
             st.session_state.tutorial_state = {
                 'active': False,
                 'current_step': 0,
                 'completed_steps': [],
-                'show_on_start': show_on_start,
+                'show_on_start': False,  # Tutorial off by default
                 'first_visit': True,
                 'dismissed': False
             }
     
     def should_show_tutorial(self):
-        """Determine if tutorial should auto-start"""
-        if st.session_state.tutorial_state['dismissed']:
-            return False
-        if not st.session_state.tutorial_state['show_on_start']:
-            return False
-        if st.session_state.tutorial_state['first_visit']:
-            return True
+        """Determine if tutorial should auto-start - now always returns False"""
+        # Tutorial no longer auto-starts - users can start manually from Help
         return False
     
     def start_tutorial(self):
@@ -507,22 +499,8 @@ class TutorialSystem:
                            unsafe_allow_html=True)
             
             with col4:
-                # Show later checkbox with proper persistence
-                show_again = st.checkbox(
-                    "Show on startup",
-                    value=st.session_state.tutorial_state['show_on_start'],
-                    key="tutorial_show_again",
-                    help="Toggle whether tutorial appears when you open the app"
-                )
-                if show_again != st.session_state.tutorial_state['show_on_start']:
-                    # Update both session state values
-                    st.session_state.tutorial_state['show_on_start'] = show_again
-                    st.session_state.show_tutorial = show_again
-                    # Also update query param for URL sharing
-                    set_query_param('show_tutorial', str(show_again).lower())
-                    st.toast(f"✅ Tutorial {'enabled' if show_again else 'disabled'} on startup!")
-                    # Force rerun to update URL
-                    st.rerun()
+                # Empty column for spacing
+                pass
             
             with col5:
                 if step_num < total_steps:
@@ -599,22 +577,6 @@ class TutorialSystem:
                 - **Tab** - Navigate between fields
                 - **Enter** - Submit form
                 """)
-            
-            # Settings
-            st.markdown("### ⚙️ Tutorial Settings")
-            show_startup = st.checkbox(
-                "Show tutorial on app startup",
-                value=st.session_state.tutorial_state['show_on_start'],
-                key="tutorial_settings_checkbox"
-            )
-            if show_startup != st.session_state.tutorial_state['show_on_start']:
-                # Update both session state values
-                st.session_state.tutorial_state['show_on_start'] = show_startup
-                st.session_state.show_tutorial = show_startup
-                # Also update query param
-                set_query_param('show_tutorial', str(show_startup).lower())
-                st.toast(f"✅ Tutorial {'enabled' if show_startup else 'disabled'} on startup!")
-                st.rerun()
 
 # Initialize tutorial system
 tutorial = TutorialSystem()
@@ -1968,9 +1930,8 @@ if 'data_source' not in st.session_state:
 if 'db_path' not in st.session_state:
     st.session_state.db_path = None  # User can set custom path
 if 'show_tutorial' not in st.session_state:
-    # Initialize from query param, default to True for first visit
-    tutorial_param = get_query_param('show_tutorial', 'true')
-    st.session_state.show_tutorial = tutorial_param.lower() == 'true'
+    # Tutorial defaults to OFF - users can start it manually from Help section
+    st.session_state.show_tutorial = False
 
 # Auto-load data on startup if previously loaded
 if st.session_state.data_source == 'database' and not st.session_state.data_loaded:
@@ -2102,22 +2063,6 @@ with st.sidebar:
             st.caption(f"📌 Using: `{st.session_state.db_path}`")
         else:
             st.caption("🔍 Auto-detecting database location")
-        
-        st.markdown("---")
-        
-        # Tutorial preference setting (moved here from help)
-        st.markdown("### 🎓 Tutorial Preferences")
-        show_tutorial_setting = st.checkbox(
-            "Show tutorial on app startup",
-            value=st.session_state.get('show_tutorial', True),
-            key="settings_tutorial_checkbox"
-        )
-        if show_tutorial_setting != st.session_state.get('show_tutorial', True):
-            st.session_state.show_tutorial = show_tutorial_setting
-            st.session_state.tutorial_state['show_on_start'] = show_tutorial_setting
-            set_query_param('show_tutorial', str(show_tutorial_setting).lower())
-            st.toast(f"✅ Tutorial {'enabled' if show_tutorial_setting else 'disabled'}!")
-            st.rerun()
     
     # Tutorial & Help in sidebar
     st.markdown("---")
