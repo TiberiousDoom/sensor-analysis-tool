@@ -902,10 +902,6 @@ def validate_job_number(job_input):
 @st.cache_data
 def load_data_from_db(db_path=None):
     """Load sensor data from SQLite database with robust error handling."""
-    # Check if custom path is set in session state
-    if db_path is None and 'db_path' in st.session_state and st.session_state.db_path:
-        db_path = st.session_state.db_path
-    
     # Try multiple possible locations if no path specified
     if db_path is None:
         possible_paths = [
@@ -915,7 +911,6 @@ def load_data_from_db(db_path=None):
             os.path.join(os.getcwd(), 'sensor_data.db'),  # Working directory
         ]
         
-        db_path = None
         for path in possible_paths:
             if os.path.exists(path):
                 db_path = path
@@ -1936,7 +1931,9 @@ if 'show_tutorial' not in st.session_state:
 # Auto-load data on startup if previously loaded
 if st.session_state.data_source == 'database' and not st.session_state.data_loaded:
     with st.spinner("Auto-loading database..."):
-        df = load_data_from_db()  # Let function find the database
+        # Pass db_path explicitly (cached functions can't access session_state)
+        db_path = st.session_state.db_path if st.session_state.db_path else None
+        df = load_data_from_db(db_path)
         if len(df) > 0:
             st.session_state.df = df
             st.session_state.data_loaded = True
@@ -1975,7 +1972,9 @@ with st.sidebar:
         
         if st.button("🔄 Load Database", use_container_width=True):
             with st.spinner("Connecting to database..."):
-                df = load_data_from_db()  # Let function find the database
+                # Pass db_path explicitly (cached functions can't access session_state)
+                db_path = st.session_state.db_path if st.session_state.db_path else None
+                df = load_data_from_db(db_path)
                 if len(df) > 0:
                     st.session_state.df = df
                     st.session_state.data_loaded = True
