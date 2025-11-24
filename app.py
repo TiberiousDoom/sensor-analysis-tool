@@ -2043,12 +2043,16 @@ with st.sidebar:
         with col1:
             if st.button("💾 Save Path", use_container_width=True, key="save_db_path"):
                 if custom_db_path:
-                    if os.path.exists(custom_db_path):
-                        st.session_state.db_path = custom_db_path
-                        st.success(f"✅ Database path saved!")
-                        st.info(f"Path: {custom_db_path}")
-                    else:
-                        st.error(f"❌ File not found: {custom_db_path}")
+                    # Clean up the path - strip whitespace, quotes, normalize path
+                    clean_path = custom_db_path.strip().strip('"').strip("'")
+                    # Normalize path separators for the OS
+                    clean_path = os.path.normpath(clean_path)
+                    
+                    # Save the path even without validation - let load_data_from_db handle errors
+                    st.session_state.db_path = clean_path
+                    st.success(f"✅ Database path saved!")
+                    st.info(f"Path: {clean_path}")
+                    st.caption("Click 'Load Database' to test the connection")
                 else:
                     st.session_state.db_path = None
                     st.info("Using auto-detect mode")
@@ -2375,9 +2379,16 @@ if len(df) > 0:
                         st.markdown(f"**Total Failed:** {len(failed_sensors)} sensors")
                         st.markdown("")
                         
-                        # Display as table
-                        display_cols = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)']
-                        display_df = failed_sensors[display_cols].copy()
+                        # Display as table - include T1 and T2 status if available
+                        display_cols = ['Serial Number', 'Channel', 'Pass/Fail']
+                        # Add Status(T1) and Status(T2) if they exist
+                        if 'Status(T1)' in failed_sensors.columns:
+                            display_cols.append('Status(T1)')
+                        if 'Status(T2)' in failed_sensors.columns:
+                            display_cols.append('Status(T2)')
+                        display_cols.append('120s(St.Dev.)')
+                        
+                        display_df = failed_sensors[[c for c in display_cols if c in failed_sensors.columns]].copy()
                         display_df['120s(St.Dev.)'] = display_df['120s(St.Dev.)'].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "—")
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
@@ -2413,15 +2424,21 @@ if len(df) > 0:
             <th>Serial Number</th>
             <th>Channel</th>
             <th>Status</th>
+            <th>T1 Status</th>
+            <th>T2 Status</th>
             <th>Std Dev</th>
         </tr>
 """
                         
                         for idx, row in failed_sensors.iterrows():
+                            t1_status = row.get('Status(T1)', '—') if pd.notna(row.get('Status(T1)', None)) else '—'
+                            t2_status = row.get('Status(T2)', '—') if pd.notna(row.get('Status(T2)', None)) else '—'
                             failed_report_html += f"""        <tr>
             <td>{row['Serial Number']}</td>
             <td>{row.get('Channel', 'N/A')}</td>
             <td>{row['Pass/Fail']}</td>
+            <td>{t1_status}</td>
+            <td>{t2_status}</td>
             <td>{row['120s(St.Dev.)']:.3f}</td>
         </tr>
 """
@@ -2667,17 +2684,90 @@ if len(df) > 0:
         
         # Tab 3: Status Breakdown
         with tabs[2]:
-            col1, col2 = st.columns([1, 2])
+            col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.markdown("#### Status Distribution")
-                for status, count in info['status_counts'].items():
-                    if count > 0:
-                        pct = (count / info['total_sensors'] * 100)
-                        badge_html = StatusBadge.get_html(status)
-                        st.markdown(f"{badge_html} **{count}** ({pct:.1f}%)", unsafe_allow_html=True)
+                st.markdown("#### Distribution by Test")
+                
+                # Create bar chart showing status distribution per test
+                with create_plot(figsize=(8, 6)) as fig:
+                    ax = fig.add_subplot(111)
+                    
+                    fig.patch.set_facecolor('#1a1a1a' if st.get_option('theme.base') == 'dark' else 'white')
+                    ax.set_facecolor('#2d2d2d' if st.get_option('theme.base') == 'dark' else '#f8f9fa')
+                    text_color = 'white' if st.get_option('theme.base') == 'dark' else 'black'
+                    
+                    # Get results dataframe
+                    results_df = info['results']
+                    
+                    # Find test columns (Status(T1), Status(T2), etc.)
+                    test_cols = [col for col in results_df.columns if col.startswith('Status(T') and col.endswith(')')]
+                    
+                    if test_cols:
+                        # Count statuses per test
+                        test_data = {}
+                        status_order = ['PASS', 'OT-', 'TT', 'OT+', 'FL', 'FH', 'DM']
+                        
+                        for test_col in sorted(test_cols):
+                            test_name = test_col.replace('Status(', '').replace(')', '')
+                            counts = results_df[test_col].value_counts()
+                            test_data[test_name] = {status: counts.get(status, 0) for status in status_order}
+                        
+                        # Create stacked bar chart
+                        tests = list(test_data.keys())
+                        x = np.arange(len(tests))
+                        bar_width = 0.6
+                        
+                        bottom = np.zeros(len(tests))
+                        
+                        for status in status_order:
+                            values = [test_data[t].get(status, 0) for t in tests]
+                            if sum(values) > 0:  # Only plot if there are values
+                                color = StatusBadge.get_color(status)
+                                ax.bar(x, values, bar_width, label=status, bottom=bottom, color=color)
+                                bottom += np.array(values)
+                        
+                        ax.set_xlabel('Test', fontsize=11, color=text_color)
+                        ax.set_ylabel('Count', fontsize=11, color=text_color)
+                        ax.set_title('Status by Test', fontsize=14, fontweight='bold', color=text_color)
+                        ax.set_xticks(x)
+                        ax.set_xticklabels(tests, color=text_color)
+                        ax.tick_params(colors=text_color)
+                        ax.legend(loc='upper right', fontsize=8)
+                        
+                        for spine in ax.spines.values():
+                            spine.set_color(text_color)
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                    else:
+                        # Fallback: single test - show simple bar chart
+                        statuses = list(info['status_counts'].keys())
+                        counts = list(info['status_counts'].values())
+                        colors = [StatusBadge.get_color(s) for s in statuses]
+                        
+                        # Filter to non-zero
+                        non_zero = [(s, c, col) for s, c, col in zip(statuses, counts, colors) if c > 0]
+                        if non_zero:
+                            statuses, counts, colors = zip(*non_zero)
+                            
+                            x = np.arange(len(statuses))
+                            ax.bar(x, counts, color=colors)
+                            ax.set_xlabel('Status', fontsize=11, color=text_color)
+                            ax.set_ylabel('Count', fontsize=11, color=text_color)
+                            ax.set_title('Status Distribution', fontsize=14, fontweight='bold', color=text_color)
+                            ax.set_xticks(x)
+                            ax.set_xticklabels(statuses, color=text_color)
+                            ax.tick_params(colors=text_color)
+                            
+                            for spine in ax.spines.values():
+                                spine.set_color(text_color)
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
             
             with col2:
+                st.markdown("#### Overall Distribution")
                 with create_plot(figsize=(10, 7)) as fig:
                     ax = fig.add_subplot(111)
                     
