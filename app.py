@@ -899,7 +899,7 @@ def validate_job_number(job_input):
     return job_input, None
 
 # ==================== DATA LOADING WITH IMPROVED ERROR HANDLING ====================
-@st.cache_data
+@st.cache_data(ttl=60)  # Cache for 60 seconds - allow retry if file appears/path is fixed
 def load_data_from_db(db_path=None):
     """Load sensor data from SQLite database with robust error handling."""
     # Try multiple possible locations if no path specified
@@ -2046,12 +2046,16 @@ with st.sidebar:
                     clean_path = custom_db_path.strip().strip('"').strip("'")
                     # Normalize path separators for the OS
                     clean_path = os.path.normpath(clean_path)
-                    
-                    # Save the path even without validation - let load_data_from_db handle errors
-                    st.session_state.db_path = clean_path
-                    st.success(f"✅ Database path saved!")
-                    st.info(f"Path: {clean_path}")
-                    st.caption("Click 'Load Database' to test the connection")
+
+                    # Ensure path is not empty after cleaning
+                    if clean_path and clean_path not in ('.', ''):
+                        st.session_state.db_path = clean_path
+                        st.success(f"✅ Database path saved!")
+                        st.info(f"Path: {clean_path}")
+                        st.caption("Click 'Load Database' to test the connection")
+                    else:
+                        st.session_state.db_path = None
+                        st.warning("⚠️ Invalid path - using auto-detect mode")
                 else:
                     st.session_state.db_path = None
                     st.info("Using auto-detect mode")
