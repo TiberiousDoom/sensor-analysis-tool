@@ -1354,6 +1354,7 @@ else if (typeof exports === 'object'){
     let currentJob = null;
     let currentJobData = null;
     let jobHistory = JSON.parse(localStorage.getItem('sensorJobHistory') || '[]');
+    let jobStatsHistory = JSON.parse(localStorage.getItem('sensorJobStatsHistory') || '[]');
     let activeFilters = new Set(['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']);
     let charts = {};
     let sqlDb = null;
@@ -1722,9 +1723,38 @@ else if (typeof exports === 'object'){
     function updateJobHistory(jobNumber) {
         if (!jobHistory.includes(jobNumber)) {
             jobHistory.unshift(jobNumber);
-            jobHistory = jobHistory.slice(0, 5);
+            jobHistory = jobHistory.slice(0, 15);
             localStorage.setItem('sensorJobHistory', JSON.stringify(jobHistory));
         }
+
+        // Calculate and store job statistics
+        if (analysisResults && analysisResults.length > 0) {
+            const total = analysisResults.length;
+            const passed = analysisResults.filter(r => ['PASS', 'OT-', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
+            const failed = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail'])).length;
+            const counted = passed + failed;
+            const passedPct = counted > 0 ? (passed / counted * 100) : 0;
+            const failedPct = counted > 0 ? (failed / counted * 100) : 0;
+
+            // Remove existing entry for this job if present
+            jobStatsHistory = jobStatsHistory.filter(j => j.jobNumber !== jobNumber);
+
+            // Add new entry at the beginning
+            jobStatsHistory.unshift({
+                jobNumber: jobNumber,
+                totalSensors: total,
+                passedQty: passed,
+                passedPct: passedPct,
+                failedQty: failed,
+                failedPct: failedPct,
+                timestamp: Date.now()
+            });
+
+            // Keep only last 15 jobs
+            jobStatsHistory = jobStatsHistory.slice(0, 15);
+            localStorage.setItem('sensorJobStatsHistory', JSON.stringify(jobStatsHistory));
+        }
+
         renderJobHistory();
     }
     
@@ -2366,30 +2396,71 @@ else if (typeof exports === 'object'){
     }
     
     function showSummaryReport() {
-        if (!analysisResults) return;
-        
-        const total = analysisResults.length;
-        const passed = analysisResults.filter(r => ['PASS', 'OT-', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
-        const failed = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail'])).length;
-        const counted = passed + failed;
-        const passRate = counted > 0 ? (passed / counted * 100).toFixed(1) : '0.0';
-        const failRate = counted > 0 ? (failed / counted * 100).toFixed(1) : '0.0';
-        
+        if (jobStatsHistory.length === 0) {
+            alert('No job history available. Please analyze at least one job first.');
+            return;
+        }
+
+        // Get up to 15 latest jobs
+        const jobsToShow = jobStatsHistory.slice(0, 15);
+
+        // Calculate cumulative values
+        const totalSensorsSum = jobsToShow.reduce((sum, j) => sum + j.totalSensors, 0);
+        const passedQtySum = jobsToShow.reduce((sum, j) => sum + j.passedQty, 0);
+        const failedQtySum = jobsToShow.reduce((sum, j) => sum + j.failedQty, 0);
+        const passedPctAvg = jobsToShow.length > 0 ? (jobsToShow.reduce((sum, j) => sum + j.passedPct, 0) / jobsToShow.length) : 0;
+        const failedPctAvg = jobsToShow.length > 0 ? (jobsToShow.reduce((sum, j) => sum + j.failedPct, 0) / jobsToShow.length) : 0;
+
+        // Generate table rows for each job
+        const jobRows = jobsToShow.map(job => `
+            <tr>
+                <td>${job.jobNumber}</td>
+                <td>${job.totalSensors}</td>
+                <td>${job.passedQty}</td>
+                <td>${job.passedPct.toFixed(2)}%</td>
+                <td>${job.failedQty}</td>
+                <td>${job.failedPct.toFixed(2)}%</td>
+            </tr>
+        `).join('');
+
         const reportHTML = `
-            <html><head><title>Summary Report - Job ${currentJob}</title>
-            <style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#667eea;border-bottom:3px solid #667eea;padding-bottom:10px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:10px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}.pass{color:#10b981;font-weight:bold}.fail{color:#ef4444;font-weight:bold}</style>
+            <html><head><title>Job Analysis Comparison</title>
+            <style>
+                body{font-family:Arial,sans-serif;padding:20px}
+                h1{color:#667eea;border-bottom:3px solid #667eea;padding-bottom:10px}
+                table{width:100%;border-collapse:collapse;margin:20px 0}
+                th,td{padding:10px;border:1px solid #ddd;text-align:left}
+                th{background:#f5f5f5}
+                .cumulative-row{border-top:3px solid #333;font-weight:bold;background:#f9f9f9}
+                .pass{color:#10b981}
+                .fail{color:#ef4444}
+            </style>
             </head><body>
-            <h1>Sensor Analysis Report - Job ${currentJob}</h1>
+            <h1>Job Analysis Comparison</h1>
             <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-            <table><tr><th>Metric</th><th>Value</th></tr>
-            <tr><td>Total Sensors</td><td>${total}</td></tr>
-            <tr><td>Passed</td><td class="pass">${passed} (${passRate}%)</td></tr>
-            <tr><td>Failed</td><td class="fail">${failed} (${failRate}%)</td></tr>
-            <tr><td>Threshold Set</td><td>${document.getElementById('thresholdSet').value}</td></tr>
-            </table></body></html>
+            <table>
+                <tr>
+                    <th>Job Number</th>
+                    <th>Total Sensors</th>
+                    <th>Passed Qty</th>
+                    <th>Passed %</th>
+                    <th>Failed Qty</th>
+                    <th>Failed %</th>
+                </tr>
+                ${jobRows}
+                <tr class="cumulative-row">
+                    <td>Cumulative:</td>
+                    <td>${totalSensorsSum}</td>
+                    <td>${passedQtySum}</td>
+                    <td>${passedPctAvg.toFixed(2)}%</td>
+                    <td>${failedQtySum}</td>
+                    <td>${failedPctAvg.toFixed(2)}%</td>
+                </tr>
+            </table>
+            </body></html>
         `;
-        
-        const win = window.open('', '', 'width=800,height=600');
+
+        const win = window.open('', '', 'width=900,height=700');
         win.document.write(reportHTML);
         win.document.close();
         win.print();
