@@ -1623,8 +1623,8 @@ else if (typeof exports === 'object'){
             } else {
                 const uniqueFailures = [...new Set(allFailureCodes)];
                 
-                // Check if there's a critical failure (FL or FH)
-                const hasCriticalFailure = uniqueFailures.some(code => code === 'FL' || code === 'FH');
+                // Check if there's a critical failure (FL, FH, or FT-)
+                const hasCriticalFailure = uniqueFailures.some(code => code === 'FL' || code === 'FH' || code === 'FT-');
                 
                 // Check if any test passed (by checking Status columns)
                 const hasAnyPass = group.some((row, idx) => {
