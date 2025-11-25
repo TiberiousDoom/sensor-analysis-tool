@@ -242,7 +242,8 @@
         
         .status-PASS { background: var(--success); }
         .status-FL, .status-FH { background: var(--danger); }
-        .status-OT-, .status-TT, .status-OT\+ { background: var(--warning); }
+        .status-FT- { background: var(--danger); }
+        .status-TT, .status-OT\+ { background: var(--warning); }
         .status-DM { background: var(--info); }
         
         .filter-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
@@ -262,7 +263,7 @@
         .filter-pill:not(.active) { background: #e5e7eb; color: #666; opacity: 0.7; }
         .filter-pill.filter-PASS { background: var(--success); color: white; }
         .filter-pill.filter-FL, .filter-pill.filter-FH { background: var(--danger); color: white; }
-        .filter-pill.filter-OT- { background: var(--warning); color: white; }
+        .filter-pill.filter-FT- { background: var(--danger); color: white; }
         .filter-pill.filter-TT { background: #eab308; color: white; }
         .filter-pill.filter-OT\+ { background: #fb923c; color: white; }
         .filter-pill.filter-DM { background: var(--info); color: white; }
@@ -678,14 +679,14 @@
                             <tbody>
                                 <tr><td><span class="status-pill status-FL">FL</span></td><td>Failed Low (120s &lt; min voltage)</td><td>FAIL</td></tr>
                                 <tr><td><span class="status-pill status-FH">FH</span></td><td>Failed High (120s &gt; max voltage)</td><td>FAIL</td></tr>
-                                <tr><td><span class="status-pill status-OT-">OT-</span></td><td>Out of Tolerance Negative (&lt; min % change)</td><td>PASS*</td></tr>
+                                <tr><td><span class="status-pill status-FT-">FT-</span></td><td>Failed Tolerance Negative (&lt; min % change)</td><td>FAIL</td></tr>
                                 <tr><td><span class="status-pill status-TT">TT</span></td><td>Test-to-Test Variability (&gt; max std dev)</td><td>PASS*</td></tr>
                                 <tr><td><span class="status-pill status-OT+">OT+</span></td><td>Out of Tolerance Positive (&gt; max % change)</td><td>PASS*</td></tr>
                                 <tr><td><span class="status-pill status-DM">DM</span></td><td>Data Missing (no valid 120s reading)</td><td>N/A</td></tr>
                                 <tr><td><span class="status-pill status-PASS">PASS</span></td><td>All criteria met</td><td>PASS</td></tr>
                             </tbody>
                         </table>
-                        <p style="font-size: 0.85rem; color: #666; margin-top: 0.75rem;">*OT-, TT, and OT+ are counted as PASS in pass/fail statistics</p>
+                        <p style="font-size: 0.85rem; color: #666; margin-top: 0.75rem;">*TT and OT+ are counted as PASS in pass/fail statistics</p>
                     </div>
                 </div>
             </div>
@@ -1330,14 +1331,14 @@ else if (typeof exports === 'object'){
     const TIME_POINTS = ['0', '5', '15', '30', '60', '90', '120'];
     
     const STATUS_PRIORITY = {
-        'FL': 1, 'FH': 2, 'OT-': 3, 'PASS': 4, 'TT': 5, 'OT+': 6, 'DM': 7
+        'FL': 1, 'FH': 2, 'FT-': 3, 'PASS': 4, 'TT': 5, 'OT+': 6, 'DM': 7
     };
     
     const STATUS_COLORS = {
         'PASS': '#10b981',
         'FL': '#ef4444',
         'FH': '#dc2626',
-        'OT-': '#f59e0b',
+        'FT-': '#ef4444',
         'TT': '#eab308',
         'OT+': '#fb923c',
         'DM': '#6b7280'
@@ -1355,7 +1356,7 @@ else if (typeof exports === 'object'){
     let currentJobData = null;
     let jobHistory = JSON.parse(localStorage.getItem('sensorJobHistory') || '[]');
     let jobStatsHistory = JSON.parse(localStorage.getItem('sensorJobStatsHistory') || '[]');
-    let activeFilters = new Set(['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']);
+    let activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+', 'DM']);
     let charts = {};
     let sqlDb = null;
     let sqlEngine = null;
@@ -1593,7 +1594,7 @@ else if (typeof exports === 'object'){
                 }
                 
                 if (pctChange !== null && !isNaN(pctChange)) {
-                    if (pctChange < thresholds.min_pct_change) failureCodes.push('OT-');
+                    if (pctChange < thresholds.min_pct_change) failureCodes.push('FT-');
                     if (pctChange > thresholds.max_pct_change) failureCodes.push('OT+');
                 }
                 
@@ -1730,8 +1731,8 @@ else if (typeof exports === 'object'){
         // Calculate and store job statistics
         if (analysisResults && analysisResults.length > 0) {
             const total = analysisResults.length;
-            const passed = analysisResults.filter(r => ['PASS', 'OT-', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
-            const failed = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail'])).length;
+            const passed = analysisResults.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
+            const failed = analysisResults.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
             const counted = passed + failed;
             const passedPct = counted > 0 ? (passed / counted * 100) : 0;
             const failedPct = counted > 0 ? (failed / counted * 100) : 0;
@@ -1790,8 +1791,8 @@ else if (typeof exports === 'object'){
     
     function renderMetrics(results, thresholdSet) {
         const total = results.length;
-        const passed = results.filter(r => ['PASS', 'OT-', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
-        const failed = results.filter(r => ['FL', 'FH'].includes(r['Pass/Fail'])).length;
+        const passed = results.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
+        const failed = results.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
         const dm = results.filter(r => r['Pass/Fail'] === 'DM').length;
         const counted = passed + failed;
         
@@ -1889,9 +1890,9 @@ else if (typeof exports === 'object'){
         tbody.innerHTML = filtered.map(row => {
             const status = row['Pass/Fail'];
             let rowClass = '';
-            if (['FL', 'FH'].includes(status)) rowClass = 'row-fail';
+            if (['FL', 'FH', 'FT-'].includes(status)) rowClass = 'row-fail';
             else if (status === 'PASS') rowClass = 'row-pass';
-            else if (['OT-', 'TT', 'OT+'].includes(status)) rowClass = 'row-warning';
+            else if (['TT', 'OT+'].includes(status)) rowClass = 'row-warning';
             else if (status === 'DM') rowClass = 'row-dm';
             
             const cells = [
@@ -2062,7 +2063,7 @@ else if (typeof exports === 'object'){
         
         // Count status per test
         const statusByTest = {};
-        const allStatuses = ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM'];
+        const allStatuses = ['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+', 'DM'];
         
         for (let t = 1; t <= maxTests; t++) {
             statusByTest[t] = {};
@@ -2224,7 +2225,7 @@ else if (typeof exports === 'object'){
                 
                 renderMetrics(analysisResults, thresholdSet);
                 renderStatusFilters(analysisResults);
-                activeFilters = new Set(['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'DM']);
+                activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+', 'DM']);
                 renderTable();
                 renderCharts(analysisResults, jobData, thresholdSet);
                 renderThresholdInfo(thresholdSet);
@@ -2293,8 +2294,8 @@ else if (typeof exports === 'object'){
                 const doc = new jsPDF();
                 
                 const total = analysisResults.length;
-                const passed = analysisResults.filter(r => ['PASS', 'OT-', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
-                const failed = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail'])).length;
+                const passed = analysisResults.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
+                const failed = analysisResults.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
                 const counted = passed + failed;
                 const passRate = counted > 0 ? (passed / counted * 100).toFixed(1) : '0.0';
                 const failRate = counted > 0 ? (failed / counted * 100).toFixed(1) : '0.0';
@@ -2469,7 +2470,7 @@ else if (typeof exports === 'object'){
     function showFailedReport() {
         if (!analysisResults) return;
         
-        const failed = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail']));
+        const failed = analysisResults.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail']));
         
         if (failed.length === 0) {
             alert('✅ No failed sensors found!');
