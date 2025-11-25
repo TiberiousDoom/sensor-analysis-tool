@@ -54,6 +54,13 @@
             .welcome-screen p { color: var(--text-dark); }
             .welcome-feature { background: #3d3d3d !important; }
             .welcome-feature p { color: #ccc; }
+            .metric-label { color: #bbb !important; }
+            .metric-delta { color: #aaa !important; }
+            .sidebar-section h3 { color: #bbb !important; }
+            .form-group label { color: #ccc !important; }
+            th { color: #ddd !important; }
+            #filterInfo { color: #aaa !important; }
+            #statusKey p { color: #aaa !important; }
         }
         
         .app-container { display: flex; min-height: 100vh; }
@@ -473,6 +480,7 @@
         
         @media (prefers-color-scheme: dark) {
             .status-summary-item { background: #3d3d3d; }
+            .status-summary-item .pct { color: #aaa; }
         }
     </style>
 </head>
@@ -1623,8 +1631,8 @@ else if (typeof exports === 'object'){
             } else {
                 const uniqueFailures = [...new Set(allFailureCodes)];
                 
-                // Check if there's a critical failure (FL or FH)
-                const hasCriticalFailure = uniqueFailures.some(code => code === 'FL' || code === 'FH');
+                // Check if there's a critical failure (FL, FH, or FT-)
+                const hasCriticalFailure = uniqueFailures.some(code => code === 'FL' || code === 'FH' || code === 'FT-');
                 
                 // Check if any test passed (by checking Status columns)
                 const hasAnyPass = group.some((row, idx) => {
