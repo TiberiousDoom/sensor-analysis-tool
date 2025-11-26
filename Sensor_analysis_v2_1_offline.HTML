@@ -47,10 +47,10 @@
             .metric-value { color: var(--text-dark) !important; }
             .metric.success .metric-value { color: #34d399 !important; }
             .metric.danger .metric-value { color: #f87171 !important; }
-            .alert-success { color: #6ee7b7; }
-            .alert-warning { color: #fcd34d; }
-            .alert-danger { color: #fca5a5; }
-            .alert-info { color: #a5b4fc; }
+            .alert-success { background: rgba(16, 185, 129, 0.2); color: #a7f3d0; }
+            .alert-warning { background: rgba(245, 158, 11, 0.2); color: #fde68a; }
+            .alert-danger { background: rgba(239, 68, 68, 0.2); color: #fecaca; }
+            .alert-info { background: rgba(102, 126, 234, 0.2); color: #c7d2fe; }
             .welcome-screen p { color: var(--text-dark); }
             .welcome-feature { background: #3d3d3d !important; }
             .welcome-feature p { color: #ccc; }
@@ -375,6 +375,112 @@
         }
         
         .job-history-item:hover { background: rgba(102, 126, 234, 0.1); }
+
+        /* Tooltip styles */
+        .help-tooltip {
+            position: relative;
+            display: inline-flex;
+            cursor: help;
+            margin-left: 0.5rem;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .help-tooltip:hover { opacity: 1; }
+
+        .help-tooltip .tooltip-content {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 400;
+            width: 220px;
+            z-index: 1000;
+            transition: visibility 0s, opacity 0.2s;
+            margin-top: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .help-tooltip .tooltip-content::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: #333;
+        }
+
+        .help-tooltip:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .tooltip-content ol {
+            margin: 0.5rem 0 0 1.25rem;
+            padding: 0;
+        }
+
+        .tooltip-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        /* Toast notification styles */
+        .toast-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 0.5rem;
+        }
+
+        .toast {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            animation: slideDown 0.3s ease-out;
+            font-size: 0.85rem;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .toast.fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+
+        .toast-success { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--success); color: #065f46; }
+        .toast-warning { background: rgba(245, 158, 11, 0.15); border: 1px solid var(--warning); color: #92400e; }
+        .toast-danger { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #991b1b; }
+        .toast-info { background: rgba(102, 126, 234, 0.15); border: 1px solid var(--primary); color: #1e40af; }
+
+        @media (prefers-color-scheme: dark) {
+            .help-tooltip .tooltip-content { background: #444; }
+            .help-tooltip .tooltip-content::before { border-bottom-color: #444; }
+            .toast-success { background: rgba(16, 185, 129, 0.2); color: #a7f3d0; }
+            .toast-warning { background: rgba(245, 158, 11, 0.2); color: #fde68a; }
+            .toast-danger { background: rgba(239, 68, 68, 0.2); color: #fecaca; }
+            .toast-info { background: rgba(102, 126, 234, 0.2); color: #c7d2fe; }
+        }
         
         .spinner {
             border: 3px solid #f3f3f3;
@@ -482,84 +588,6 @@
             .status-summary-item { background: #3d3d3d; }
             .status-summary-item .pct { color: #aaa; }
         }
-
-        /* Database Builder Styles */
-        .db-builder-upload {
-            border: 2px dashed var(--border-light);
-            border-radius: 10px;
-            padding: 1.5rem;
-            text-align: center;
-            transition: all 0.2s;
-            cursor: pointer;
-            margin-bottom: 1rem;
-        }
-
-        .db-builder-upload:hover { border-color: var(--primary); background: rgba(102, 126, 234, 0.05); }
-        .db-builder-upload.dragover { border-color: var(--primary); background: rgba(102, 126, 234, 0.1); }
-        .db-builder-upload input[type="file"] { display: none; }
-
-        .file-list {
-            max-height: 150px;
-            overflow-y: auto;
-            margin-bottom: 1rem;
-        }
-
-        .file-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0.75rem;
-            background: var(--bg-light);
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-            font-size: 0.85rem;
-        }
-
-        .file-item .file-info {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            overflow: hidden;
-        }
-
-        .file-item .file-name {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 150px;
-        }
-
-        .file-item .file-rows {
-            color: #666;
-            font-size: 0.75rem;
-        }
-
-        .file-item .remove-btn {
-            background: none;
-            border: none;
-            color: var(--danger);
-            cursor: pointer;
-            font-size: 1rem;
-            padding: 0 0.25rem;
-        }
-
-        .file-item .remove-btn:hover { opacity: 0.7; }
-
-        .db-builder-summary {
-            font-size: 0.85rem;
-            color: #666;
-            padding: 0.5rem;
-            background: var(--bg-light);
-            border-radius: 6px;
-            margin-bottom: 1rem;
-            text-align: center;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            .file-item { background: #3d3d3d; }
-            .file-item .file-rows { color: #aaa; }
-            .db-builder-summary { background: #3d3d3d; color: #ccc; }
-        }
     </style>
 </head>
 <body>
@@ -574,31 +602,53 @@
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
-            <div class="sidebar-header">🔬 Sensor Analysis v2.1</div>
-            
-            <div class="sidebar-section">
-                <h3>📁 Data Source</h3>
-                <div class="upload-tabs">
-                    <button class="upload-tab active" data-type="csv" onclick="switchUploadType('csv')">CSV</button>
-                    <button class="upload-tab" data-type="db" onclick="switchUploadType('db')">Database</button>
-                </div>
-                <div id="csvUpload" class="upload-content active">
-                    <div class="upload-area" id="csvUploadArea">
-                        <div class="upload-icon">📤</div>
-                        <div>Drop CSV or click to browse</div>
-                        <input type="file" id="csvFileInput" accept=".csv">
+            <div id="toastContainer" class="toast-container"></div>
+            <div class="sidebar-header">
+                🔬 Sensor Analysis v2.1
+                <span class="help-tooltip">
+                    ❓
+                    <div class="tooltip-content">
+                        <strong>Workflow:</strong>
+                        <ol>
+                            <li>Upload CSV or .db file</li>
+                            <li>Enter job number</li>
+                            <li>Click Analyze</li>
+                            <li>Review results</li>
+                            <li>Export as needed</li>
+                        </ol>
                     </div>
-                </div>
-                <div id="dbUpload" class="upload-content">
-                    <div class="upload-area" id="dbUploadArea">
-                        <div class="upload-icon">💾</div>
-                        <div>Drop .db file or click to browse</div>
-                        <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3">
-                    </div>
-                </div>
-                <div id="dataStatus" class="alert alert-info hidden" style="margin-top: 1rem;"><span>No data loaded</span></div>
+                </span>
             </div>
             
+            <div class="sidebar-section">
+                <div class="collapsible" id="dataSourceCollapsible">
+                    <div class="collapsible-header" onclick="toggleCollapsible(this.parentElement)">
+                        <span>📁 Data Source</span>
+                        <span class="collapsible-icon">▼</span>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="upload-tabs">
+                            <button class="upload-tab active" data-type="csv" onclick="switchUploadType('csv')">CSV</button>
+                            <button class="upload-tab" data-type="db" onclick="switchUploadType('db')">Database</button>
+                        </div>
+                        <div id="csvUpload" class="upload-content active">
+                            <div class="upload-area" id="csvUploadArea">
+                                <div class="upload-icon">📤</div>
+                                <div>Drop CSV or click to browse</div>
+                                <input type="file" id="csvFileInput" accept=".csv">
+                            </div>
+                        </div>
+                        <div id="dbUpload" class="upload-content">
+                            <div class="upload-area" id="dbUploadArea">
+                                <div class="upload-icon">💾</div>
+                                <div>Drop .db file or click to browse</div>
+                                <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="sidebar-section" id="analysisSection">
                 <h3>⚙️ Analysis Settings</h3>
                 <div class="form-group">
@@ -626,47 +676,6 @@
                 <div id="jobHistory"><div style="color: #888; font-size: 0.85rem;">No recent jobs</div></div>
             </div>
 
-            <div class="sidebar-section">
-                <div class="collapsible">
-                    <div class="collapsible-header" onclick="toggleCollapsible(this.parentElement)">
-                        <span>🗄️ Database Builder</span>
-                        <span class="collapsible-icon">▼</span>
-                    </div>
-                    <div class="collapsible-content">
-                        <div class="db-builder-upload" id="dbBuilderUploadArea">
-                            <div class="upload-icon">📤</div>
-                            <div>Drop CSVs or click to browse</div>
-                            <div style="font-size: 0.75rem; color: #888; margin-top: 0.25rem;">Select multiple files</div>
-                            <input type="file" id="dbBuilderFileInput" accept=".csv" multiple>
-                        </div>
-                        <div id="dbBuilderFileList" class="file-list"></div>
-                        <div id="dbBuilderSummary" class="db-builder-summary hidden">
-                            <strong id="dbBuilderTotalFiles">0</strong> files • <strong id="dbBuilderTotalRows">0</strong> rows
-                        </div>
-                        <button class="btn btn-primary btn-block btn-sm" id="compileDbBtn" disabled>💾 Compile Database</button>
-                        <button class="btn btn-secondary btn-block btn-sm" id="clearDbBuilderBtn" style="margin-top: 0.5rem;" disabled>🗑️ Clear All</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="collapsible">
-                    <div class="collapsible-header" onclick="toggleCollapsible(this.parentElement)">
-                        <span>❓ Quick Help</span>
-                        <span class="collapsible-icon">â–¼</span>
-                    </div>
-                    <div class="collapsible-content">
-                        <p style="font-size: 0.85rem; margin-bottom: 0.5rem;"><strong>Workflow:</strong></p>
-                        <ol style="font-size: 0.85rem; margin-left: 1.25rem;">
-                            <li>Upload CSV or .db file</li>
-                            <li>Enter job number</li>
-                            <li>Click Analyze</li>
-                            <li>Review results</li>
-                            <li>Export as needed</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
         </aside>
         
         <!-- Main Content -->
@@ -1913,10 +1922,17 @@ else if (typeof exports === 'object'){
     // ============================================================
     
     function showAlert(message, type = 'info') {
-        const statusDiv = document.getElementById('dataStatus');
-        statusDiv.className = `alert alert-${type}`;
-        statusDiv.innerHTML = message;
-        statusDiv.classList.remove('hidden');
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = message;
+        container.appendChild(toast);
+
+        // Auto-remove after 4 seconds
+        setTimeout(() => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
     }
     
     function enableExportButtons(enabled) {
@@ -1936,7 +1952,7 @@ else if (typeof exports === 'object'){
     function updateJobHistory(jobNumber) {
         if (!jobHistory.includes(jobNumber)) {
             jobHistory.unshift(jobNumber);
-            jobHistory = jobHistory.slice(0, 15);
+            jobHistory = jobHistory.slice(0, 5);
             localStorage.setItem('sensorJobHistory', JSON.stringify(jobHistory));
         }
 
@@ -1963,22 +1979,24 @@ else if (typeof exports === 'object'){
                 timestamp: Date.now()
             });
 
-            // Keep only last 15 jobs
-            jobStatsHistory = jobStatsHistory.slice(0, 15);
+            // Keep only last 5 jobs
+            jobStatsHistory = jobStatsHistory.slice(0, 5);
             localStorage.setItem('sensorJobStatsHistory', JSON.stringify(jobStatsHistory));
         }
 
         renderJobHistory();
     }
-    
+
     function renderJobHistory() {
         const container = document.getElementById('jobHistory');
         if (jobHistory.length === 0) {
             container.innerHTML = '<div style="color: #888; font-size: 0.85rem;">No recent jobs</div>';
             return;
         }
-        
-        container.innerHTML = jobHistory.map(job => `
+
+        // Show only the 5 most recent jobs
+        const recentJobs = jobHistory.slice(0, 5);
+        container.innerHTML = recentJobs.map(job => `
             <div class="job-history-item" onclick="loadHistoryJob('${job}')">🔄 Job ${job}</div>
         `).join('');
     }
@@ -2819,205 +2837,6 @@ else if (typeof exports === 'object'){
         win.document.close();
         win.print();
     }
-    
-    // ============================================================
-    // DATABASE BUILDER
-    // ============================================================
-
-    // State for database builder
-    const dbBuilderFiles = [];
-
-    function addFilesToBuilder(files) {
-        const filePromises = Array.from(files).map(file => {
-            return new Promise((resolve, reject) => {
-                if (!file.name.toLowerCase().endsWith('.csv')) {
-                    reject(new Error(`${file.name} is not a CSV file`));
-                    return;
-                }
-
-                // Check if file already added
-                if (dbBuilderFiles.some(f => f.name === file.name)) {
-                    reject(new Error(`${file.name} already added`));
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = e => {
-                    try {
-                        const data = parseCSV(e.target.result);
-                        dbBuilderFiles.push({
-                            name: file.name,
-                            data: data,
-                            rows: data.length
-                        });
-                        resolve();
-                    } catch (err) {
-                        reject(new Error(`Error parsing ${file.name}: ${err.message}`));
-                    }
-                };
-                reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-                reader.readAsText(file);
-            });
-        });
-
-        showLoading('Processing CSV files...');
-
-        Promise.allSettled(filePromises).then(results => {
-            hideLoading();
-
-            const errors = results.filter(r => r.status === 'rejected').map(r => r.reason.message);
-            if (errors.length > 0) {
-                showAlert(`⚠️ ${errors.join('; ')}`, 'warning');
-            }
-
-            const added = results.filter(r => r.status === 'fulfilled').length;
-            if (added > 0) {
-                showAlert(`✅ Added ${added} file(s) to database builder`, 'success');
-            }
-
-            renderDbBuilderFileList();
-            updateDbBuilderButtons();
-        });
-    }
-
-    function renderDbBuilderFileList() {
-        const listEl = document.getElementById('dbBuilderFileList');
-        const summaryEl = document.getElementById('dbBuilderSummary');
-
-        if (dbBuilderFiles.length === 0) {
-            listEl.innerHTML = '';
-            summaryEl.classList.add('hidden');
-            return;
-        }
-
-        listEl.innerHTML = dbBuilderFiles.map((file, idx) => `
-            <div class="file-item">
-                <div class="file-info">
-                    <span>📄</span>
-                    <span class="file-name" title="${file.name}">${file.name}</span>
-                    <span class="file-rows">(${file.rows} rows)</span>
-                </div>
-                <button class="remove-btn" onclick="removeFileFromBuilder(${idx})" title="Remove">✕</button>
-            </div>
-        `).join('');
-
-        const totalRows = dbBuilderFiles.reduce((sum, f) => sum + f.rows, 0);
-        document.getElementById('dbBuilderTotalFiles').textContent = dbBuilderFiles.length;
-        document.getElementById('dbBuilderTotalRows').textContent = totalRows;
-        summaryEl.classList.remove('hidden');
-    }
-
-    function removeFileFromBuilder(index) {
-        const removed = dbBuilderFiles.splice(index, 1);
-        if (removed.length > 0) {
-            showAlert(`Removed ${removed[0].name}`, 'info');
-        }
-        renderDbBuilderFileList();
-        updateDbBuilderButtons();
-    }
-
-    function clearDbBuilder() {
-        dbBuilderFiles.length = 0;
-        renderDbBuilderFileList();
-        updateDbBuilderButtons();
-        showAlert('Database builder cleared', 'info');
-    }
-
-    function updateDbBuilderButtons() {
-        const hasFiles = dbBuilderFiles.length > 0;
-        document.getElementById('compileDbBtn').disabled = !hasFiles;
-        document.getElementById('clearDbBuilderBtn').disabled = !hasFiles;
-    }
-
-    async function compileDatabase() {
-        if (dbBuilderFiles.length === 0) {
-            showAlert('No files to compile', 'warning');
-            return;
-        }
-
-        showLoading('Compiling database...');
-
-        try {
-            const SQL = await loadSqlEngine();
-            const db = new SQL.Database();
-
-            // Create the sensor_readings table with all expected columns
-            db.run(`
-                CREATE TABLE sensor_readings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    "Job #" TEXT,
-                    "Serial Number" TEXT,
-                    "Channel" TEXT,
-                    "0" REAL,
-                    "5" REAL,
-                    "15" REAL,
-                    "30" REAL,
-                    "60" REAL,
-                    "90" REAL,
-                    "120" REAL,
-                    "Test #" INTEGER
-                )
-            `);
-
-            // Prepare insert statement
-            const insertStmt = db.prepare(`
-                INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #")
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `);
-
-            let totalInserted = 0;
-
-            // Insert all data from all files
-            for (const file of dbBuilderFiles) {
-                for (const row of file.data) {
-                    insertStmt.run([
-                        row['Job #'] || row['Job Number'] || '',
-                        row['Serial Number'] || row['Serial#'] || '',
-                        row['Channel'] || '',
-                        row['0'] ?? null,
-                        row['5'] ?? null,
-                        row['15'] ?? null,
-                        row['30'] ?? null,
-                        row['60'] ?? null,
-                        row['90'] ?? null,
-                        row['120'] ?? null,
-                        row['Test #'] ?? null
-                    ]);
-                    totalInserted++;
-                }
-            }
-
-            insertStmt.free();
-
-            // Export the database to a binary array
-            const binaryArray = db.export();
-            const blob = new Blob([binaryArray], { type: 'application/x-sqlite3' });
-
-            // Generate filename with timestamp
-            const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            const filename = `sensor_data_${timestamp}.db`;
-
-            // Download the file
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            db.close();
-            hideLoading();
-
-            showAlert(`✅ Database compiled: ${totalInserted} records from ${dbBuilderFiles.length} files saved to ${filename}`, 'success');
-
-        } catch (err) {
-            hideLoading();
-            showAlert(`❌ Error compiling database: ${err.message}`, 'danger');
-            console.error('Database compilation error:', err);
-        }
-    }
 
     // ============================================================
     // EVENT HANDLERS
@@ -3055,27 +2874,6 @@ else if (typeof exports === 'object'){
         dbFileInput.addEventListener('change', e => {
             if (e.target.files[0]) loadDatabaseFile(e.target.files[0]);
         });
-
-        // Database Builder upload
-        const dbBuilderUploadArea = document.getElementById('dbBuilderUploadArea');
-        const dbBuilderFileInput = document.getElementById('dbBuilderFileInput');
-
-        dbBuilderUploadArea.addEventListener('click', () => dbBuilderFileInput.click());
-        dbBuilderUploadArea.addEventListener('dragover', e => { e.preventDefault(); dbBuilderUploadArea.classList.add('dragover'); });
-        dbBuilderUploadArea.addEventListener('dragleave', () => dbBuilderUploadArea.classList.remove('dragover'));
-        dbBuilderUploadArea.addEventListener('drop', e => {
-            e.preventDefault();
-            dbBuilderUploadArea.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) addFilesToBuilder(e.dataTransfer.files);
-        });
-        dbBuilderFileInput.addEventListener('change', e => {
-            if (e.target.files.length > 0) addFilesToBuilder(e.target.files);
-            e.target.value = ''; // Reset to allow selecting same files again
-        });
-
-        // Database Builder buttons
-        document.getElementById('compileDbBtn').addEventListener('click', compileDatabase);
-        document.getElementById('clearDbBuilderBtn').addEventListener('click', clearDbBuilder);
 
         // Buttons
         document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
