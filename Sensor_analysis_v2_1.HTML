@@ -538,12 +538,13 @@
             color: #666;
             transition: transform 0.2s;
         }
-        .collapsible-content {
+        .card .collapsible-content {
+            display: block;
             max-height: 1000px;
             overflow: hidden;
             transition: max-height 0.3s ease;
         }
-        .collapsible-content.collapsed {
+        .card .collapsible-content.collapsed {
             max-height: 0;
         }
         .collapsible-preview {
@@ -650,8 +651,8 @@
             </div>
             
             <div class="sidebar-section">
-                <div class="collapsible" id="dataSourceCollapsible">
-                    <div class="collapsible-header" onclick="toggleCollapsible(this.parentElement)">
+                <div class="collapsible open" id="dataSourceCollapsible">
+                    <div class="collapsible-header" onclick="toggleSidebarCollapsible(this.parentElement)">
                         <span>📁 Data Source</span>
                         <span class="collapsible-icon">▼</span>
                     </div>
@@ -2023,7 +2024,7 @@ else if (typeof exports === 'object'){
         runAnalysis();
     }
     
-    function toggleCollapsible(element) {
+    function toggleSidebarCollapsible(element) {
         element.classList.toggle('open');
     }
     
