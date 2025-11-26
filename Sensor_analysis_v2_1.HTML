@@ -1731,6 +1731,9 @@ else if (typeof exports === 'object'){
                 switchUploadType('db');
             }
 
+            // Collapse the Data Source section after successful load
+            document.getElementById('dataSourceCollapsible').classList.remove('open');
+
             return true;
 
         } catch (err) {
