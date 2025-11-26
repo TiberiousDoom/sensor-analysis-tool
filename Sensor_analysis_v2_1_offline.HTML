@@ -2441,7 +2441,8 @@ else if (typeof exports === 'object'){
                     return;
                 }
                 
-                document.getElementById('welcomeScreen').classList.add('hidden');
+                const welcomeScreen = document.getElementById('welcomeScreen');
+                if (welcomeScreen) welcomeScreen.classList.add('hidden');
                 document.getElementById('resultsSection').classList.remove('hidden');
                 
                 renderMetrics(analysisResults, thresholdSet);
