@@ -542,10 +542,13 @@
             display: block;
             max-height: 1000px;
             overflow: hidden;
-            transition: max-height 0.3s ease;
+            transition: max-height 0.3s ease, margin 0.3s ease, padding 0.3s ease;
         }
         .card .collapsible-content.collapsed {
             max-height: 0;
+            margin-top: 0 !important;
+            padding-top: 0;
+            padding-bottom: 0;
         }
         .collapsible-preview {
             font-size: 0.85rem;
@@ -1727,6 +1730,9 @@ else if (typeof exports === 'object'){
             if (isAutoLoad) {
                 switchUploadType('db');
             }
+
+            // Collapse the Data Source section after successful load
+            document.getElementById('dataSourceCollapsible').classList.remove('open');
 
             return true;
 
