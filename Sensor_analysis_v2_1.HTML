@@ -520,9 +520,37 @@
             .metrics-grid { grid-template-columns: repeat(2, 1fr); }
         }
         
-        .anomaly-item { padding: 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; font-size: 0.9rem; }
-        .anomaly-high { background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--danger); }
-        .anomaly-medium { background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning); }
+        .anomaly-item { padding: 0.4rem 0.75rem; border-radius: 4px; margin-bottom: 0.25rem; font-size: 0.85rem; }
+        .anomaly-high { background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--danger); }
+        .anomaly-medium { background: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning); }
+
+        /* Collapsible sections */
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .collapsible-header .card-title { margin-bottom: 0; }
+        .collapsible-toggle {
+            font-size: 0.85rem;
+            color: #666;
+            transition: transform 0.2s;
+        }
+        .collapsible-content {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .collapsible-content.collapsed {
+            max-height: 0;
+        }
+        .collapsible-preview {
+            font-size: 0.85rem;
+            color: #888;
+            margin-left: 0.5rem;
+        }
         
         .threshold-table { width: 100%; border-collapse: collapse; }
         .threshold-table th, .threshold-table td { padding: 10px; border: 1px solid var(--border-light); }
@@ -689,23 +717,28 @@
             
             <div id="resultsSection" class="hidden">
                 <div id="anomalySection" class="card hidden">
-                    <div class="card-title">⚠️ Anomalies Detected</div>
-                    <div id="anomalyList"></div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">📊 Quick Summary</div>
-                    <div class="metrics-grid" id="metricsGrid"></div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">📋 Quick Reports</div>
-                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn btn-danger btn-sm" id="failedReportBtn">❌ Failed Sensors</button>
-                        <button class="btn btn-secondary btn-sm" id="printBtn">🖨️ Print</button>
+                    <div class="collapsible-header" onclick="toggleCollapsible('anomalyCollapsible', 'anomalyToggle')">
+                        <div style="display: flex; align-items: center;">
+                            <div class="card-title">⚠️ Anomalies Detected</div>
+                            <span id="anomalyPreview" class="collapsible-preview"></span>
+                        </div>
+                        <span id="anomalyToggle" class="collapsible-toggle">▶</span>
+                    </div>
+                    <div id="anomalyCollapsible" class="collapsible-content collapsed" style="margin-top: 0.75rem;">
+                        <div id="anomalyList"></div>
                     </div>
                 </div>
-                
+
+                <div class="card">
+                    <div class="collapsible-header" onclick="toggleCollapsible('summaryCollapsible', 'summaryToggle')">
+                        <div class="card-title">📊 Quick Summary</div>
+                        <span id="summaryToggle" class="collapsible-toggle">▼</span>
+                    </div>
+                    <div id="summaryCollapsible" class="collapsible-content" style="margin-top: 1rem;">
+                        <div class="metrics-grid" id="metricsGrid"></div>
+                    </div>
+                </div>
+
                 <div class="tabs">
                     <button class="tab-btn active" data-tab="dataTable">📋 Data Table</button>
                     <button class="tab-btn" data-tab="visualization">📈 Visualization</button>
@@ -715,20 +748,13 @@
                 <!-- Data Table Tab -->
                 <div id="dataTable" class="tab-content active">
                     <div class="card">
-                        <div class="card-title">🔍 Filters</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                            <div>
-                                <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; display: block;">Status Filter</label>
-                                <div class="filter-pills" id="statusFilters"></div>
-                            </div>
-                            <div>
-                                <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; display: block;">Serial Number Search</label>
-                                <input type="text" id="serialSearch" placeholder="Enter serial numbers (comma-separated)...">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div class="filter-pills" id="statusFilters"></div>
+                            <div style="flex: 1; min-width: 200px;">
+                                <input type="text" id="serialSearch" placeholder="Search serial numbers..." style="margin: 0;">
                             </div>
                         </div>
-                        <div id="filterInfo" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;"></div>
-                    </div>
-                    <div class="card">
+                        <div id="filterInfo" style="font-size: 0.85rem; color: #666; margin-bottom: 0.75rem;"></div>
                         <div class="table-container" style="max-height: 500px; overflow-y: auto;">
                             <table id="resultsTable">
                                 <thead><tr id="tableHeader"></tr></thead>
@@ -2139,16 +2165,25 @@ else if (typeof exports === 'object'){
         }).join('');
     }
     
+    function toggleCollapsible(contentId, toggleId) {
+        const content = document.getElementById(contentId);
+        const toggle = document.getElementById(toggleId);
+        const isCollapsed = content.classList.toggle('collapsed');
+        toggle.textContent = isCollapsed ? '▶' : '▼';
+    }
+
     function renderAnomalies(anomalies) {
         const section = document.getElementById('anomalySection');
         const list = document.getElementById('anomalyList');
-        
+        const preview = document.getElementById('anomalyPreview');
+
         if (anomalies.length === 0) {
             section.classList.add('hidden');
             return;
         }
-        
+
         section.classList.remove('hidden');
+        preview.textContent = `(${anomalies.length} detected)`;
         list.innerHTML = anomalies.map(a => `
             <div class="anomaly-item anomaly-${a.severity.toLowerCase()}">
                 <strong>${a.serial}</strong> (Channel: ${a.channel}) — ${a.type}: ${a.message}
@@ -2849,8 +2884,6 @@ else if (typeof exports === 'object'){
         document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
         document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
         document.getElementById('summaryReportBtn').addEventListener('click', showSummaryReport);
-        document.getElementById('failedReportBtn').addEventListener('click', showFailedReport);
-        document.getElementById('printBtn').addEventListener('click', printReport);
         
         // Tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
