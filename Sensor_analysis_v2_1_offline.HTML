@@ -2609,20 +2609,95 @@ else if (typeof exports === 'object'){
     }
     
     function showSummaryReport() {
-        if (jobStatsHistory.length === 0) {
-            alert('No job history available. Please analyze at least one job first.');
+        if (!currentJob || !rawData || rawData.length === 0) {
+            alert('Please load a database and analyze a job first.');
             return;
         }
 
-        // Get up to 15 latest jobs
-        const jobsToShow = jobStatsHistory.slice(0, 15);
+        // Get all unique job numbers from database and parse numerically
+        const allJobs = [...new Set(rawData.map(r => r['Job #']))];
+        const currentJobNum = parseInt(currentJob, 10);
+
+        // Filter to jobs that are numerically less than or equal to current job
+        // and can be parsed as numbers
+        const numericJobs = allJobs
+            .map(j => ({ original: j, num: parseInt(j, 10) }))
+            .filter(j => !isNaN(j.num))
+            .sort((a, b) => b.num - a.num); // Sort descending (highest first)
+
+        // Find current job and 14 jobs numerically before it
+        const currentJobIndex = numericJobs.findIndex(j => j.num === currentJobNum);
+
+        let jobsToInclude;
+        if (currentJobIndex === -1) {
+            // Current job not in list - just take top 15
+            jobsToInclude = numericJobs.slice(0, 15);
+        } else {
+            // Include current job + up to 14 jobs before it (numerically lower)
+            jobsToInclude = numericJobs.slice(currentJobIndex, currentJobIndex + 15);
+        }
+
+        // Calculate stats for each job from rawData
+        const jobsToShow = jobsToInclude.map(jobInfo => {
+            const jobData = rawData.filter(r => String(r['Job #']).trim() === String(jobInfo.original).trim());
+            const total = jobData.length;
+
+            // We need to calculate pass/fail - use the same logic as determinePassFail
+            // but we need the current threshold settings
+            const thresholdSet = document.getElementById('thresholdSet').value;
+            const thresholds = THRESHOLDS[thresholdSet] || THRESHOLDS['default'];
+
+            let passed = 0;
+            let failed = 0;
+
+            jobData.forEach(row => {
+                const v0 = row['0'];
+                const v90 = row['90'];
+                const v120 = row['120'];
+
+                // Calculate metrics
+                let pctChange = null;
+                if (v0 !== null && v90 !== null && v120 !== null) {
+                    const denominator = v90 - v0;
+                    if (denominator !== 0) {
+                        pctChange = ((v120 - v90) / denominator) * 100;
+                    }
+                }
+
+                // Determine pass/fail status
+                if (v120 === null || v120 === undefined || isNaN(v120)) {
+                    // DM - Data Missing, don't count
+                } else if (v120 < thresholds.v120Min) {
+                    failed++; // FL
+                } else if (v120 > thresholds.v120Max) {
+                    failed++; // FH
+                } else if (pctChange !== null && pctChange < thresholds.pctChangeMin) {
+                    failed++; // FT-
+                } else {
+                    passed++; // PASS, TT, or OT+
+                }
+            });
+
+            const counted = passed + failed;
+            const passedPct = counted > 0 ? (passed / counted * 100) : 0;
+            const failedPct = counted > 0 ? (failed / counted * 100) : 0;
+
+            return {
+                jobNumber: jobInfo.original,
+                totalSensors: total,
+                passedQty: passed,
+                passedPct: passedPct,
+                failedQty: failed,
+                failedPct: failedPct
+            };
+        });
 
         // Calculate cumulative values
         const totalSensorsSum = jobsToShow.reduce((sum, j) => sum + j.totalSensors, 0);
         const passedQtySum = jobsToShow.reduce((sum, j) => sum + j.passedQty, 0);
         const failedQtySum = jobsToShow.reduce((sum, j) => sum + j.failedQty, 0);
-        const passedPctAvg = jobsToShow.length > 0 ? (jobsToShow.reduce((sum, j) => sum + j.passedPct, 0) / jobsToShow.length) : 0;
-        const failedPctAvg = jobsToShow.length > 0 ? (jobsToShow.reduce((sum, j) => sum + j.failedPct, 0) / jobsToShow.length) : 0;
+        const cumulativePassedPct = (passedQtySum + failedQtySum) > 0 ? (passedQtySum / (passedQtySum + failedQtySum) * 100) : 0;
+        const cumulativeFailedPct = (passedQtySum + failedQtySum) > 0 ? (failedQtySum / (passedQtySum + failedQtySum) * 100) : 0;
 
         // Generate table rows for each job
         const jobRows = jobsToShow.map(job => `
@@ -2665,9 +2740,9 @@ else if (typeof exports === 'object'){
                     <td>Cumulative:</td>
                     <td>${totalSensorsSum}</td>
                     <td>${passedQtySum}</td>
-                    <td>${passedPctAvg.toFixed(2)}%</td>
+                    <td>${cumulativePassedPct.toFixed(2)}%</td>
                     <td>${failedQtySum}</td>
-                    <td>${failedPctAvg.toFixed(2)}%</td>
+                    <td>${cumulativeFailedPct.toFixed(2)}%</td>
                 </tr>
             </table>
             </body></html>
