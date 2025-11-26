@@ -71,6 +71,7 @@
             border-right: 1px solid var(--border-light);
             padding: 1.5rem;
             overflow-y: auto;
+            overflow-x: hidden;
             position: fixed;
             height: 100vh;
             left: 0;
@@ -468,18 +469,18 @@
             animation: fadeOut 0.3s ease-out forwards;
         }
 
-        .toast-success { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--success); color: #065f46; }
-        .toast-warning { background: rgba(245, 158, 11, 0.15); border: 1px solid var(--warning); color: #92400e; }
-        .toast-danger { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #991b1b; }
-        .toast-info { background: rgba(102, 126, 234, 0.15); border: 1px solid var(--primary); color: #1e40af; }
+        .toast-success { background: #d1fae5; border: 1px solid var(--success); color: #065f46; }
+        .toast-warning { background: #fef3c7; border: 1px solid var(--warning); color: #92400e; }
+        .toast-danger { background: #fee2e2; border: 1px solid var(--danger); color: #991b1b; }
+        .toast-info { background: #e0e7ff; border: 1px solid var(--primary); color: #1e40af; }
 
         @media (prefers-color-scheme: dark) {
             .help-tooltip .tooltip-content { background: #444; }
             .help-tooltip .tooltip-content::before { border-bottom-color: #444; }
-            .toast-success { background: rgba(16, 185, 129, 0.2); color: #a7f3d0; }
-            .toast-warning { background: rgba(245, 158, 11, 0.2); color: #fde68a; }
-            .toast-danger { background: rgba(239, 68, 68, 0.2); color: #fecaca; }
-            .toast-info { background: rgba(102, 126, 234, 0.2); color: #c7d2fe; }
+            .toast-success { background: #064e3b; color: #a7f3d0; }
+            .toast-warning { background: #78350f; color: #fde68a; }
+            .toast-danger { background: #7f1d1d; color: #fecaca; }
+            .toast-info { background: #312e81; color: #c7d2fe; }
         }
         
         .spinner {
@@ -667,8 +668,9 @@
             
             <div class="sidebar-section" id="exportSection">
                 <h3>📊 Export</h3>
-                <button class="btn btn-secondary btn-block btn-sm" id="exportCsvBtn" disabled>📥 Export CSV</button>
-                <button class="btn btn-secondary btn-block btn-sm" id="exportPdfBtn" disabled style="margin-top: 0.5rem;">📄 Export PDF</button>
+                <button class="btn btn-secondary btn-block btn-sm" id="exportCsvBtn" disabled>📥 CSV of Job Data</button>
+                <button class="btn btn-secondary btn-block btn-sm" id="exportPdfBtn" disabled style="margin-top: 0.5rem;">🖨️ Job Summary</button>
+                <button class="btn btn-secondary btn-block btn-sm" id="summaryReportBtn" disabled style="margin-top: 0.5rem;">📄 Job Comparison</button>
             </div>
             
             <div class="sidebar-section" id="historySection">
@@ -682,19 +684,8 @@
         <main class="main-content">
             <header class="main-header">
                 <h1>🔬 Sensor Analysis Dashboard</h1>
-                <p>Advanced sensor data analysis • Fully Offline</p>
+                <p>Advanced sensor data analysis</p>
             </header>
-            
-            <div id="welcomeScreen" class="card welcome-screen">
-                <h2>👋 Welcome to Sensor Analysis Dashboard</h2>
-                <p>Upload a CSV file or SQLite database to get started.</p>
-                <div class="welcome-features">
-                    <div class="welcome-feature"><h4>📊 Data Analysis</h4><p>Analyze sensor readings with configurable thresholds</p></div>
-                    <div class="welcome-feature"><h4>📈 Visualizations</h4><p>Interactive charts by test number</p></div>
-                    <div class="welcome-feature"><h4>💾 Offline Ready</h4><p>Works completely offline - no internet needed</p></div>
-                    <div class="welcome-feature"><h4>📄 PDF Export</h4><p>Generate professional PDF reports</p></div>
-                </div>
-            </div>
             
             <div id="resultsSection" class="hidden">
                 <div id="anomalySection" class="card hidden">
@@ -710,7 +701,6 @@
                 <div class="card">
                     <div class="card-title">📋 Quick Reports</div>
                     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn btn-primary btn-sm" id="summaryReportBtn">📄 Summary Report</button>
                         <button class="btn btn-danger btn-sm" id="failedReportBtn">❌ Failed Sensors</button>
                         <button class="btn btn-secondary btn-sm" id="printBtn">🖨️ Print</button>
                     </div>
@@ -1938,6 +1928,7 @@ else if (typeof exports === 'object'){
     function enableExportButtons(enabled) {
         document.getElementById('exportCsvBtn').disabled = !enabled;
         document.getElementById('exportPdfBtn').disabled = !enabled;
+        document.getElementById('summaryReportBtn').disabled = !enabled;
     }
     
     function switchUploadType(type) {
@@ -2515,101 +2506,77 @@ else if (typeof exports === 'object'){
     
     function exportPDF() {
         if (!analysisResults) return;
-        
-        showLoading('Generating PDF...');
-        
-        setTimeout(() => {
-            try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
-                
-                const total = analysisResults.length;
-                const passed = analysisResults.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
-                const failed = analysisResults.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
-                const counted = passed + failed;
-                const passRate = counted > 0 ? (passed / counted * 100).toFixed(1) : '0.0';
-                const failRate = counted > 0 ? (failed / counted * 100).toFixed(1) : '0.0';
-                const thresholdSet = document.getElementById('thresholdSet').value;
-                
-                doc.setFontSize(20);
-                doc.setTextColor(102, 126, 234);
-                doc.text('Sensor Analysis Report', 105, 20, { align: 'center' });
-                
-                doc.setFontSize(12);
-                doc.setTextColor(100);
-                doc.text(`Job: ${currentJob}`, 105, 30, { align: 'center' });
-                doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 37, { align: 'center' });
-                
-                doc.setFontSize(14);
-                doc.setTextColor(0);
-                doc.text('Summary', 14, 50);
-                
-                doc.autoTable({
-                    startY: 55,
-                    head: [['Metric', 'Value']],
-                    body: [
-                        ['Total Sensors', total.toString()],
-                        ['Passed', `${passed} (${passRate}%)`],
-                        ['Failed', `${failed} (${failRate}%)`],
-                        ['Threshold Set', thresholdSet]
-                    ],
-                    theme: 'striped',
-                    headStyles: { fillColor: [102, 126, 234] }
-                });
-                
-                const statusCounts = {};
-                analysisResults.forEach(r => {
-                    statusCounts[r['Pass/Fail']] = (statusCounts[r['Pass/Fail']] || 0) + 1;
-                });
-                
-                doc.text('Status Breakdown', 14, doc.lastAutoTable.finalY + 15);
-                
-                const statusRows = Object.entries(statusCounts)
-                    .sort((a, b) => (STATUS_PRIORITY[a[0]] || 99) - (STATUS_PRIORITY[b[0]] || 99))
-                    .map(([status, count]) => [status, count.toString(), `${(count / total * 100).toFixed(1)}%`]);
-                
-                doc.autoTable({
-                    startY: doc.lastAutoTable.finalY + 20,
-                    head: [['Status', 'Count', 'Percentage']],
-                    body: statusRows,
-                    theme: 'striped',
-                    headStyles: { fillColor: [102, 126, 234] }
-                });
-                
-                const failedSensors = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail']));
-                if (failedSensors.length > 0) {
-                    if (doc.lastAutoTable.finalY > 200) {
-                        doc.addPage();
-                        doc.text('Failed Sensors', 14, 20);
-                    } else {
-                        doc.text('Failed Sensors', 14, doc.lastAutoTable.finalY + 15);
-                    }
-                    
-                    const failedRows = failedSensors.map(r => [
-                        r['Serial Number'],
-                        r['Channel'],
-                        r['Pass/Fail'],
-                        r['120s(St.Dev.)'].toFixed(4)
-                    ]);
-                    
-                    doc.autoTable({
-                        startY: doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 25,
-                        head: [['Serial Number', 'Channel', 'Status', 'Std Dev']],
-                        body: failedRows,
-                        theme: 'striped',
-                        headStyles: { fillColor: [239, 68, 68] }
-                    });
-                }
-                
-                doc.save(`job_${currentJob}_report.pdf`);
-                hideLoading();
-                
-            } catch (err) {
-                hideLoading();
-                showAlert(`❌ PDF error: ${err.message}`, 'danger');
-                console.error(err);
-            }
-        }, 100);
+
+        const total = analysisResults.length;
+        const passed = analysisResults.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
+        const failed = analysisResults.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
+        const counted = passed + failed;
+        const passRate = counted > 0 ? (passed / counted * 100).toFixed(1) : '0.0';
+        const failRate = counted > 0 ? (failed / counted * 100).toFixed(1) : '0.0';
+        const thresholdSet = document.getElementById('thresholdSet').value;
+
+        const statusCounts = {};
+        analysisResults.forEach(r => {
+            statusCounts[r['Pass/Fail']] = (statusCounts[r['Pass/Fail']] || 0) + 1;
+        });
+
+        const statusRows = Object.entries(statusCounts)
+            .sort((a, b) => (STATUS_PRIORITY[a[0]] || 99) - (STATUS_PRIORITY[b[0]] || 99))
+            .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td><td>${(count / total * 100).toFixed(1)}%</td></tr>`)
+            .join('');
+
+        const failedSensors = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail']));
+        const failedRows = failedSensors.map(r => `<tr><td>${r['Serial Number']}</td><td>${r['Channel']}</td><td>${r['Pass/Fail']}</td><td>${r['120s(St.Dev.)'].toFixed(4)}</td></tr>`).join('');
+
+        const reportHTML = `
+            <html><head><title>Job ${currentJob} Summary</title>
+            <style>
+                body{font-family:Arial,sans-serif;padding:20px}
+                h1{color:#667eea;border-bottom:3px solid #667eea;padding-bottom:10px}
+                h2{color:#333;margin-top:20px}
+                table{width:100%;border-collapse:collapse;margin:15px 0}
+                th,td{padding:10px;border:1px solid #ddd;text-align:left}
+                th{background:#f5f5f5}
+                .pass{color:#10b981}
+                .fail{color:#ef4444}
+                .failed-section th{background:#ef4444;color:white}
+                @media print { body{padding:0} }
+            </style>
+            </head><body>
+            <h1>Sensor Analysis Report</h1>
+            <p><strong>Job:</strong> ${currentJob}</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+
+            <h2>Summary</h2>
+            <table>
+                <tr><th>Metric</th><th>Value</th></tr>
+                <tr><td>Total Sensors</td><td>${total}</td></tr>
+                <tr><td>Passed</td><td class="pass">${passed} (${passRate}%)</td></tr>
+                <tr><td>Failed</td><td class="fail">${failed} (${failRate}%)</td></tr>
+                <tr><td>Threshold Set</td><td>${thresholdSet}</td></tr>
+            </table>
+
+            <h2>Status Breakdown</h2>
+            <table>
+                <tr><th>Status</th><th>Count</th><th>Percentage</th></tr>
+                ${statusRows}
+            </table>
+
+            ${failedSensors.length > 0 ? `
+            <h2>Failed Sensors</h2>
+            <table class="failed-section">
+                <tr><th>Serial Number</th><th>Channel</th><th>Status</th><th>Std Dev</th></tr>
+                ${failedRows}
+            </table>
+            ` : ''}
+            </body></html>
+        `;
+
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(reportHTML);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
     }
     
     function downloadFile(content, filename, mimeType) {
