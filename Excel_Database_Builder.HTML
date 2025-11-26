@@ -472,37 +472,44 @@
                         const workbook = XLSX.read(data, { type: 'array' });
 
                         const sheets = [];
-                        for (const sheetName of workbook.SheetNames) {
-                            const worksheet = workbook.Sheets[sheetName];
-                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+                        const targetSheetName = 'Test Results';
 
-                            if (jsonData.length > 0) {
-                                // Process data to match expected format
-                                const processedData = jsonData.map(row => {
-                                    const processed = {};
-                                    for (const [key, value] of Object.entries(row)) {
-                                        const trimmedKey = key.trim();
-                                        // Convert numeric columns
-                                        if (TIME_POINTS.includes(trimmedKey) || trimmedKey === 'Test #') {
-                                            const num = parseFloat(value);
-                                            processed[trimmedKey] = isNaN(num) ? null : num;
-                                        } else {
-                                            processed[trimmedKey] = String(value).trim();
-                                        }
+                        // Check if the "Test Results" sheet exists
+                        if (!workbook.SheetNames.includes(targetSheetName)) {
+                            reject(new Error(`${file.name} does not contain a "Test Results" sheet - skipping`));
+                            return;
+                        }
+
+                        // Only process the "Test Results" sheet
+                        const worksheet = workbook.Sheets[targetSheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                        if (jsonData.length > 0) {
+                            // Process data to match expected format
+                            const processedData = jsonData.map(row => {
+                                const processed = {};
+                                for (const [key, value] of Object.entries(row)) {
+                                    const trimmedKey = key.trim();
+                                    // Convert numeric columns
+                                    if (TIME_POINTS.includes(trimmedKey) || trimmedKey === 'Test #') {
+                                        const num = parseFloat(value);
+                                        processed[trimmedKey] = isNaN(num) ? null : num;
+                                    } else {
+                                        processed[trimmedKey] = String(value).trim();
                                     }
-                                    return processed;
-                                });
+                                }
+                                return processed;
+                            });
 
-                                sheets.push({
-                                    name: sheetName,
-                                    data: processedData,
-                                    rows: processedData.length
-                                });
-                            }
+                            sheets.push({
+                                name: targetSheetName,
+                                data: processedData,
+                                rows: processedData.length
+                            });
                         }
 
                         if (sheets.length === 0) {
-                            reject(new Error(`${file.name} contains no data`));
+                            reject(new Error(`${file.name} "Test Results" sheet contains no data`));
                             return;
                         }
 
