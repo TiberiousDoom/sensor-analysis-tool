@@ -1370,9 +1370,86 @@ else if (typeof exports === 'object'){
     let sqlEngine = null;
     
     // ============================================================
+    // INDEXEDDB FUNCTIONS (For persisting last database)
+    // ============================================================
+
+    const DB_NAME = 'SensorAnalysisDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'databases';
+
+    function openIndexedDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+            };
+        });
+    }
+
+    async function saveLastDatabase(arrayBuffer, fileName) {
+        try {
+            const db = await openIndexedDB();
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            await new Promise((resolve, reject) => {
+                const request = store.put({
+                    id: 'lastDatabase',
+                    data: arrayBuffer,
+                    fileName: fileName,
+                    savedAt: new Date().toISOString()
+                });
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+            db.close();
+        } catch (err) {
+            console.error('Failed to save database to IndexedDB:', err);
+        }
+    }
+
+    async function getLastDatabase() {
+        try {
+            const db = await openIndexedDB();
+            const transaction = db.transaction(STORE_NAME, 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const result = await new Promise((resolve, reject) => {
+                const request = store.get('lastDatabase');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            db.close();
+            return result;
+        } catch (err) {
+            console.error('Failed to retrieve database from IndexedDB:', err);
+            return null;
+        }
+    }
+
+    async function clearLastDatabase() {
+        try {
+            const db = await openIndexedDB();
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            await new Promise((resolve, reject) => {
+                const request = store.delete('lastDatabase');
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+            db.close();
+        } catch (err) {
+            console.error('Failed to clear database from IndexedDB:', err);
+        }
+    }
+
+    // ============================================================
     // SQL.js INITIALIZATION (Fixed naming conflict)
     // ============================================================
-    
+
     async function loadSqlEngine() {
         if (sqlEngine) return sqlEngine;
         
@@ -1476,28 +1553,28 @@ else if (typeof exports === 'object'){
     // ============================================================
     // DATABASE FUNCTIONS (Fixed)
     // ============================================================
-    
-    async function loadDatabaseFile(file) {
-        showLoading('Loading database...');
-        
+
+    async function loadDatabaseFromArrayBuffer(arrayBuffer, fileName, isAutoLoad = false) {
+        const loadingMsg = isAutoLoad ? `Restoring previous database (${fileName})...` : 'Loading database...';
+        showLoading(loadingMsg);
+
         try {
             const SQL = await loadSqlEngine();
-            
-            const arrayBuffer = await file.arrayBuffer();
+
             const uint8Array = new Uint8Array(arrayBuffer);
-            
+
             sqlDb = new SQL.Database(uint8Array);
-            
+
             // Query the sensor_readings table
             const results = sqlDb.exec("SELECT * FROM sensor_readings");
-            
+
             if (results.length === 0) {
                 throw new Error('No data found in sensor_readings table');
             }
-            
+
             const columns = results[0].columns;
             const rows = results[0].values;
-            
+
             rawData = rows.map(row => {
                 const obj = {};
                 columns.forEach((col, idx) => {
@@ -1510,14 +1587,40 @@ else if (typeof exports === 'object'){
                 });
                 return obj;
             });
-            
+
             hideLoading();
-            
+
             const uniqueJobs = [...new Set(rawData.map(r => r['Job #']))];
-            showAlert(`✅ Loaded ${rawData.length} records from ${uniqueJobs.length} jobs (Database)`, 'success');
+            const sourceLabel = isAutoLoad ? `Restored: ${fileName}` : 'Database';
+            showAlert(`✅ Loaded ${rawData.length} records from ${uniqueJobs.length} jobs (${sourceLabel})`, 'success');
             document.getElementById('analyzeBtn').disabled = false;
             enableExportButtons(false);
-            
+
+            // Switch to Database tab when auto-loading
+            if (isAutoLoad) {
+                switchUploadType('db');
+            }
+
+            return true;
+
+        } catch (err) {
+            hideLoading();
+            const errorPrefix = isAutoLoad ? 'Failed to restore database' : 'Database error';
+            showAlert(`❌ ${errorPrefix}: ${err.message}`, 'danger');
+            console.error(err);
+            return false;
+        }
+    }
+
+    async function loadDatabaseFile(file) {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const success = await loadDatabaseFromArrayBuffer(arrayBuffer, file.name, false);
+
+            // Save to IndexedDB for auto-load on next visit (only on success)
+            if (success) {
+                await saveLastDatabase(arrayBuffer, file.name);
+            }
         } catch (err) {
             hideLoading();
             showAlert(`❌ Database error: ${err.message}`, 'danger');
@@ -2560,6 +2663,18 @@ else if (typeof exports === 'object'){
         
         // Initialize
         renderJobHistory();
+
+        // Auto-load previous database (if one was loaded before)
+        (async function() {
+            try {
+                const lastDb = await getLastDatabase();
+                if (lastDb && lastDb.data && lastDb.fileName) {
+                    await loadDatabaseFromArrayBuffer(lastDb.data, lastDb.fileName, true);
+                }
+            } catch (err) {
+                console.error('Failed to auto-load previous database:', err);
+            }
+        })();
     });
     
     function handleCSVFile(file) {
