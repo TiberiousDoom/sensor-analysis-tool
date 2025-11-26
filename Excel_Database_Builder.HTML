@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Database Builder</title>
+
+    <!-- SQL.js for SQLite database creation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <!-- SheetJS for Excel file parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #1f2937;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --border-light: #374151;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border-light);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed var(--border-light);
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-text {
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        /* File List */
+        .file-list {
+            margin-top: 1rem;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .remove-btn {
+            background: transparent;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            font-size: 1.2rem;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .remove-btn:hover {
+            opacity: 1;
+        }
+
+        /* Summary */
+        .summary {
+            display: flex;
+            gap: 2rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .summary-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Buttons */
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            flex: 1;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-light);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--border-light);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid var(--warning);
+            color: var(--warning);
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Schema Info */
+        .schema-info {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+        }
+
+        .schema-info code {
+            color: var(--success);
+        }
+
+        .info-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Sheet Selection */
+        .sheet-selector {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 6px;
+        }
+
+        .sheet-selector label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .sheet-selector input[type="checkbox"] {
+            accent-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Excel Database Builder</h1>
+        <p class="subtitle">Compile multiple Excel spreadsheets into a SQLite database</p>
+
+        <div id="alertBox" class="alert"></div>
+
+        <div class="card">
+            <div class="card-title">📤 Add Excel Files</div>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div>Drop Excel files here or click to browse</div>
+                <div class="upload-text">Supports .xlsx and .xls files • Select multiple files</div>
+            </div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" multiple hidden>
+
+            <div id="fileList" class="file-list"></div>
+
+            <div id="summarySection" class="summary hidden">
+                <div class="summary-item">
+                    <div class="summary-value" id="totalFiles">0</div>
+                    <div class="summary-label">Files</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="totalSheets">0</div>
+                    <div class="summary-label">Sheets</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value" id="totalRows">0</div>
+                    <div class="summary-label">Total Rows</div>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="compileBtn" disabled>
+                    🔨 Compile Database
+                </button>
+                <button class="btn btn-secondary" id="clearBtn" disabled>
+                    🗑️ Clear All
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">ℹ️ Database Schema</div>
+            <p class="info-text" style="margin-bottom: 1rem;">
+                The compiled database creates a <code>sensor_readings</code> table compatible with the Sensor Analysis Tool:
+            </p>
+            <div class="schema-info">
+                <code>sensor_readings</code> (<br>
+                &nbsp;&nbsp;id, Job #, Serial Number, Channel,<br>
+                &nbsp;&nbsp;0, 5, 15, 30, 60, 90, 120, Test #<br>
+                )
+            </div>
+            <p class="info-text" style="margin-top: 1rem;">
+                Your Excel files should have columns matching these headers. The tool will automatically map common variations like "Job Number" → "Job #".
+            </p>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div id="loadingText">Processing...</div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        const builderFiles = [];
+        let sqlEngine = null;
+
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const summarySection = document.getElementById('summarySection');
+        const compileBtn = document.getElementById('compileBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const alertBox = document.getElementById('alertBox');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+
+        // Time point columns (numeric)
+        const TIME_POINTS = ['0', '5', '15', '30', '60', '90', '120'];
+
+        // Alert helper
+        function showAlert(message, type = 'info') {
+            alertBox.className = `alert alert-${type} show`;
+            alertBox.textContent = message;
+            setTimeout(() => alertBox.classList.remove('show'), 5000);
+        }
+
+        // Loading helpers
+        function showLoading(text = 'Processing...') {
+            loadingText.textContent = text;
+            loadingOverlay.classList.add('show');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.remove('show');
+        }
+
+        // Initialize SQL.js
+        async function loadSqlEngine() {
+            if (sqlEngine) return sqlEngine;
+            showLoading('Initializing database engine...');
+            try {
+                sqlEngine = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+                hideLoading();
+                return sqlEngine;
+            } catch (err) {
+                hideLoading();
+                console.error('Failed to initialize SQL.js:', err);
+                throw err;
+            }
+        }
+
+        // Parse Excel file
+        function parseExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+
+                        const sheets = [];
+                        for (const sheetName of workbook.SheetNames) {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                            if (jsonData.length > 0) {
+                                // Process data to match expected format
+                                const processedData = jsonData.map(row => {
+                                    const processed = {};
+                                    for (const [key, value] of Object.entries(row)) {
+                                        const trimmedKey = key.trim();
+                                        // Convert numeric columns
+                                        if (TIME_POINTS.includes(trimmedKey) || trimmedKey === 'Test #') {
+                                            const num = parseFloat(value);
+                                            processed[trimmedKey] = isNaN(num) ? null : num;
+                                        } else {
+                                            processed[trimmedKey] = String(value).trim();
+                                        }
+                                    }
+                                    return processed;
+                                });
+
+                                sheets.push({
+                                    name: sheetName,
+                                    data: processedData,
+                                    rows: processedData.length
+                                });
+                            }
+                        }
+
+                        if (sheets.length === 0) {
+                            reject(new Error(`${file.name} contains no data`));
+                            return;
+                        }
+
+                        resolve({
+                            name: file.name,
+                            sheets: sheets,
+                            totalRows: sheets.reduce((sum, s) => sum + s.rows, 0)
+                        });
+                    } catch (err) {
+                        reject(new Error(`Error parsing ${file.name}: ${err.message}`));
+                    }
+                };
+                reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // Add files
+        async function addFiles(files) {
+            const validFiles = Array.from(files).filter(file => {
+                const ext = file.name.toLowerCase();
+                return ext.endsWith('.xlsx') || ext.endsWith('.xls');
+            });
+
+            if (validFiles.length === 0) {
+                showAlert('Please select Excel files (.xlsx or .xls)', 'warning');
+                return;
+            }
+
+            showLoading('Processing Excel files...');
+
+            const results = await Promise.allSettled(
+                validFiles.map(file => {
+                    // Check for duplicates
+                    if (builderFiles.some(f => f.name === file.name)) {
+                        return Promise.reject(new Error(`${file.name} already added`));
+                    }
+                    return parseExcelFile(file);
+                })
+            );
+
+            hideLoading();
+
+            const errors = results.filter(r => r.status === 'rejected').map(r => r.reason.message);
+            const successful = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+
+            if (errors.length > 0) {
+                showAlert(errors.join('; '), 'warning');
+            }
+
+            if (successful.length > 0) {
+                builderFiles.push(...successful);
+                showAlert(`Added ${successful.length} file(s)`, 'success');
+            }
+
+            renderFileList();
+            updateButtons();
+        }
+
+        // Render file list
+        function renderFileList() {
+            if (builderFiles.length === 0) {
+                fileList.innerHTML = '';
+                summarySection.classList.add('hidden');
+                return;
+            }
+
+            fileList.innerHTML = builderFiles.map((file, idx) => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <span>📊</span>
+                        <span class="file-name" title="${file.name}">${file.name}</span>
+                        <span class="file-meta">${file.sheets.length} sheet(s) • ${file.totalRows} rows</span>
+                    </div>
+                    <button class="remove-btn" onclick="removeFile(${idx})" title="Remove">✕</button>
+                </div>
+            `).join('');
+
+            // Update summary
+            const totalFiles = builderFiles.length;
+            const totalSheets = builderFiles.reduce((sum, f) => sum + f.sheets.length, 0);
+            const totalRows = builderFiles.reduce((sum, f) => sum + f.totalRows, 0);
+
+            document.getElementById('totalFiles').textContent = totalFiles;
+            document.getElementById('totalSheets').textContent = totalSheets;
+            document.getElementById('totalRows').textContent = totalRows;
+            summarySection.classList.remove('hidden');
+        }
+
+        // Remove file
+        function removeFile(index) {
+            const removed = builderFiles.splice(index, 1);
+            if (removed.length > 0) {
+                showAlert(`Removed ${removed[0].name}`, 'info');
+            }
+            renderFileList();
+            updateButtons();
+        }
+
+        // Clear all
+        function clearAll() {
+            builderFiles.length = 0;
+            renderFileList();
+            updateButtons();
+            showAlert('All files cleared', 'info');
+        }
+
+        // Update button states
+        function updateButtons() {
+            const hasFiles = builderFiles.length > 0;
+            compileBtn.disabled = !hasFiles;
+            clearBtn.disabled = !hasFiles;
+        }
+
+        // Compile database
+        async function compileDatabase() {
+            if (builderFiles.length === 0) {
+                showAlert('No files to compile', 'warning');
+                return;
+            }
+
+            showLoading('Compiling database...');
+
+            try {
+                const SQL = await loadSqlEngine();
+                const db = new SQL.Database();
+
+                // Create the sensor_readings table
+                db.run(`
+                    CREATE TABLE sensor_readings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        "Job #" TEXT,
+                        "Serial Number" TEXT,
+                        "Channel" TEXT,
+                        "0" REAL,
+                        "5" REAL,
+                        "15" REAL,
+                        "30" REAL,
+                        "60" REAL,
+                        "90" REAL,
+                        "120" REAL,
+                        "Test #" INTEGER
+                    )
+                `);
+
+                // Prepare insert statement
+                const insertStmt = db.prepare(`
+                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #")
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+
+                let totalInserted = 0;
+
+                // Insert all data from all files and sheets
+                for (const file of builderFiles) {
+                    for (const sheet of file.sheets) {
+                        for (const row of sheet.data) {
+                            insertStmt.run([
+                                row['Job #'] || row['Job Number'] || '',
+                                row['Serial Number'] || row['Serial#'] || row['Serial'] || '',
+                                row['Channel'] || '',
+                                row['0'] ?? null,
+                                row['5'] ?? null,
+                                row['15'] ?? null,
+                                row['30'] ?? null,
+                                row['60'] ?? null,
+                                row['90'] ?? null,
+                                row['120'] ?? null,
+                                row['Test #'] ?? row['Test'] ?? null
+                            ]);
+                            totalInserted++;
+                        }
+                    }
+                }
+
+                insertStmt.free();
+
+                // Export the database
+                const binaryArray = db.export();
+                const blob = new Blob([binaryArray], { type: 'application/x-sqlite3' });
+
+                // Generate filename with timestamp
+                const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const filename = `sensor_data_${timestamp}.db`;
+
+                // Download
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                db.close();
+                hideLoading();
+
+                showAlert(`Database compiled: ${totalInserted} records from ${builderFiles.length} files saved to ${filename}`, 'success');
+
+            } catch (err) {
+                hideLoading();
+                showAlert(`Error compiling database: ${err.message}`, 'danger');
+                console.error('Database compilation error:', err);
+            }
+        }
+
+        // Event listeners
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                addFiles(e.dataTransfer.files);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                addFiles(e.target.files);
+                fileInput.value = ''; // Reset for re-selection
+            }
+        });
+
+        compileBtn.addEventListener('click', compileDatabase);
+        clearBtn.addEventListener('click', clearAll);
+
+        // Initialize
+        updateButtons();
+    </script>
+</body>
+</html>
