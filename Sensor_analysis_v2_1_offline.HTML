@@ -2614,77 +2614,114 @@ else if (typeof exports === 'object'){
             return;
         }
 
-        // Get all unique job numbers from database and parse numerically
-        const allJobs = [...new Set(rawData.map(r => r['Job #']))];
-        const currentJobNum = parseInt(currentJob, 10);
+        // Get threshold settings
+        const thresholdSet = document.getElementById('thresholdSet').value;
+        const thresholds = THRESHOLDS[thresholdSet] || THRESHOLDS['default'];
 
-        // Filter to jobs that are numerically less than or equal to current job
-        // and can be parsed as numbers
-        const numericJobs = allJobs
-            .map(j => ({ original: j, num: parseInt(j, 10) }))
-            .filter(j => !isNaN(j.num))
-            .sort((a, b) => b.num - a.num); // Sort descending (highest first)
+        // Group all raw data by whole number job prefix (e.g., 258.1, 258.2 -> 258)
+        const jobGroups = {};
+        rawData.forEach(row => {
+            const jobNum = row['Job #'];
+            const wholeNum = parseInt(jobNum, 10);
+            if (!isNaN(wholeNum)) {
+                if (!jobGroups[wholeNum]) {
+                    jobGroups[wholeNum] = [];
+                }
+                jobGroups[wholeNum].push(row);
+            }
+        });
+
+        // Get unique whole number job prefixes, sorted descending
+        const allWholeJobs = Object.keys(jobGroups)
+            .map(j => parseInt(j, 10))
+            .sort((a, b) => b - a);
+
+        const currentJobWholeNum = parseInt(currentJob, 10);
 
         // Find current job and 14 jobs numerically before it
-        const currentJobIndex = numericJobs.findIndex(j => j.num === currentJobNum);
+        const currentJobIndex = allWholeJobs.findIndex(j => j === currentJobWholeNum);
 
         let jobsToInclude;
         if (currentJobIndex === -1) {
             // Current job not in list - just take top 15
-            jobsToInclude = numericJobs.slice(0, 15);
+            jobsToInclude = allWholeJobs.slice(0, 15);
         } else {
             // Include current job + up to 14 jobs before it (numerically lower)
-            jobsToInclude = numericJobs.slice(currentJobIndex, currentJobIndex + 15);
+            jobsToInclude = allWholeJobs.slice(currentJobIndex, currentJobIndex + 15);
         }
 
-        // Calculate stats for each job from rawData
-        const jobsToShow = jobsToInclude.map(jobInfo => {
-            const jobData = rawData.filter(r => String(r['Job #']).trim() === String(jobInfo.original).trim());
-            const total = jobData.length;
+        // Calculate stats for each job group by analyzing unique sensors
+        const jobsToShow = jobsToInclude.map(wholeJobNum => {
+            const jobData = jobGroups[wholeJobNum];
 
-            // We need to calculate pass/fail - use the same logic as determinePassFail
-            // but we need the current threshold settings
-            const thresholdSet = document.getElementById('thresholdSet').value;
-            const thresholds = THRESHOLDS[thresholdSet] || THRESHOLDS['default'];
+            // Group by Serial Number to count unique sensors
+            const sensorGroups = {};
+            jobData.forEach(row => {
+                const serial = row['Serial Number'];
+                if (!sensorGroups[serial]) {
+                    sensorGroups[serial] = [];
+                }
+                sensorGroups[serial].push(row);
+            });
 
             let passed = 0;
             let failed = 0;
 
-            jobData.forEach(row => {
-                const v0 = row['0'];
-                const v90 = row['90'];
-                const v120 = row['120'];
+            // Evaluate each unique sensor using the same logic as determinePassFail
+            for (const [serial, sensorRows] of Object.entries(sensorGroups)) {
+                const readings120 = sensorRows
+                    .map(row => row['120'])
+                    .filter(v => v !== null && v !== undefined && !isNaN(v));
 
-                // Calculate metrics
-                let pctChange = null;
-                if (v0 !== null && v90 !== null && v120 !== null) {
-                    const denominator = v90 - v0;
-                    if (denominator !== 0) {
-                        pctChange = ((v120 - v90) / denominator) * 100;
+                if (readings120.length === 0) continue; // Skip sensors with no valid data
+
+                const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
+                const allFailureCodes = [];
+
+                // Check each test for this sensor
+                sensorRows.forEach(row => {
+                    const v0 = row['0'];
+                    const v90 = row['90'];
+                    const v120 = row['120'];
+                    const pctChange = row.pct_change_90_120;
+
+                    if (v120 === null || v120 === undefined || isNaN(v120)) {
+                        allFailureCodes.push('DM');
+                    } else {
+                        if (v120 < thresholds.min_120s) allFailureCodes.push('FL');
+                        if (v120 > thresholds.max_120s) allFailureCodes.push('FH');
                     }
+
+                    if (pctChange !== null && !isNaN(pctChange)) {
+                        if (pctChange < thresholds.min_pct_change) allFailureCodes.push('FT-');
+                        if (pctChange > thresholds.max_pct_change) allFailureCodes.push('OT+');
+                    }
+                });
+
+                // Check standard deviation threshold
+                if (stdDev120 > thresholds.max_std_dev) {
+                    allFailureCodes.push('TT');
                 }
 
-                // Determine pass/fail status
-                if (v120 === null || v120 === undefined || isNaN(v120)) {
-                    // DM - Data Missing, don't count
-                } else if (v120 < thresholds.v120Min) {
-                    failed++; // FL
-                } else if (v120 > thresholds.v120Max) {
-                    failed++; // FH
-                } else if (pctChange !== null && pctChange < thresholds.pctChangeMin) {
-                    failed++; // FT-
+                // Determine sensor pass/fail - critical failures (FL, FH, FT-) mean fail
+                const hasCriticalFailure = allFailureCodes.some(code =>
+                    code === 'FL' || code === 'FH' || code === 'FT-'
+                );
+
+                if (hasCriticalFailure) {
+                    failed++;
                 } else {
-                    passed++; // PASS, TT, or OT+
+                    passed++;
                 }
-            });
+            }
 
-            const counted = passed + failed;
-            const passedPct = counted > 0 ? (passed / counted * 100) : 0;
-            const failedPct = counted > 0 ? (failed / counted * 100) : 0;
+            const totalSensors = passed + failed;
+            const passedPct = totalSensors > 0 ? (passed / totalSensors * 100) : 0;
+            const failedPct = totalSensors > 0 ? (failed / totalSensors * 100) : 0;
 
             return {
-                jobNumber: jobInfo.original,
-                totalSensors: total,
+                jobNumber: wholeJobNum,
+                totalSensors: totalSensors,
                 passedQty: passed,
                 passedPct: passedPct,
                 failedQty: failed,
