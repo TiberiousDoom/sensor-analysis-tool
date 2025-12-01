@@ -1,0 +1,2782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Statistical Analysis</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Plotly.js for charts -->
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1a2332;
+            --accent-cyan: #06b6d4;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-violet: #8b5cf6;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #1e293b;
+            --glow-cyan: 0 0 20px rgba(6, 182, 212, 0.3);
+            --glow-emerald: 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Drop Zones */
+        .drop-zones {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 2.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(16, 185, 129, 0.05));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .drop-zone:hover::before,
+        .drop-zone.drag-over::before {
+            opacity: 1;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .drop-zone.loaded {
+            border-color: var(--accent-emerald);
+            border-style: solid;
+        }
+
+        .drop-zone-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.7;
+        }
+
+        .drop-zone-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .drop-zone-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .drop-zone-status {
+            margin-top: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-emerald);
+        }
+
+        .drop-zone input[type="file"] {
+            display: none;
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: none;
+        }
+
+        .settings-panel.visible {
+            display: block;
+        }
+
+        .settings-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--accent-cyan);
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .setting-item label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .setting-item input,
+        .setting-item select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .setting-item input:focus,
+        .setting-item select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        /* KPI Cards */
+        .kpi-section {
+            display: none;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-section.visible {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--accent-cyan), var(--accent-emerald));
+            border-radius: 2px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .kpi-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-2px);
+        }
+
+        .kpi-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        .kpi-unit {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-left: 0.25rem;
+        }
+
+        /* Charts Section */
+        .charts-section {
+            display: none;
+        }
+
+        .charts-section.visible {
+            display: block;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-grid.full-width {
+            grid-template-columns: 1fr;
+        }
+
+        .chart-container {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .chart-container.large {
+            grid-column: span 2;
+        }
+
+        .chart-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chart-title .badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            background: var(--accent-violet);
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .chart-plot {
+            width: 100%;
+            height: 350px;
+        }
+
+        .chart-plot.tall {
+            height: 450px;
+        }
+
+        /* Regression Panel */
+        .regression-section {
+            display: none;
+            margin-top: 2rem;
+        }
+
+        .regression-section.visible {
+            display: block;
+        }
+
+        .regression-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 16px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 200px;
+        }
+
+        .control-group label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .control-group select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .control-group select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .regression-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .result-card {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .result-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--accent-cyan);
+        }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .result-table th,
+        .result-table td {
+            padding: 0.6rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .result-table th {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .result-table td {
+            color: var(--text-primary);
+        }
+
+        .stat-highlight {
+            color: var(--accent-emerald);
+            font-weight: 600;
+        }
+
+        .stat-significant {
+            color: var(--accent-amber);
+        }
+
+        /* Tooltips */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 50%;
+            font-size: 10px;
+            color: var(--text-muted);
+            cursor: help;
+            margin-left: 4px;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            position: absolute;
+            z-index: 100;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            width: 250px;
+            line-height: 1.4;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+        }
+
+        .tooltip-text::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--bg-tertiary);
+        }
+
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+        }
+
+        /* Data Table */
+        .data-preview {
+            display: none;
+            margin-bottom: 2rem;
+        }
+
+        .data-preview.visible {
+            display: block;
+        }
+
+        .data-table-container {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        .data-table th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-tertiary);
+            padding: 0.75rem;
+            text-align: left;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .data-table td {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .data-table tr:hover td {
+            background: var(--bg-tertiary);
+        }
+
+        /* Loading Spinner */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .tab.active {
+            color: var(--accent-cyan);
+            background: var(--bg-secondary);
+            font-weight: 600;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-container.large {
+                grid-column: span 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .drop-zones {
+                grid-template-columns: 1fr;
+            }
+            .container {
+                padding: 1rem;
+            }
+            h1 {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ Sensor Statistical Analysis</h1>
+            <p class="subtitle">Drop your data files to begin analysis</p>
+        </header>
+
+        <!-- Drop Zones -->
+        <div class="drop-zones">
+            <div class="drop-zone" id="buildDataZone">
+                <div class="drop-zone-icon">📋</div>
+                <div class="drop-zone-title">Build Data</div>
+                <div class="drop-zone-subtitle">Design parameters (CSV, XLSX, TXT)</div>
+                <div class="drop-zone-status" id="buildDataStatus"></div>
+                <input type="file" id="buildDataFile" accept=".csv,.xlsx,.xls,.txt">
+            </div>
+            <div class="drop-zone" id="sensorDataZone">
+                <div class="drop-zone-icon">📈</div>
+                <div class="drop-zone-title">Sensor Response Data</div>
+                <div class="drop-zone-subtitle">Time series (Time in col A, sensors in B+)</div>
+                <div class="drop-zone-status" id="sensorDataStatus"></div>
+                <input type="file" id="sensorDataFile" accept=".csv,.xlsx,.xls,.txt">
+            </div>
+        </div>
+        
+        <!-- Matching Status -->
+        <div id="matchingStatus" style="display: none; background: var(--bg-secondary); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; margin-bottom: 0.5rem;">🔗 Sensor Matching Status</div>
+            <div id="matchingDetails" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text-secondary);"></div>
+        </div>
+        
+        <!-- Test/Debug Buttons (commented out - uncomment for debugging)
+        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <button id="loadTestDataBtn" style="background: var(--accent-violet); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-weight: 600;">
+                🧪 Load Test Data
+            </button>
+            <button id="runDiagnosticsBtn" style="background: var(--accent-amber); color: #000; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-weight: 600; display: none;">
+                🔍 Run Diagnostics
+            </button>
+        </div>
+        -->
+        
+        <!-- Diagnostics Report (commented out - uncomment for debugging)
+        <div id="diagnosticsReport" style="display: none; background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); max-height: 500px; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div style="font-weight: 600; font-size: 1.1rem;">📋 Diagnostics Report</div>
+                <button id="closeDiagnosticsBtn" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;">Close</button>
+            </div>
+            <div id="diagnosticsContent" style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; white-space: pre-wrap;"></div>
+        </div>
+        -->
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-title">⚙️ Analysis Settings</div>
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label>
+                        Baseline Points
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Number of initial time points used to calculate baseline mean and standard deviation. These points should be before any stimulus is applied.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="baselinePoints" value="10" min="3" max="50">
+                </div>
+                <div class="setting-item">
+                    <label>
+                        Peak Window (seconds)
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Duration after the peak to measure signal stability (Peak StdDev). A 5-second window captures the plateau region around maximum response.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="peakWindow" value="5" min="1" max="20">
+                </div>
+                <div class="setting-item">
+                    <label>
+                        Final Avg Points
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Number of data points at the end of recording to average for the "final value" used in recovery calculations.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="finalAvgPoints" value="5" min="1" max="20">
+                </div>
+                <div class="setting-item">
+                    <label>
+                        Response Threshold (σ)
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Minimum peak height as multiples of baseline standard deviation. Signals below baseline + (threshold × σ) are marked as non-responsive. Use higher values to filter noise.</span>
+                        </span>
+                    </label>
+                    <input type="number" id="responseThreshold" value="3" min="1" max="100" step="0.5">
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs" id="mainTabs" style="display: none;">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="timeseries">Time Series</button>
+            <button class="tab" data-tab="distributions">Distributions</button>
+            <button class="tab" data-tab="correlations">Correlations</button>
+            <button class="tab" data-tab="regression">Regression</button>
+            <button class="tab" data-tab="data">Data Tables</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overviewTab" class="tab-content">
+            <div class="kpi-section" id="kpiSection">
+                <h2 class="section-title">Summary Statistics</h2>
+                <div class="kpi-grid" id="kpiGrid"></div>
+            </div>
+
+            <div class="charts-section" id="overviewCharts">
+                <div class="chart-grid">
+                    <div class="chart-container large">
+                        <div class="chart-title">📊 Response Magnitude by Sensor</div>
+                        <div class="chart-plot" id="responseMagChart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">🎯 Response vs Baseline</div>
+                        <div class="chart-plot" id="responseVsBaselineChart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">⏱️ Response Timing</div>
+                        <div class="chart-plot" id="timingChart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Series Tab -->
+        <div id="timeseriesTab" class="tab-content" style="display: none;">
+            <div class="charts-section visible">
+                <div class="chart-grid full-width">
+                    <div class="chart-container">
+                        <div class="chart-title">📈 All Sensor Responses <span class="badge">Interactive</span></div>
+                        <div class="chart-plot tall" id="allSensorsChart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">🔥 Heatmap: Sensor Response Over Time</div>
+                        <div class="chart-plot tall" id="heatmapChart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">📉 Normalized Response Curves</div>
+                        <div class="chart-plot tall" id="normalizedChart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Distributions Tab -->
+        <div id="distributionsTab" class="tab-content" style="display: none;">
+            <div class="charts-section visible">
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <div class="chart-title">📊 Response Magnitude Distribution</div>
+                        <div class="chart-plot" id="responseHistogram"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">📊 T90 Rise Time Distribution</div>
+                        <div class="chart-plot" id="t90Histogram"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            ⏱️ T90 Rise by Trace × Reference
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Time to reach 90% of peak response, grouped by Trace Type and Reference Location combination.</span>
+                            </span>
+                        </div>
+                        <div class="chart-plot" id="t90CombinedBoxplot"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            ⏱️ T50 Recovery by Trace × Reference
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Time to recover 50% from peak back toward baseline, grouped by Trace Type and Reference Location combination.</span>
+                            </span>
+                        </div>
+                        <div class="chart-plot" id="t50rCombinedBoxplot"></div>
+                    </div>
+                    <div class="chart-container large">
+                        <div class="chart-title">
+                            📊 Response by Trace × Reference Combination
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Compares all 6 combinations of Trace Type (Carbon, Silver, None) and Reference Location (Center, Side). Helps identify interaction effects between these design choices.</span>
+                            </span>
+                        </div>
+                        <div class="chart-plot" id="combinedBoxplot"></div>
+                    </div>
+                    <div class="chart-container large">
+                        <div class="chart-title">
+                            🎻 KPI Violin Plots by Trace Type
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Violin plots combine a box plot with a density curve. The width shows how common values are at each level - wider = more sensors have that response. The white dot is the median, thick bar is interquartile range (25th-75th percentile), thin line extends to min/max.</span>
+                            </span>
+                        </div>
+                        <div class="chart-plot tall" id="violinChart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Correlations Tab -->
+        <div id="correlationsTab" class="tab-content" style="display: none;">
+            <div class="charts-section visible">
+                <div class="chart-grid">
+                    <div class="chart-container large">
+                        <div class="chart-title">🔥 Correlation Heatmap: Design Parameters vs KPIs</div>
+                        <div class="chart-plot tall" id="correlationHeatmap"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">📈 W:C Ratio vs Response Magnitude</div>
+                        <div class="chart-plot" id="wcVsResponseChart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">📈 W:C Ratio vs T90 Rise</div>
+                        <div class="chart-plot" id="wcVsT90Chart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">📈 Working SA vs Response</div>
+                        <div class="chart-plot" id="workSaVsResponseChart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">🔮 3D: W:C × W:R × Response</div>
+                        <div class="chart-plot" id="scatter3dChart"></div>
+                    </div>
+                    <div class="chart-container large">
+                        <div class="chart-title">
+                            📊 Parallel Coordinates: All Parameters
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Each line is one sensor. Trace a line across axes to see how that sensor's values compare. Lines are colored by Response magnitude (yellow=high). Look for patterns: do high-response sensors cluster together on other axes?</span>
+                            </span>
+                        </div>
+                        <div class="chart-plot tall" id="parallelChart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Regression Tab -->
+        <div id="regressionTab" class="tab-content" style="display: none;">
+            <div class="regression-section visible">
+                <h2 class="section-title">Multiple Regression Analysis</h2>
+                
+                <div class="regression-controls">
+                    <div class="control-group">
+                        <label>Dependent Variable (Y)</label>
+                        <select id="yVariable">
+                            <option value="responseMag">Response Magnitude</option>
+                            <option value="percentResponse">% Response</option>
+                            <option value="t50Rise">T50 Rise (s)</option>
+                            <option value="t90Rise">T90 Rise (s)</option>
+                            <option value="riseRate">Rise Rate (V/s)</option>
+                            <option value="percentRecovery">% Recovery</option>
+                            <option value="recoveryRate">Recovery Rate</option>
+                            <option value="snr">Signal-to-Noise Ratio</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Primary Predictor (X1)</label>
+                        <select id="x1Variable">
+                            <option value="wcRatio">W:C Ratio</option>
+                            <option value="wrRatio">W:R Ratio</option>
+                            <option value="workingSA">Working SA</option>
+                            <option value="counterSA">Counter SA</option>
+                            <option value="referenceSA">Reference SA</option>
+                            <option value="totalSA">Total SA</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Secondary Predictor (X2)</label>
+                        <select id="x2Variable">
+                            <option value="none">None</option>
+                            <option value="wcRatio">W:C Ratio</option>
+                            <option value="wrRatio" selected>W:R Ratio</option>
+                            <option value="workingSA">Working SA</option>
+                            <option value="counterSA">Counter SA</option>
+                            <option value="referenceSA">Reference SA</option>
+                            <option value="totalSA">Total SA</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Include Categoricals</label>
+                        <select id="includeCategoricals">
+                            <option value="no">No</option>
+                            <option value="yes">Yes (Trace + Reference)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <div class="chart-title">📈 Regression: X1 vs Y</div>
+                        <div class="chart-plot" id="regressionScatter"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">📊 Residual Plot</div>
+                        <div class="chart-plot" id="residualPlot"></div>
+                    </div>
+                </div>
+
+                <div class="regression-results" id="regressionResults">
+                    <div class="result-card">
+                        <h3>Model 1: Simple Regression</h3>
+                        <table class="result-table" id="model1Table">
+                            <thead>
+                                <tr><th>Term</th><th>Coefficient</th><th>Std Error</th><th>t-stat</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div style="margin-top: 1rem;">
+                            <span class="stat-highlight">R² = <span id="model1R2">--</span></span>
+                        </div>
+                    </div>
+                    <div class="result-card">
+                        <h3>Model 2: Multiple Regression</h3>
+                        <table class="result-table" id="model2Table">
+                            <thead>
+                                <tr><th>Term</th><th>Coefficient</th><th>Std Error</th><th>t-stat</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div style="margin-top: 1rem;">
+                            <span class="stat-highlight">R² = <span id="model2R2">--</span></span>
+                            <span style="margin-left: 1rem;">Adj R² = <span id="model2AdjR2">--</span></span>
+                        </div>
+                    </div>
+                    <div class="result-card" id="model3Card" style="display: none;">
+                        <h3>Model 3: With Categoricals</h3>
+                        <table class="result-table" id="model3Table">
+                            <thead>
+                                <tr><th>Term</th><th>Coefficient</th><th>Std Error</th><th>t-stat</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div style="margin-top: 1rem;">
+                            <span class="stat-highlight">R² = <span id="model3R2">--</span></span>
+                            <span style="margin-left: 1rem;">Adj R² = <span id="model3AdjR2">--</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Tab -->
+        <div id="dataTab" class="tab-content" style="display: none;">
+            <div class="data-preview visible">
+                <h2 class="section-title">Build Data</h2>
+                <div class="data-table-container">
+                    <table class="data-table" id="buildDataTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="data-preview visible" style="margin-top: 2rem;">
+                <h2 class="section-title">Calculated KPIs</h2>
+                <div class="data-table-container">
+                    <table class="data-table" id="kpiDataTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check if libraries loaded
+        const loadErrors = [];
+        if (typeof Papa === 'undefined') loadErrors.push('PapaParse');
+        if (typeof XLSX === 'undefined') loadErrors.push('SheetJS');
+        if (typeof Plotly === 'undefined') loadErrors.push('Plotly');
+        
+        if (loadErrors.length > 0) {
+            console.error('Libraries failed to load:', loadErrors);
+            document.addEventListener('DOMContentLoaded', function() {
+                const header = document.querySelector('header');
+                if (header) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.cssText = 'background: #1a2332; border: 2px solid #f43f5e; border-radius: 16px; padding: 2rem; margin: 2rem 0; text-align: center;';
+                    errorDiv.innerHTML = `
+                        <h2 style="color: #f43f5e; margin-bottom: 1rem;">⚠️ Libraries Failed to Load</h2>
+                        <p style="color: #94a3b8; margin-bottom: 1rem;">Could not load: <strong>${loadErrors.join(', ')}</strong></p>
+                        <p style="color: #94a3b8;">Check your internet connection and refresh, or try a local server.</p>
+                    `;
+                    header.after(errorDiv);
+                }
+            });
+        }
+        
+        // Safe Plotly wrapper - calls Plotly.newPlot with error handling
+        function safePlot(elementId, data, layout, config) {
+            if (typeof Plotly === 'undefined') {
+                console.error(`Cannot render ${elementId}: Plotly not loaded`);
+                const el = document.getElementById(elementId);
+                if (el) el.innerHTML = '<div style="color: #f43f5e; padding: 2rem; text-align: center;">Chart library not loaded.</div>';
+                return;
+            }
+            try {
+                Plotly.newPlot(elementId, data, layout, config);
+            } catch (err) {
+                console.error(`Error rendering ${elementId}:`, err);
+            }
+        }
+        
+        // Global data stores
+        let buildData = null;
+        let sensorData = null;
+        let kpiData = null;
+        let settings = {
+            baselinePoints: 10,
+            peakWindow: 5,
+            finalAvgPoints: 5,
+            responseThreshold: 3
+        };
+
+        // Plotly dark theme
+        const plotlyLayout = {
+            paper_bgcolor: '#111827',
+            plot_bgcolor: '#111827',
+            font: { color: '#f1f5f9', family: 'Space Grotesk' },
+            xaxis: { gridcolor: '#1e293b', zerolinecolor: '#1e293b' },
+            yaxis: { gridcolor: '#1e293b', zerolinecolor: '#1e293b' },
+            margin: { t: 40, r: 20, b: 50, l: 60 }
+        };
+
+        const plotlyConfig = { responsive: true, displayModeBar: false };
+
+        // Color palette for sensors
+        const sensorColors = [
+            '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6',
+            '#ec4899', '#14b8a6', '#84cc16', '#f97316', '#6366f1',
+            '#22d3ee', '#4ade80', '#facc15', '#fb7185', '#a78bfa'
+        ];
+
+        // Initialize drop zones
+        function initDropZones() {
+            const zones = [
+                { zone: 'buildDataZone', input: 'buildDataFile', handler: handleBuildData },
+                { zone: 'sensorDataZone', input: 'sensorDataFile', handler: handleSensorData }
+            ];
+
+            zones.forEach(({ zone, input, handler }) => {
+                const dropZone = document.getElementById(zone);
+                const fileInput = document.getElementById(input);
+
+                dropZone.addEventListener('click', () => fileInput.click());
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('drag-over');
+                });
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('drag-over');
+                });
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('drag-over');
+                    const file = e.dataTransfer.files[0];
+                    if (file) handler(file, dropZone);
+                });
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) handler(file, dropZone);
+                });
+            });
+        }
+
+        // Parse file (CSV, XLSX, TXT)
+        async function parseFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            if (ext === 'xlsx' || ext === 'xls') {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const workbook = XLSX.read(e.target.result, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+                        resolve(data);
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            } else {
+                return new Promise((resolve) => {
+                    Papa.parse(file, {
+                        complete: (results) => resolve(results.data),
+                        skipEmptyLines: true
+                    });
+                });
+            }
+        }
+
+        // Handle Build Data upload
+        async function handleBuildData(file, dropZone) {
+            const status = document.getElementById('buildDataStatus');
+            status.textContent = 'Parsing...';
+            
+            try {
+                const rawData = await parseFile(file);
+                
+                console.log('Build data raw rows:', rawData.length);
+                console.log('First row:', rawData[0]);
+                
+                // Find header row (contains "Cell" or "ID")
+                let headerRow = 0;
+                for (let i = 0; i < Math.min(10, rawData.length); i++) {
+                    if (rawData[i] && rawData[i].some(cell => {
+                        const cellStr = String(cell).toLowerCase();
+                        return cellStr.includes('cell') || cellStr.includes('id');
+                    })) {
+                        headerRow = i;
+                        break;
+                    }
+                }
+                
+                console.log('Build data header row:', headerRow);
+                console.log('Header row contents:', rawData[headerRow]);
+                
+                const headers = rawData[headerRow].map(h => String(h).trim());
+                const rows = rawData.slice(headerRow + 1).filter(row => row.length > 0 && row[0]);
+                
+                console.log('Build data rows:', rows.length);
+                console.log('First data row:', rows[0]);
+                console.log('Raw trace values (first 5 rows):', rows.slice(0, 5).map(r => ({ raw: r[1], type: typeof r[1] })));
+                
+                buildData = {
+                    headers,
+                    rows,
+                    sensors: rows.map(r => String(r[0]).trim()),
+                    traceTypes: rows.map(r => {
+                        // Handle all possible null/empty/NaN variations
+                        const raw = r[1];
+                        if (raw === undefined || raw === null || raw === '') {
+                            return 'None';
+                        }
+                        const val = String(raw).trim().toLowerCase();
+                        if (val === '' || val === 'nan' || val === 'undefined' || val === 'null' || val === 'none') {
+                            return 'None';
+                        }
+                        // Return capitalized version
+                        return String(raw).trim();
+                    }),
+                    refLocations: rows.map(r => {
+                        const raw = r[2];
+                        if (raw === undefined || raw === null || raw === '') {
+                            return 'Center';
+                        }
+                        const val = String(raw).trim().toLowerCase();
+                        if (val === '' || val === 'nan' || val === 'undefined' || val === 'null') {
+                            return 'Center';
+                        }
+                        return String(raw).trim();
+                    }),
+                    workingSA: rows.map(r => parseFloat(r[3]) || 0),
+                    counterSA: rows.map(r => parseFloat(r[4]) || 0),
+                    referenceSA: rows.map(r => parseFloat(r[5]) || 0)
+                };
+                
+                console.log('Parsed build sensors:', buildData.sensors.slice(0, 5));
+                console.log('Parsed trace types:', buildData.traceTypes.slice(0, 15));
+                console.log('Unique trace types:', [...new Set(buildData.traceTypes)]);
+                
+                // Calculate ratios
+                buildData.wcRatio = buildData.workingSA.map((w, i) => 
+                    buildData.counterSA[i] > 0 ? w / buildData.counterSA[i] : 0);
+                buildData.wrRatio = buildData.workingSA.map((w, i) => 
+                    buildData.referenceSA[i] > 0 ? w / buildData.referenceSA[i] : 0);
+                buildData.totalSA = buildData.workingSA.map((w, i) => 
+                    w + buildData.counterSA[i] + buildData.referenceSA[i]);
+                
+                // Create dummy variables
+                buildData.traceCarbon = buildData.traceTypes.map(t => 
+                    String(t).toLowerCase().includes('carbon') ? 1 : 0);
+                buildData.traceSilver = buildData.traceTypes.map(t => 
+                    String(t).toLowerCase().includes('silver') ? 1 : 0);
+                buildData.refSide = buildData.refLocations.map(r => 
+                    String(r).toLowerCase().includes('side') ? 1 : 0);
+                
+                status.textContent = `✓ Loaded ${rows.length} sensors`;
+                dropZone.classList.add('loaded');
+                
+                updateBuildDataTable();
+                checkDataReady();
+            } catch (err) {
+                status.textContent = `Error: ${err.message}`;
+                console.error(err);
+            }
+        }
+
+        // Handle Sensor Data upload
+        async function handleSensorData(file, dropZone) {
+            const status = document.getElementById('sensorDataStatus');
+            status.textContent = 'Parsing...';
+            
+            try {
+                const rawData = await parseFile(file);
+                
+                // Find header row - look for "Time" in first column
+                let headerRow = 0;
+                for (let i = 0; i < Math.min(50, rawData.length); i++) {
+                    if (rawData[i] && rawData[i][0]) {
+                        const firstCell = String(rawData[i][0]).toLowerCase();
+                        if (firstCell.includes('time')) {
+                            headerRow = i;
+                            break;
+                        }
+                    }
+                }
+                
+                console.log('Sensor data header row:', headerRow);
+                console.log('Header row contents:', rawData[headerRow]?.slice(0, 5));
+                
+                const headers = rawData[headerRow].map(h => String(h).trim());
+                const rows = rawData.slice(headerRow + 1).filter(row => {
+                    // Only keep rows where first column is a number (time value)
+                    return row.length > 1 && !isNaN(parseFloat(row[0]));
+                });
+                
+                sensorData = {
+                    headers,
+                    time: rows.map(r => parseFloat(r[0]) || 0),
+                    sensors: {}
+                };
+                
+                // Extract each sensor's data
+                for (let i = 1; i < headers.length; i++) {
+                    const sensorName = headers[i];
+                    if (sensorName && sensorName.toLowerCase() !== 'time') {
+                        sensorData.sensors[sensorName] = rows.map(r => parseFloat(r[i]) || 0);
+                    }
+                }
+                
+                console.log('Parsed sensor names:', Object.keys(sensorData.sensors).slice(0, 5));
+                
+                status.textContent = `✓ ${Object.keys(sensorData.sensors).length} sensors, ${rows.length} time points`;
+                dropZone.classList.add('loaded');
+                
+                document.getElementById('settingsPanel').classList.add('visible');
+                checkDataReady();
+            } catch (err) {
+                status.textContent = `Error: ${err.message}`;
+                console.error(err);
+            }
+        }
+
+        // Check if both datasets are loaded
+        function checkDataReady() {
+            if (buildData && sensorData) {
+                // Debug: Log sensor names to help diagnose matching issues
+                console.log('=== SENSOR MATCHING DEBUG ===');
+                console.log('Build Data sensors (first 5):', buildData.sensors.slice(0, 5));
+                console.log('Sensor Data keys (first 5):', Object.keys(sensorData.sensors).slice(0, 5));
+                
+                // Normalize function
+                const normalize = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+                
+                // Show matching status in UI
+                const buildNormalized = buildData.sensors.map(normalize);
+                const kpiNormalized = Object.keys(sensorData.sensors).map(normalize);
+                const buildSet = new Set(buildNormalized);
+                const kpiSet = new Set(kpiNormalized);
+                
+                const matchedFromBuild = buildNormalized.filter(s => kpiSet.has(s)).length;
+                const matchedFromKpi = kpiNormalized.filter(s => buildSet.has(s)).length;
+                
+                console.log(`Build sensors matched: ${matchedFromBuild}/${buildData.sensors.length}`);
+                console.log(`KPI sensors matched: ${matchedFromKpi}/${Object.keys(sensorData.sensors).length}`);
+                
+                // Show in UI
+                const statusDiv = document.getElementById('matchingStatus');
+                const detailsDiv = document.getElementById('matchingDetails');
+                statusDiv.style.display = 'block';
+                
+                if (matchedFromBuild > 0) {
+                    statusDiv.style.borderColor = 'var(--accent-emerald)';
+                    detailsDiv.innerHTML = `✅ Matched <strong>${matchedFromBuild}</strong> of ${buildData.sensors.length} build sensors with ${Object.keys(sensorData.sensors).length} response sensors`;
+                } else {
+                    statusDiv.style.borderColor = 'var(--accent-rose)';
+                    detailsDiv.innerHTML = `❌ No sensors matched!<br>
+                        Build Data: ${buildData.sensors.slice(0,3).join(', ')}...<br>
+                        Sensor Data: ${Object.keys(sensorData.sensors).slice(0,3).join(', ')}...<br>
+                        <em>Ensure sensor names match between files.</em>`;
+                }
+                
+                calculateKPIs();
+                document.getElementById('mainTabs').style.display = 'flex';
+                showTab('overview');
+            }
+        }
+
+        // Calculate KPIs for all sensors
+        function calculateKPIs() {
+            settings.baselinePoints = parseInt(document.getElementById('baselinePoints').value);
+            settings.peakWindow = parseInt(document.getElementById('peakWindow').value);
+            settings.finalAvgPoints = parseInt(document.getElementById('finalAvgPoints').value);
+            settings.responseThreshold = parseFloat(document.getElementById('responseThreshold').value);
+            
+            kpiData = {};
+            const sensorNames = Object.keys(sensorData.sensors);
+            
+            sensorNames.forEach(sensor => {
+                const values = sensorData.sensors[sensor];
+                const time = sensorData.time;
+                const n = settings.baselinePoints;
+                
+                // Baseline stats
+                const baseline = values.slice(0, n);
+                const baselineMean = mean(baseline);
+                const baselineStd = std(baseline) || 0.0001; // Prevent division by zero
+                
+                // Peak detection
+                const peakValue = Math.max(...values.filter(v => !isNaN(v)));
+                const peakIndex = values.indexOf(peakValue);
+                const peakTime = time[peakIndex];
+                
+                // Response magnitude
+                const responseMag = peakValue - baselineMean;
+                
+                // Check if signal exceeds threshold
+                const threshold = baselineMean + settings.responseThreshold * baselineStd;
+                const isSignificant = peakValue > threshold;
+                
+                const percentResponse = baselineMean > 0 ? (responseMag / baselineMean) * 100 : 0;
+                
+                // Find response start time (when signal first rises significantly)
+                // Use either 10% of response OR baseline + 3σ, whichever is larger
+                const minResponseThreshold = baselineMean + Math.max(baselineStd * 3, responseMag * 0.1);
+                let responseStartTime = peakTime; // Default to peak time if no clear start found
+                let responseStartIndex = peakIndex;
+                
+                for (let i = n; i < peakIndex; i++) {
+                    if (values[i] > minResponseThreshold) {
+                        responseStartTime = time[i];
+                        responseStartIndex = i;
+                        break;
+                    }
+                }
+                
+                // Rise times (T50, T90) - calculate absolute times first
+                const t50Target = baselineMean + 0.5 * responseMag;
+                const t90Target = baselineMean + 0.9 * responseMag;
+                const t50RiseAbs = findTimeAtValue(time, values, t50Target, 0, peakIndex, 1);
+                const t90RiseAbs = findTimeAtValue(time, values, t90Target, 0, peakIndex, 1);
+                
+                // Relative times (from response start)
+                const t50Rise = Math.max(0, t50RiseAbs - responseStartTime);
+                const t90Rise = Math.max(0, t90RiseAbs - responseStartTime);
+                
+                const riseRate = (t90Rise - t50Rise) > 0 ? (0.4 * responseMag) / (t90Rise - t50Rise) : 0;
+                
+                // Peak stability
+                const peakWindowEnd = Math.min(peakIndex + settings.peakWindow, values.length);
+                const peakRegion = values.slice(peakIndex, peakWindowEnd);
+                const peakStd = std(peakRegion);
+                
+                // Final value & recovery
+                const finalRegion = values.slice(-settings.finalAvgPoints);
+                const finalValue = mean(finalRegion);
+                const recoveryMag = peakValue - finalValue;
+                const percentRecovery = responseMag > 0 ? (recoveryMag / responseMag) * 100 : 0;
+                
+                // Recovery times (absolute values)
+                const t50RecTarget = peakValue - 0.5 * recoveryMag;
+                const t10RecTarget = peakValue - 0.9 * recoveryMag;
+                const t50Recovery = findTimeAtValue(time, values, t50RecTarget, peakIndex, values.length, -1);
+                const t10Recovery = findTimeAtValue(time, values, t10RecTarget, peakIndex, values.length, -1);
+                const recoveryRate = (t10Recovery - peakTime) > 0 ? recoveryMag / (t10Recovery - peakTime) : 0;
+                
+                // SNR
+                const snr = baselineStd > 0 ? responseMag / baselineStd : 0;
+                const responseNoise = peakStd > 0 ? responseMag / peakStd : 0;
+                
+                kpiData[sensor] = {
+                    baselineMean, baselineStd, peakValue, peakTime,
+                    responseMag, percentResponse, responseStartTime,
+                    t50Rise, t90Rise, t50RiseAbs, t90RiseAbs, riseRate,
+                    peakStd, finalValue, recoveryMag, percentRecovery,
+                    t50Recovery, t10Recovery, recoveryRate, snr, responseNoise,
+                    isSignificant, threshold
+                };
+            });
+            
+            updateAllVisualizations();
+        }
+
+        // Helper functions
+        function mean(arr) {
+            const valid = arr.filter(v => !isNaN(v) && isFinite(v));
+            return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+        }
+
+        function std(arr) {
+            const m = mean(arr);
+            const valid = arr.filter(v => !isNaN(v) && isFinite(v));
+            if (valid.length < 2) return 0;
+            const variance = valid.reduce((sum, v) => sum + Math.pow(v - m, 2), 0) / (valid.length - 1);
+            return Math.sqrt(variance);
+        }
+
+        function median(arr) {
+            const valid = arr.filter(v => !isNaN(v) && isFinite(v)).sort((a, b) => a - b);
+            if (valid.length === 0) return 0;
+            const mid = Math.floor(valid.length / 2);
+            return valid.length % 2 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+        }
+
+        function findTimeAtValue(time, values, target, startIdx, endIdx, direction) {
+            if (direction === 1) {
+                for (let i = startIdx; i < endIdx; i++) {
+                    if (!isNaN(values[i]) && values[i] >= target) return time[i];
+                }
+            } else {
+                for (let i = startIdx; i < endIdx; i++) {
+                    if (!isNaN(values[i]) && values[i] <= target) return time[i];
+                }
+            }
+            return time[Math.min(endIdx - 1, time.length - 1)] || 0;
+        }
+
+        // Linear regression
+        function linearRegression(x, y) {
+            const n = x.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sumX += x[i];
+                sumY += y[i];
+                sumXY += x[i] * y[i];
+                sumX2 += x[i] * x[i];
+                sumY2 += y[i] * y[i];
+            }
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            // R-squared
+            const yMean = sumY / n;
+            let ssTotal = 0, ssResidual = 0;
+            for (let i = 0; i < n; i++) {
+                const predicted = slope * x[i] + intercept;
+                ssTotal += Math.pow(y[i] - yMean, 2);
+                ssResidual += Math.pow(y[i] - predicted, 2);
+            }
+            const r2 = 1 - (ssResidual / ssTotal);
+            
+            // Standard errors
+            const mse = ssResidual / (n - 2);
+            const seSlope = Math.sqrt(mse / (sumX2 - sumX * sumX / n));
+            const seIntercept = Math.sqrt(mse * (1/n + Math.pow(sumX/n, 2) / (sumX2 - sumX * sumX / n)));
+            
+            return { slope, intercept, r2, seSlope, seIntercept, residuals: y.map((yi, i) => yi - (slope * x[i] + intercept)) };
+        }
+
+        // Multiple regression using normal equations
+        function multipleRegression(X, y) {
+            // X is array of arrays (each row is [1, x1, x2, ...])
+            // Returns coefficients, R2, standard errors
+            const n = X.length;
+            const p = X[0].length;
+            
+            // Add intercept column if not present
+            const Xmat = X[0][0] === 1 ? X : X.map(row => [1, ...row]);
+            const pAdj = Xmat[0].length;
+            
+            // X'X
+            const XtX = [];
+            for (let i = 0; i < pAdj; i++) {
+                XtX[i] = [];
+                for (let j = 0; j < pAdj; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < n; k++) {
+                        sum += Xmat[k][i] * Xmat[k][j];
+                    }
+                    XtX[i][j] = sum;
+                }
+            }
+            
+            // X'y
+            const Xty = [];
+            for (let i = 0; i < pAdj; i++) {
+                let sum = 0;
+                for (let k = 0; k < n; k++) {
+                    sum += Xmat[k][i] * y[k];
+                }
+                Xty[i] = sum;
+            }
+            
+            // Solve (X'X)^-1 * X'y using Gaussian elimination
+            const coeffs = solveLinearSystem(XtX, Xty);
+            
+            // Calculate R2
+            const yMean = mean(y);
+            let ssTotal = 0, ssResidual = 0;
+            const residuals = [];
+            for (let i = 0; i < n; i++) {
+                let predicted = 0;
+                for (let j = 0; j < pAdj; j++) {
+                    predicted += coeffs[j] * Xmat[i][j];
+                }
+                ssTotal += Math.pow(y[i] - yMean, 2);
+                ssResidual += Math.pow(y[i] - predicted, 2);
+                residuals.push(y[i] - predicted);
+            }
+            
+            const r2 = 1 - (ssResidual / ssTotal);
+            const adjR2 = 1 - ((1 - r2) * (n - 1) / (n - pAdj));
+            
+            // Standard errors (simplified)
+            const mse = ssResidual / (n - pAdj);
+            const XtXinv = invertMatrix(XtX);
+            const stdErrors = XtXinv ? XtXinv.map((row, i) => Math.sqrt(mse * row[i])) : coeffs.map(() => 0);
+            
+            return { coeffs, r2, adjR2, stdErrors, residuals };
+        }
+
+        function solveLinearSystem(A, b) {
+            const n = A.length;
+            const aug = A.map((row, i) => [...row, b[i]]);
+            
+            // Forward elimination
+            for (let i = 0; i < n; i++) {
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) maxRow = k;
+                }
+                [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
+                
+                for (let k = i + 1; k < n; k++) {
+                    const factor = aug[k][i] / aug[i][i];
+                    for (let j = i; j <= n; j++) {
+                        aug[k][j] -= factor * aug[i][j];
+                    }
+                }
+            }
+            
+            // Back substitution
+            const x = new Array(n).fill(0);
+            for (let i = n - 1; i >= 0; i--) {
+                x[i] = aug[i][n];
+                for (let j = i + 1; j < n; j++) {
+                    x[i] -= aug[i][j] * x[j];
+                }
+                x[i] /= aug[i][i];
+            }
+            
+            return x;
+        }
+
+        function invertMatrix(A) {
+            const n = A.length;
+            const aug = A.map((row, i) => [...row, ...Array(n).fill(0).map((_, j) => i === j ? 1 : 0)]);
+            
+            // Forward elimination
+            for (let i = 0; i < n; i++) {
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) maxRow = k;
+                }
+                [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
+                
+                if (Math.abs(aug[i][i]) < 1e-10) return null;
+                
+                const pivot = aug[i][i];
+                for (let j = 0; j < 2 * n; j++) aug[i][j] /= pivot;
+                
+                for (let k = 0; k < n; k++) {
+                    if (k !== i) {
+                        const factor = aug[k][i];
+                        for (let j = 0; j < 2 * n; j++) {
+                            aug[k][j] -= factor * aug[i][j];
+                        }
+                    }
+                }
+            }
+            
+            return aug.map(row => row.slice(n));
+        }
+
+        // Correlation coefficient
+        function correlation(x, y) {
+            const n = x.length;
+            const mx = mean(x), my = mean(y);
+            let num = 0, dx = 0, dy = 0;
+            for (let i = 0; i < n; i++) {
+                num += (x[i] - mx) * (y[i] - my);
+                dx += Math.pow(x[i] - mx, 2);
+                dy += Math.pow(y[i] - my, 2);
+            }
+            return num / Math.sqrt(dx * dy);
+        }
+
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            
+            document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`${tabName}Tab`).style.display = 'block';
+            
+            // Trigger resize for Plotly charts
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => showTab(tab.dataset.tab));
+        });
+
+        // Update all visualizations
+        function updateAllVisualizations() {
+            updateKPICards();
+            updateOverviewCharts();
+            updateTimeSeriesCharts();
+            updateDistributionCharts();
+            updateCorrelationCharts();
+            updateRegressionAnalysis();
+            updateKPIDataTable();
+            
+            document.getElementById('kpiSection').classList.add('visible');
+            document.getElementById('overviewCharts').classList.add('visible');
+        }
+
+        // KPI Summary Cards
+        function updateKPICards() {
+            const grid = document.getElementById('kpiGrid');
+            const sensors = Object.keys(kpiData);
+            
+            const significantSensors = sensors.filter(s => kpiData[s].isSignificant);
+            const avgResponse = mean(sensors.map(s => kpiData[s].responseMag));
+            const avgT90 = mean(sensors.map(s => kpiData[s].t90Rise));
+            const avgT90Abs = mean(sensors.map(s => kpiData[s].t90RiseAbs));
+            const avgResponseStart = mean(sensors.map(s => kpiData[s].responseStartTime));
+            const avgRecovery = mean(sensors.map(s => kpiData[s].percentRecovery));
+            const medianSNR = median(sensors.map(s => kpiData[s].snr));
+            const avgRiseRate = mean(sensors.map(s => kpiData[s].riseRate));
+            const avgBaselineStd = mean(sensors.map(s => kpiData[s].baselineStd));
+            
+            grid.innerHTML = `
+                <div class="kpi-card">
+                    <div class="kpi-label">Sensors Analyzed</div>
+                    <div class="kpi-value">${sensors.length}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Significant Responses
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Sensors where peak exceeds baseline + (threshold &times; &sigma;). Non-significant sensors may have noise-level responses.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${significantSensors.length}<span class="kpi-unit">/ ${sensors.length}</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Avg Response
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Mean response magnitude (Peak Value &minus; Baseline Mean) across all sensors.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${avgResponse.toFixed(4)}<span class="kpi-unit">V</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Avg T90 Rise
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Mean time to reach 90% of peak response. Absolute time: ${avgT90Abs.toFixed(1)}s. Response starts at: ${avgResponseStart.toFixed(1)}s.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${avgT90.toFixed(1)}<span class="kpi-unit">s</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Avg Recovery
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Mean percent recovery: (Peak &minus; Final) / (Peak &minus; Baseline) &times; 100. Higher = more complete return toward baseline.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${avgRecovery.toFixed(1)}<span class="kpi-unit">%</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Median SNR
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Median signal-to-noise ratio (Response &divide; Baseline StdDev). Median used to reduce outlier impact.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${medianSNR.toFixed(1)}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Avg Rise Rate
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Mean rate of signal increase from T50 to T90: (0.4 &times; Response) / (T90 &minus; T50). Higher = faster response.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${avgRiseRate.toFixed(4)}<span class="kpi-unit">V/s</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        Avg Baseline &sigma;
+                        <span class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">Mean standard deviation of baseline signal. Lower = more stable baseline, better for detecting small responses.</span>
+                        </span>
+                    </div>
+                    <div class="kpi-value">${avgBaselineStd.toFixed(5)}<span class="kpi-unit">V</span></div>
+                </div>
+            `;
+        }
+
+        // Overview Charts
+        function updateOverviewCharts() {
+            const sensors = Object.keys(kpiData);
+            
+            // Response Magnitude Bar Chart
+            safePlot('responseMagChart', [{
+                x: sensors,
+                y: sensors.map(s => kpiData[s].responseMag),
+                type: 'bar',
+                marker: {
+                    color: sensors.map((_, i) => sensorColors[i % sensorColors.length]),
+                    line: { width: 0 }
+                },
+                hovertemplate: '%{x}<br>Response: %{y:.4f} V<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, tickangle: -45, title: 'Sensor' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' }
+            }, plotlyConfig);
+            
+            // Response vs Baseline Scatter
+            safePlot('responseVsBaselineChart', [{
+                x: sensors.map(s => kpiData[s].baselineMean),
+                y: sensors.map(s => kpiData[s].responseMag),
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    color: sensorColors[0],
+                    size: 10,
+                    opacity: 0.7
+                },
+                text: sensors,
+                hovertemplate: '%{text}<br>Baseline: %{x:.4f}<br>Response: %{y:.4f}<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Baseline Mean (V)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' }
+            }, plotlyConfig);
+            
+            // Timing Chart (T50 vs T90)
+            safePlot('timingChart', [{
+                x: sensors.map(s => kpiData[s].t50Rise),
+                y: sensors.map(s => kpiData[s].t90Rise),
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    color: sensors.map(s => kpiData[s].responseMag),
+                    colorscale: 'Viridis',
+                    size: 12,
+                    showscale: true,
+                    colorbar: { title: 'Response' }
+                },
+                text: sensors,
+                hovertemplate: '%{text}<br>T50: %{x:.1f}s<br>T90: %{y:.1f}s<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'T50 Rise (s)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s)' }
+            }, plotlyConfig);
+        }
+
+        // Time Series Charts
+        function updateTimeSeriesCharts() {
+            const sensors = Object.keys(sensorData.sensors);
+            const time = sensorData.time;
+            
+            // All sensors overlay
+            const traces = sensors.map((sensor, i) => ({
+                x: time,
+                y: sensorData.sensors[sensor],
+                type: 'scatter',
+                mode: 'lines',
+                name: sensor,
+                line: { color: sensorColors[i % sensorColors.length], width: 1.5 },
+                hovertemplate: `${sensor}<br>Time: %{x:.1f}s<br>Value: %{y:.4f} V<extra></extra>`
+            }));
+            
+            safePlot('allSensorsChart', traces, {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Voltage (V)' },
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.2 }
+            }, plotlyConfig);
+            
+            // Heatmap
+            const zData = sensors.map(s => sensorData.sensors[s]);
+            safePlot('heatmapChart', [{
+                z: zData,
+                x: time,
+                y: sensors,
+                type: 'heatmap',
+                colorscale: 'Viridis',
+                hovertemplate: 'Sensor: %{y}<br>Time: %{x:.1f}s<br>Value: %{z:.4f} V<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Sensor' }
+            }, plotlyConfig);
+            
+            // Normalized curves
+            const normTraces = sensors.map((sensor, i) => {
+                const values = sensorData.sensors[sensor];
+                const baseline = kpiData[sensor].baselineMean;
+                const response = kpiData[sensor].responseMag;
+                const normalized = values.map(v => response > 0 ? (v - baseline) / response : 0);
+                return {
+                    x: time,
+                    y: normalized,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: sensor,
+                    line: { color: sensorColors[i % sensorColors.length], width: 1 },
+                    opacity: 0.6
+                };
+            });
+            
+            safePlot('normalizedChart', normTraces, {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Normalized Response' },
+                showlegend: false
+            }, plotlyConfig);
+        }
+
+        // Distribution Charts
+        function updateDistributionCharts() {
+            const sensors = Object.keys(kpiData);
+            const responseMags = sensors.map(s => kpiData[s].responseMag);
+            const t90Values = sensors.map(s => kpiData[s].t90Rise);
+            
+            // Calculate optimal number of bins (Sturges' rule)
+            const numBins = Math.max(5, Math.min(15, Math.ceil(Math.log2(sensors.length) + 1)));
+            
+            // Response Histogram
+            safePlot('responseHistogram', [{
+                x: responseMags,
+                type: 'histogram',
+                marker: { color: sensorColors[0], line: { color: '#fff', width: 1 } },
+                nbinsx: numBins,
+                hovertemplate: 'Range: %{x}<br>Count: %{y}<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Response Magnitude (V)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Count' }
+            }, plotlyConfig);
+            
+            // T90 Histogram
+            safePlot('t90Histogram', [{
+                x: t90Values,
+                type: 'histogram',
+                marker: { color: sensorColors[1], line: { color: '#fff', width: 1 } },
+                nbinsx: numBins,
+                hovertemplate: 'Range: %{x}<br>Count: %{y}<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'T90 Rise Time (s)' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Count' }
+            }, plotlyConfig);
+            
+            // Box plots by Trace Type and Reference Location
+            if (buildData) {
+                // Robust normalization - strip ALL non-alphanumeric and convert to lowercase
+                function normalize(name) {
+                    return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+                }
+                
+                // Create lookup from KPI data
+                const kpiLookup = {};
+                Object.keys(kpiData).forEach(s => {
+                    const norm = normalize(s);
+                    kpiLookup[norm] = kpiData[s];
+                    console.log(`KPI lookup: "${s}" -> "${norm}"`);
+                });
+                
+                // Match build data sensors to KPI data
+                const matchedIndices = [];
+                buildData.sensors.forEach((sensor, idx) => {
+                    const norm = normalize(sensor);
+                    const kpi = kpiLookup[norm];
+                    if (kpi) {
+                        matchedIndices.push({ idx, sensor, kpi });
+                    } else {
+                        console.log(`No match for build sensor: "${sensor}" -> "${norm}"`);
+                    }
+                });
+                
+                console.log('Distribution charts - matched sensors:', matchedIndices.length);
+                
+                if (matchedIndices.length === 0) {
+                    console.warn('No sensors matched for distribution charts!');
+                    // Show available keys for debugging
+                    console.log('KPI lookup keys:', Object.keys(kpiLookup).slice(0, 5));
+                    console.log('Build normalized:', buildData.sensors.slice(0, 5).map(normalize));
+                    return;
+                }
+                
+                // T90 Rise by Trace × Reference Combination
+                const t90CombinedGroups = {};
+                const t90GroupOrder = ['Center/Carbon', 'Center/Silver', 'Center/None', 'Side/Carbon', 'Side/Silver', 'Side/None'];
+                
+                matchedIndices.forEach(({ idx, kpi }) => {
+                    let trace = String(buildData.traceTypes[idx] || '');
+                    const ref = String(buildData.refLocations[idx] || '');
+                    
+                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
+                    const traceLower = trace.toLowerCase().trim();
+                    let traceClean;
+                    if (traceLower.includes('carbon')) {
+                        traceClean = 'Carbon';
+                    } else if (traceLower.includes('silver')) {
+                        traceClean = 'Silver';
+                    } else {
+                        traceClean = 'None';
+                    }
+                    
+                    const groupName = `${refShort}/${traceClean}`;
+                    if (!t90CombinedGroups[groupName]) t90CombinedGroups[groupName] = [];
+                    t90CombinedGroups[groupName].push(kpi.t90Rise);
+                });
+                
+                const t90CombinedColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
+                const t90CombinedTraces = t90GroupOrder
+                    .filter(g => t90CombinedGroups[g] && t90CombinedGroups[g].length > 0)
+                    .map((group, i) => ({
+                        y: t90CombinedGroups[group],
+                        type: 'box',
+                        name: group,
+                        marker: { color: t90CombinedColors[i % t90CombinedColors.length] },
+                        boxpoints: 'all',
+                        jitter: 0.3,
+                        pointpos: -1.5
+                    }));
+                
+                safePlot('t90CombinedBoxplot', t90CombinedTraces, {
+                    ...plotlyLayout,
+                    yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise Time (s)' },
+                    showlegend: false
+                }, plotlyConfig);
+                
+                // T50 Recovery by Trace × Reference Combination
+                const t50rCombinedGroups = {};
+                const t50rGroupOrder = ['Center/Carbon', 'Center/Silver', 'Center/None', 'Side/Carbon', 'Side/Silver', 'Side/None'];
+                
+                matchedIndices.forEach(({ idx, kpi }) => {
+                    let trace = String(buildData.traceTypes[idx] || '');
+                    const ref = String(buildData.refLocations[idx] || '');
+                    
+                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
+                    const traceLower = trace.toLowerCase().trim();
+                    let traceClean;
+                    if (traceLower.includes('carbon')) {
+                        traceClean = 'Carbon';
+                    } else if (traceLower.includes('silver')) {
+                        traceClean = 'Silver';
+                    } else {
+                        traceClean = 'None';
+                    }
+                    
+                    const groupName = `${refShort}/${traceClean}`;
+                    if (!t50rCombinedGroups[groupName]) t50rCombinedGroups[groupName] = [];
+                    t50rCombinedGroups[groupName].push(kpi.t50Recovery);
+                });
+                
+                const t50rCombinedColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
+                const t50rCombinedTraces = t50rGroupOrder
+                    .filter(g => t50rCombinedGroups[g] && t50rCombinedGroups[g].length > 0)
+                    .map((group, i) => ({
+                        y: t50rCombinedGroups[group],
+                        type: 'box',
+                        name: group,
+                        marker: { color: t50rCombinedColors[i % t50rCombinedColors.length] },
+                        boxpoints: 'all',
+                        jitter: 0.3,
+                        pointpos: -1.5
+                    }));
+                
+                safePlot('t50rCombinedBoxplot', t50rCombinedTraces, {
+                    ...plotlyLayout,
+                    yaxis: { ...plotlyLayout.yaxis, title: 'T50 Recovery Time (s)' },
+                    showlegend: false
+                }, plotlyConfig);
+                
+                // Combined Trace × Reference box plot
+                const combinedGroups = {};
+                const groupOrder = ['Center/Carbon', 'Center/Silver', 'Center/None', 'Side/Carbon', 'Side/Silver', 'Side/None'];
+                
+                matchedIndices.forEach(({ idx, kpi }) => {
+                    let trace = String(buildData.traceTypes[idx] || '');
+                    const ref = String(buildData.refLocations[idx] || '');
+                    
+                    // Simplify reference location name
+                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
+                    
+                    // Clean trace name - catch all variations
+                    const traceLower = trace.toLowerCase().trim();
+                    let traceClean;
+                    if (traceLower.includes('carbon')) {
+                        traceClean = 'Carbon';
+                    } else if (traceLower.includes('silver')) {
+                        traceClean = 'Silver';
+                    } else {
+                        traceClean = 'None';  // Empty, NaN, None, null, undefined, etc.
+                    }
+                    
+                    const groupName = `${refShort}/${traceClean}`;
+                    
+                    if (!combinedGroups[groupName]) combinedGroups[groupName] = [];
+                    combinedGroups[groupName].push(kpi.responseMag);
+                });
+                
+                console.log('Combined groups:', Object.entries(combinedGroups).map(([k, v]) => `${k}: ${v.length}`));;
+                
+                const combinedColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
+                const combinedTraces = groupOrder
+                    .filter(g => combinedGroups[g] && combinedGroups[g].length > 0)
+                    .map((group, i) => ({
+                        y: combinedGroups[group],
+                        type: 'box',
+                        name: group,
+                        marker: { color: combinedColors[i % combinedColors.length] },
+                        boxpoints: 'all',
+                        jitter: 0.3,
+                        pointpos: -1.5
+                    }));
+                
+                safePlot('combinedBoxplot', combinedTraces, {
+                    ...plotlyLayout,
+                    yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                    showlegend: false
+                }, plotlyConfig);
+                
+                // Violin plot - use same trace cleaning logic
+                const violinGroups = {};
+                matchedIndices.forEach(({ idx, kpi }) => {
+                    let trace = String(buildData.traceTypes[idx] || '');
+                    const traceLower = trace.toLowerCase().trim();
+                    let traceClean;
+                    if (traceLower.includes('carbon')) {
+                        traceClean = 'Carbon';
+                    } else if (traceLower.includes('silver')) {
+                        traceClean = 'Silver';
+                    } else {
+                        traceClean = 'None';
+                    }
+                    if (!violinGroups[traceClean]) violinGroups[traceClean] = [];
+                    violinGroups[traceClean].push(kpi.responseMag);
+                });
+                
+                const violinOrder = ['Carbon', 'Silver', 'None'];
+                const violinTraces = violinOrder
+                    .filter(t => violinGroups[t] && violinGroups[t].length > 0)
+                    .map((trace, i) => ({
+                        type: 'violin',
+                        y: violinGroups[trace],
+                        name: trace,
+                        box: { visible: true },
+                        meanline: { visible: true },
+                        fillcolor: sensorColors[i],
+                        line: { color: sensorColors[i] },
+                        opacity: 0.7
+                    }));
+                
+                safePlot('violinChart', violinTraces, {
+                    ...plotlyLayout,
+                    yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' }
+                }, plotlyConfig);
+            }
+        }
+
+        // Correlation Charts
+        function updateCorrelationCharts() {
+            if (!buildData || !kpiData) {
+                console.warn('Missing buildData or kpiData for correlations');
+                return;
+            }
+            
+            // Normalize sensor names for matching
+            function normalizeName(name) {
+                return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+            }
+            
+            const kpiLookup = {};
+            Object.keys(kpiData).forEach(s => {
+                kpiLookup[normalizeName(s)] = kpiData[s];
+            });
+            
+            // Create matched arrays
+            const matchedData = [];
+            buildData.sensors.forEach((sensor, idx) => {
+                const normalized = normalizeName(sensor);
+                const kpi = kpiLookup[normalized];
+                if (kpi) {
+                    matchedData.push({
+                        sensor,
+                        wcRatio: buildData.wcRatio[idx],
+                        wrRatio: buildData.wrRatio[idx],
+                        workingSA: buildData.workingSA[idx],
+                        counterSA: buildData.counterSA[idx],
+                        referenceSA: buildData.referenceSA[idx],
+                        totalSA: buildData.totalSA[idx],
+                        traceCarbon: buildData.traceCarbon[idx],
+                        traceSilver: buildData.traceSilver[idx],
+                        refSide: buildData.refSide[idx],
+                        ...kpi
+                    });
+                }
+            });
+            
+            console.log('Correlation matched sensors:', matchedData.length);
+            
+            if (matchedData.length === 0) {
+                console.warn('No sensors matched for correlations!');
+                console.log('Build sensors sample:', buildData.sensors.slice(0, 3));
+                console.log('KPI sensors sample:', Object.keys(kpiData).slice(0, 3));
+                return;
+            }
+            
+            const sensors = matchedData.map(d => d.sensor);
+            const kpiList = ['responseMag', 'percentResponse', 't90Rise', 't90RiseAbs', 'riseRate', 
+                            'percentRecovery', 'recoveryRate', 'snr', 'baselineStd'];
+            const designParams = ['wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
+            
+            // Build correlation matrix
+            const corrMatrix = [];
+            kpiList.forEach(kpi => {
+                const row = [];
+                designParams.forEach(param => {
+                    const x = matchedData.map(d => d[param]);
+                    const y = matchedData.map(d => d[kpi]);
+                    const r = correlation(x, y);
+                    row.push(isNaN(r) ? 0 : r);
+                });
+                corrMatrix.push(row);
+            });
+            
+            console.log('Correlation matrix computed:', corrMatrix.length, 'x', corrMatrix[0]?.length);
+            
+            // Heatmap
+            safePlot('correlationHeatmap', [{
+                z: corrMatrix,
+                x: ['W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'],
+                y: ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate', '% Recov', 'Recov Rate', 'SNR', 'Baseline σ'],
+                type: 'heatmap',
+                colorscale: 'RdBu',
+                zmid: 0,
+                zmin: -1,
+                zmax: 1,
+                hovertemplate: '%{y} vs %{x}<br>r = %{z:.3f}<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: '' },
+                yaxis: { ...plotlyLayout.yaxis, title: '' }
+            }, plotlyConfig);
+            
+            // Scatter plots
+            const wcRatio = matchedData.map(d => d.wcRatio);
+            const respMag = matchedData.map(d => d.responseMag);
+            const t90 = matchedData.map(d => d.t90Rise);
+            const workSA = matchedData.map(d => d.workingSA);
+            
+            // W:C vs Response with trendline
+            const regWcResp = linearRegression(wcRatio, respMag);
+            const xLine = [Math.min(...wcRatio), Math.max(...wcRatio)];
+            const yLine = xLine.map(x => regWcResp.slope * x + regWcResp.intercept);
+            
+            safePlot('wcVsResponseChart', [
+                {
+                    x: wcRatio, y: respMag,
+                    mode: 'markers', type: 'scatter',
+                    marker: { color: sensorColors[0], size: 10 },
+                    text: sensors,
+                    hovertemplate: '%{text}<br>W:C: %{x:.3f}<br>Response: %{y:.4f}<extra></extra>',
+                    name: 'Data'
+                },
+                {
+                    x: xLine, y: yLine,
+                    mode: 'lines', type: 'scatter',
+                    line: { color: '#f59e0b', width: 2, dash: 'dash' },
+                    name: `R² = ${regWcResp.r2.toFixed(3)}`
+                }
+            ], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                showlegend: true
+            }, plotlyConfig);
+            
+            // W:C vs T90
+            const regWcT90 = linearRegression(wcRatio, t90);
+            const yLineT90 = xLine.map(x => regWcT90.slope * x + regWcT90.intercept);
+            
+            safePlot('wcVsT90Chart', [
+                {
+                    x: wcRatio, y: t90,
+                    mode: 'markers', type: 'scatter',
+                    marker: { color: sensorColors[1], size: 10 },
+                    text: sensors,
+                    name: 'Data'
+                },
+                {
+                    x: xLine, y: yLineT90,
+                    mode: 'lines', type: 'scatter',
+                    line: { color: '#f59e0b', width: 2, dash: 'dash' },
+                    name: `R² = ${regWcT90.r2.toFixed(3)}`
+                }
+            ], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s from response start)' },
+                showlegend: true
+            }, plotlyConfig);
+            
+            // Working SA vs Response
+            const regWorkResp = linearRegression(workSA, respMag);
+            const xLineWork = [Math.min(...workSA), Math.max(...workSA)];
+            const yLineWork = xLineWork.map(x => regWorkResp.slope * x + regWorkResp.intercept);
+            
+            safePlot('workSaVsResponseChart', [
+                {
+                    x: workSA, y: respMag,
+                    mode: 'markers', type: 'scatter',
+                    marker: { color: sensorColors[2], size: 10 },
+                    text: sensors,
+                    name: 'Data'
+                },
+                {
+                    x: xLineWork, y: yLineWork,
+                    mode: 'lines', type: 'scatter',
+                    line: { color: '#f59e0b', width: 2, dash: 'dash' },
+                    name: `R² = ${regWorkResp.r2.toFixed(3)}`
+                }
+            ], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Working SA (mm²)', tickformat: '.1f' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                showlegend: true
+            }, plotlyConfig);
+            
+            // 3D Scatter
+            safePlot('scatter3dChart', [{
+                x: wcRatio,
+                y: matchedData.map(d => d.wrRatio),
+                z: respMag,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: {
+                    size: 6,
+                    color: respMag,
+                    colorscale: 'Viridis',
+                    opacity: 0.8
+                },
+                text: sensors,
+                hovertemplate: '%{text}<br>W:C: %{x:.2f}<br>W:R: %{y:.2f}<br>Response: %{z:.4f}<extra></extra>'
+            }], {
+                ...plotlyLayout,
+                scene: {
+                    xaxis: { title: 'W:C Ratio', gridcolor: '#1e293b' },
+                    yaxis: { title: 'W:R Ratio', gridcolor: '#1e293b' },
+                    zaxis: { title: 'Response (V)', gridcolor: '#1e293b' },
+                    bgcolor: '#111827'
+                }
+            }, plotlyConfig);
+            
+            // Parallel Coordinates
+            // Format large SNR values for display
+            const snrValues = matchedData.map(d => d.snr);
+            const maxSNR = Math.max(...snrValues);
+            
+            // If SNR values are very large, use log scale or cap display
+            const snrForDisplay = maxSNR > 1000 
+                ? snrValues.map(v => Math.log10(Math.max(v, 1)))  // Log scale for large values
+                : snrValues;
+            const snrLabel = maxSNR > 1000 ? 'log₁₀(SNR)' : 'SNR';
+            
+            safePlot('parallelChart', [{
+                type: 'parcoords',
+                line: {
+                    color: respMag,
+                    colorscale: 'Viridis',
+                    showscale: true,
+                    colorbar: { title: 'Response' }
+                },
+                dimensions: [
+                    { label: 'W:C Ratio', values: wcRatio },
+                    { label: 'W:R Ratio', values: matchedData.map(d => d.wrRatio) },
+                    { label: 'Work SA', values: workSA },
+                    { label: 'Response', values: respMag },
+                    { label: 'T90 Rise', values: t90 },
+                    { label: '% Recovery', values: matchedData.map(d => d.percentRecovery) },
+                    { label: snrLabel, values: snrForDisplay }
+                ]
+            }], {
+                ...plotlyLayout,
+                margin: { t: 50, r: 50, b: 30, l: 50 }
+            }, plotlyConfig);
+            
+            // Store matched data for regression
+            window.matchedData = matchedData;
+        }
+
+        // Regression Analysis
+        function updateRegressionAnalysis() {
+            if (!buildData || !kpiData) return;
+            
+            const yVar = document.getElementById('yVariable').value;
+            const x1Var = document.getElementById('x1Variable').value;
+            const x2Var = document.getElementById('x2Variable').value;
+            const includeCat = document.getElementById('includeCategoricals').value === 'yes';
+            
+            const sensors = buildData.sensors;
+            const y = sensors.map(s => kpiData[s]?.[yVar] || 0);
+            const x1 = buildData[x1Var];
+            const x2 = x2Var !== 'none' ? buildData[x2Var] : null;
+            
+            // Model 1: Simple regression
+            const reg1 = linearRegression(x1, y);
+            updateRegressionTable('model1Table', [
+                { term: x1Var, coef: reg1.slope, se: reg1.seSlope },
+                { term: 'Intercept', coef: reg1.intercept, se: reg1.seIntercept }
+            ]);
+            document.getElementById('model1R2').textContent = reg1.r2.toFixed(4);
+            
+            // Model 2: Multiple regression
+            let reg2;
+            if (x2) {
+                const X2 = sensors.map((_, i) => [x1[i], x2[i]]);
+                reg2 = multipleRegression(X2, y);
+                updateRegressionTable('model2Table', [
+                    { term: x1Var, coef: reg2.coeffs[1], se: reg2.stdErrors[1] },
+                    { term: x2Var, coef: reg2.coeffs[2], se: reg2.stdErrors[2] },
+                    { term: 'Intercept', coef: reg2.coeffs[0], se: reg2.stdErrors[0] }
+                ]);
+            } else {
+                reg2 = reg1;
+                updateRegressionTable('model2Table', [
+                    { term: x1Var, coef: reg1.slope, se: reg1.seSlope },
+                    { term: 'Intercept', coef: reg1.intercept, se: reg1.seIntercept }
+                ]);
+            }
+            document.getElementById('model2R2').textContent = (reg2.r2 || reg1.r2).toFixed(4);
+            document.getElementById('model2AdjR2').textContent = (reg2.adjR2 || reg1.r2).toFixed(4);
+            
+            // Model 3: With categoricals
+            document.getElementById('model3Card').style.display = includeCat ? 'block' : 'none';
+            if (includeCat) {
+                const X3 = sensors.map((_, i) => [
+                    x1[i], 
+                    buildData.traceCarbon[i], 
+                    buildData.traceSilver[i], 
+                    buildData.refSide[i]
+                ]);
+                const reg3 = multipleRegression(X3, y);
+                updateRegressionTable('model3Table', [
+                    { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
+                    { term: 'Tr_Carbon', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
+                    { term: 'Tr_Silver', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
+                    { term: 'Ref_Side', coef: reg3.coeffs[4], se: reg3.stdErrors[4] },
+                    { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
+                ]);
+                document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
+                document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
+            }
+            
+            // Regression scatter plot
+            const xLine = [Math.min(...x1), Math.max(...x1)];
+            const yLine = xLine.map(x => reg1.slope * x + reg1.intercept);
+            
+            safePlot('regressionScatter', [
+                {
+                    x: x1, y: y,
+                    mode: 'markers', type: 'scatter',
+                    marker: { color: sensorColors[0], size: 10 },
+                    text: sensors,
+                    name: 'Data'
+                },
+                {
+                    x: xLine, y: yLine,
+                    mode: 'lines', type: 'scatter',
+                    line: { color: '#f59e0b', width: 3 },
+                    name: 'Fit'
+                }
+            ], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: x1Var },
+                yaxis: { ...plotlyLayout.yaxis, title: yVar }
+            }, plotlyConfig);
+            
+            // Residual plot
+            const predicted = x1.map(xi => reg1.slope * xi + reg1.intercept);
+            safePlot('residualPlot', [{
+                x: predicted,
+                y: reg1.residuals,
+                mode: 'markers',
+                type: 'scatter',
+                marker: { color: sensorColors[3], size: 8 },
+                text: sensors
+            }, {
+                x: [Math.min(...predicted), Math.max(...predicted)],
+                y: [0, 0],
+                mode: 'lines',
+                type: 'scatter',
+                line: { color: '#64748b', width: 1, dash: 'dash' }
+            }], {
+                ...plotlyLayout,
+                xaxis: { ...plotlyLayout.xaxis, title: 'Predicted' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Residual' },
+                showlegend: false
+            }, plotlyConfig);
+        }
+
+        function updateRegressionTable(tableId, data) {
+            const tbody = document.querySelector(`#${tableId} tbody`);
+            tbody.innerHTML = data.map(row => {
+                const tStat = row.se > 0 ? row.coef / row.se : 0;
+                const significant = Math.abs(tStat) > 2;
+                return `<tr>
+                    <td>${row.term}</td>
+                    <td>${row.coef.toFixed(6)}</td>
+                    <td>${row.se.toFixed(6)}</td>
+                    <td class="${significant ? 'stat-significant' : ''}">${tStat.toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Data Tables
+        function updateBuildDataTable() {
+            if (!buildData) return;
+            const table = document.getElementById('buildDataTable');
+            table.querySelector('thead').innerHTML = `<tr>${buildData.headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+            table.querySelector('tbody').innerHTML = buildData.rows.map(row => 
+                `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
+            ).join('');
+        }
+
+        function updateKPIDataTable() {
+            if (!kpiData) return;
+            const table = document.getElementById('kpiDataTable');
+            const sensors = Object.keys(kpiData);
+            const kpiNames = ['baselineMean', 'baselineStd', 'peakValue', 'peakTime', 'responseMag', 
+                             'percentResponse', 't50Rise', 't90Rise', 'riseRate', 'percentRecovery', 'snr'];
+            
+            table.querySelector('thead').innerHTML = `<tr><th>Sensor</th>${kpiNames.map(k => `<th>${k}</th>`).join('')}</tr>`;
+            table.querySelector('tbody').innerHTML = sensors.map(s => {
+                const data = kpiData[s];
+                return `<tr><td>${s}</td>${kpiNames.map(k => `<td>${data[k]?.toFixed(4) || '--'}</td>`).join('')}</tr>`;
+            }).join('');
+        }
+
+        // Event listeners for regression controls
+        ['yVariable', 'x1Variable', 'x2Variable', 'includeCategoricals'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateRegressionAnalysis);
+        });
+
+        // Settings change listener
+        ['baselinePoints', 'peakWindow', 'finalAvgPoints', 'responseThreshold'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                if (sensorData && buildData) calculateKPIs();
+            });
+        });
+
+        // Initialize
+        initDropZones();
+        
+        // ============================================
+        // TEST DATA GENERATION AND DIAGNOSTICS
+        // ============================================
+        
+        function generateTestData() {
+            console.log('Generating test data...');
+            
+            // Create 12 test sensors with known properties
+            const testSensors = [];
+            const traceTypes = ['Carbon', 'Silver', 'None'];
+            const refLocations = ['Planar Center', 'Planar Side'];
+            
+            for (let i = 0; i < 12; i++) {
+                testSensors.push({
+                    id: `Test_${String(i + 1).padStart(3, '0')}`,
+                    traceType: traceTypes[i % 3],
+                    refLocation: refLocations[Math.floor(i / 6)],
+                    workingSA: 40 + i * 3,  // 40 to 73
+                    counterSA: 20 + (i % 4) * 5,  // 20, 25, 30, 35
+                    referenceSA: 10 + (i % 3) * 2,  // 10, 12, 14
+                    // Known response characteristics
+                    baselineValue: 0.5 + (i % 3) * 0.01,  // 0.50, 0.51, 0.52
+                    baselineNoise: 0.005 + (i % 4) * 0.002,  // varying noise
+                    peakValue: 1.5 + i * 0.1,  // 1.5 to 2.6
+                    peakTime: 100 + i * 5,  // 100 to 155
+                    riseTime: 10 + (i % 3) * 5,  // 10, 15, 20 seconds to rise
+                    recoveryPercent: 70 + (i % 4) * 10  // 70, 80, 90, 100%
+                });
+            }
+            
+            // Generate Build Data
+            buildData = {
+                headers: ['Cell ID', 'Trace Type', 'Reference Location', 'Working SA (mm²)', 'Counter SA (mm²)', 'Reference SA (mm²)'],
+                rows: testSensors.map(s => [s.id, s.traceType, s.refLocation, s.workingSA, s.counterSA, s.referenceSA]),
+                sensors: testSensors.map(s => s.id),
+                traceTypes: testSensors.map(s => s.traceType),
+                refLocations: testSensors.map(s => s.refLocation),
+                workingSA: testSensors.map(s => s.workingSA),
+                counterSA: testSensors.map(s => s.counterSA),
+                referenceSA: testSensors.map(s => s.referenceSA)
+            };
+            
+            // Calculate ratios
+            buildData.wcRatio = buildData.workingSA.map((w, i) => w / buildData.counterSA[i]);
+            buildData.wrRatio = buildData.workingSA.map((w, i) => w / buildData.referenceSA[i]);
+            buildData.totalSA = buildData.workingSA.map((w, i) => w + buildData.counterSA[i] + buildData.referenceSA[i]);
+            buildData.traceCarbon = buildData.traceTypes.map(t => t === 'Carbon' ? 1 : 0);
+            buildData.traceSilver = buildData.traceTypes.map(t => t === 'Silver' ? 1 : 0);
+            buildData.refSide = buildData.refLocations.map(r => r.includes('Side') ? 1 : 0);
+            
+            // Generate Sensor Response Data (time series)
+            const timePoints = 300;  // 300 seconds
+            const time = Array.from({length: timePoints}, (_, i) => i);
+            
+            sensorData = {
+                headers: ['Time (s)', ...testSensors.map(s => s.id)],
+                time: time,
+                sensors: {}
+            };
+            
+            // Generate each sensor's response curve
+            testSensors.forEach(sensor => {
+                const values = [];
+                const baseline = sensor.baselineValue;
+                const noise = sensor.baselineNoise;
+                const peak = sensor.peakValue;
+                const peakT = sensor.peakTime;
+                const riseT = sensor.riseTime;
+                const recoveryTarget = baseline + (peak - baseline) * (1 - sensor.recoveryPercent / 100);
+                
+                for (let t = 0; t < timePoints; t++) {
+                    let value;
+                    
+                    if (t < peakT - riseT * 2) {
+                        // Baseline period
+                        value = baseline + (Math.random() - 0.5) * noise * 2;
+                    } else if (t < peakT) {
+                        // Rise period (sigmoid)
+                        const progress = (t - (peakT - riseT * 2)) / (riseT * 2);
+                        const sigmoid = 1 / (1 + Math.exp(-10 * (progress - 0.5)));
+                        value = baseline + (peak - baseline) * sigmoid + (Math.random() - 0.5) * noise;
+                    } else if (t < peakT + 20) {
+                        // Peak plateau
+                        value = peak + (Math.random() - 0.5) * noise * 1.5;
+                    } else {
+                        // Recovery period (exponential decay)
+                        const decayProgress = (t - peakT - 20) / 100;
+                        value = recoveryTarget + (peak - recoveryTarget) * Math.exp(-decayProgress * 2) + (Math.random() - 0.5) * noise;
+                    }
+                    
+                    values.push(value);
+                }
+                
+                sensorData.sensors[sensor.id] = values;
+            });
+            
+            // Store expected values for diagnostics
+            window.testExpectedValues = testSensors.map(s => ({
+                id: s.id,
+                expectedBaseline: s.baselineValue,
+                expectedPeak: s.peakValue,
+                expectedPeakTime: s.peakTime,
+                expectedResponse: s.peakValue - s.baselineValue,
+                expectedRecoveryPct: s.recoveryPercent,
+                traceType: s.traceType,
+                refLocation: s.refLocation,
+                wcRatio: s.workingSA / s.counterSA
+            }));
+            
+            // Update UI
+            document.getElementById('buildDataStatus').textContent = `✓ Test: ${testSensors.length} sensors`;
+            document.getElementById('buildDataZone').classList.add('loaded');
+            document.getElementById('sensorDataStatus').textContent = `✓ Test: ${testSensors.length} sensors, ${timePoints} time points`;
+            document.getElementById('sensorDataZone').classList.add('loaded');
+            document.getElementById('settingsPanel').classList.add('visible');
+            const diagBtn = document.getElementById('runDiagnosticsBtn');
+            if (diagBtn) diagBtn.style.display = 'inline-block';
+            
+            updateBuildDataTable();
+            checkDataReady();
+        }
+        
+        function runDiagnostics() {
+            if (!kpiData || !buildData || !window.testExpectedValues) {
+                alert('Please load test data first!');
+                return;
+            }
+            
+            const report = [];
+            let passCount = 0;
+            let failCount = 0;
+            
+            const addResult = (test, expected, actual, tolerance = 0.1) => {
+                const passed = Math.abs(expected - actual) <= tolerance * Math.abs(expected) || 
+                              (expected === 0 && Math.abs(actual) < 0.01);
+                if (passed) passCount++; else failCount++;
+                const status = passed ? '✅ PASS' : '❌ FAIL';
+                report.push(`${status}: ${test}`);
+                report.push(`       Expected: ${typeof expected === 'number' ? expected.toFixed(4) : expected}`);
+                report.push(`       Actual:   ${typeof actual === 'number' ? actual.toFixed(4) : actual}`);
+                if (!passed) report.push(`       Difference: ${Math.abs(expected - actual).toFixed(4)}`);
+                report.push('');
+            };
+            
+            report.push('═══════════════════════════════════════════════════════');
+            report.push('              SENSOR ANALYSIS DIAGNOSTICS              ');
+            report.push('═══════════════════════════════════════════════════════');
+            report.push('');
+            
+            // Test 1: Data Loading
+            report.push('── DATA LOADING ──');
+            addResult('Sensor count', 12, Object.keys(kpiData).length, 0);
+            addResult('Build data sensors', 12, buildData.sensors.length, 0);
+            report.push('');
+            
+            // Test 2: Sensor Matching
+            report.push('── SENSOR MATCHING ──');
+            const normalize = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+            const kpiNorm = new Set(Object.keys(kpiData).map(normalize));
+            const buildNorm = buildData.sensors.map(normalize);
+            const matchCount = buildNorm.filter(s => kpiNorm.has(s)).length;
+            addResult('Matched sensors', 12, matchCount, 0);
+            report.push('');
+            
+            // Test 3: KPI Calculations for each sensor
+            report.push('── KPI CALCULATIONS (Sample Sensors) ──');
+            
+            window.testExpectedValues.slice(0, 4).forEach(expected => {
+                const kpi = kpiData[expected.id];
+                if (!kpi) {
+                    report.push(`❌ FAIL: Sensor ${expected.id} not found in KPI data`);
+                    failCount++;
+                    return;
+                }
+                
+                report.push(`\n  Sensor: ${expected.id} (${expected.traceType}, ${expected.refLocation})`);
+                addResult(`  ${expected.id} Baseline Mean`, expected.expectedBaseline, kpi.baselineMean, 0.05);
+                addResult(`  ${expected.id} Peak Value`, expected.expectedPeak, kpi.peakValue, 0.05);
+                addResult(`  ${expected.id} Peak Time`, expected.expectedPeakTime, kpi.peakTime, 0.15);
+                addResult(`  ${expected.id} Response Mag`, expected.expectedResponse, kpi.responseMag, 0.1);
+            });
+            report.push('');
+            
+            // Test 4: Build Data Parsing
+            report.push('── BUILD DATA PARSING ──');
+            const carbonCount = buildData.traceTypes.filter(t => t === 'Carbon').length;
+            const silverCount = buildData.traceTypes.filter(t => t === 'Silver').length;
+            const noneCount = buildData.traceTypes.filter(t => t === 'None').length;
+            addResult('Carbon trace count', 4, carbonCount, 0);
+            addResult('Silver trace count', 4, silverCount, 0);
+            addResult('None trace count', 4, noneCount, 0);
+            
+            const centerCount = buildData.refLocations.filter(r => r.includes('Center')).length;
+            const sideCount = buildData.refLocations.filter(r => r.includes('Side')).length;
+            addResult('Planar Center count', 6, centerCount, 0);
+            addResult('Planar Side count', 6, sideCount, 0);
+            report.push('');
+            
+            // Test 5: Ratio Calculations
+            report.push('── RATIO CALCULATIONS ──');
+            const firstSensor = window.testExpectedValues[0];
+            const firstBuildIdx = buildData.sensors.indexOf(firstSensor.id);
+            if (firstBuildIdx >= 0) {
+                const expectedWC = buildData.workingSA[firstBuildIdx] / buildData.counterSA[firstBuildIdx];
+                addResult('W:C Ratio calculation', expectedWC, buildData.wcRatio[firstBuildIdx], 0.001);
+            }
+            report.push('');
+            
+            // Test 6: Statistical Functions
+            report.push('── STATISTICAL FUNCTIONS ──');
+            const testArr = [1, 2, 3, 4, 5];
+            addResult('mean([1,2,3,4,5])', 3, mean(testArr), 0.001);
+            addResult('std([1,2,3,4,5])', 1.5811, std(testArr), 0.01);
+            addResult('median([1,2,3,4,5])', 3, median(testArr), 0.001);
+            
+            const testX = [1, 2, 3, 4, 5];
+            const testY = [2, 4, 6, 8, 10];
+            addResult('correlation([1..5], [2..10])', 1.0, correlation(testX, testY), 0.001);
+            
+            const reg = linearRegression(testX, testY);
+            addResult('linearRegression slope', 2.0, reg.slope, 0.001);
+            addResult('linearRegression intercept', 0.0, reg.intercept, 0.001);
+            addResult('linearRegression R²', 1.0, reg.r2, 0.001);
+            report.push('');
+            
+            // Test 7: Chart Data Presence
+            report.push('── CHART RENDERING ──');
+            const charts = [
+                'responseMagChart', 'responseVsBaselineChart', 'timingChart',
+                'allSensorsChart', 'heatmapChart', 'normalizedChart',
+                'responseHistogram', 't90Histogram', 't90CombinedBoxplot', 't50rCombinedBoxplot', 'combinedBoxplot',
+                'correlationHeatmap', 'wcVsResponseChart', 'scatter3dChart'
+            ];
+            
+            charts.forEach(chartId => {
+                const el = document.getElementById(chartId);
+                const hasData = el && el.data && el.data.length > 0;
+                if (hasData) passCount++; else failCount++;
+                report.push(`${hasData ? '✅' : '❌'} ${chartId}: ${hasData ? 'Has data' : 'EMPTY'}`);
+            });
+            report.push('');
+            
+            // Test 8: Significance Detection
+            report.push('── SIGNIFICANCE DETECTION ──');
+            const significantCount = Object.values(kpiData).filter(k => k.isSignificant).length;
+            addResult('Significant sensors (threshold=' + settings.responseThreshold + 'σ)', 12, significantCount, 0);
+            report.push('');
+            
+            // Summary
+            report.push('═══════════════════════════════════════════════════════');
+            report.push(`                    SUMMARY: ${passCount} PASSED, ${failCount} FAILED`);
+            report.push('═══════════════════════════════════════════════════════');
+            
+            if (failCount === 0) {
+                report.push('\n🎉 All tests passed! The analysis appears to be working correctly.');
+            } else {
+                report.push(`\n⚠️ ${failCount} test(s) failed. Review the details above.`);
+            }
+            
+            // Display report
+            const reportEl = document.getElementById('diagnosticsReport');
+            const contentEl = document.getElementById('diagnosticsContent');
+            if (contentEl) contentEl.textContent = report.join('\n');
+            if (reportEl) {
+                reportEl.style.display = 'block';
+                reportEl.scrollTop = 0;
+            } else {
+                console.log(report.join('\n'));  // Fallback to console
+            }
+        }
+        
+        // Event listeners for test/diagnostics buttons (only if buttons exist)
+        const testBtn = document.getElementById('loadTestDataBtn');
+        const diagBtn = document.getElementById('runDiagnosticsBtn');
+        const closeBtn = document.getElementById('closeDiagnosticsBtn');
+        if (testBtn) testBtn.addEventListener('click', generateTestData);
+        if (diagBtn) diagBtn.addEventListener('click', runDiagnostics);
+        if (closeBtn) closeBtn.addEventListener('click', () => {
+            document.getElementById('diagnosticsReport').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
