@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIS Analyzer - Circuit Model Fitting</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        header h1 { font-size: 2.5em; margin-bottom: 5px; }
+        header p { opacity: 0.9; }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 30px;
+        }
+        .panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        .panel h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+        select, textarea, input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        select:focus, textarea:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        button:hover { background: #764ba2; }
+        button:active { transform: scale(0.98); }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .button-group button { flex: 1; }
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        .results {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            border: 1px solid #ddd;
+        }
+        .results h3 {
+            color: #667eea;
+            font-size: 1em;
+            margin-bottom: 10px;
+        }
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+        }
+        .result-row:last-child { border-bottom: none; }
+        .result-label { color: #666; font-weight: 500; }
+        .result-value { color: #333; font-family: monospace; }
+        .plot-container {
+            width: 100%;
+            height: 400px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 1000px) {
+            .content { grid-template-columns: 1fr; }
+            .two-col { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ EIS Analyzer</h1>
+            <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
+        </header>
+
+        <div class="content">
+            <!-- Input Panel -->
+            <div class="panel">
+                <h2>📊 Data Input</h2>
+                
+                <div class="form-group">
+                    <label>Data Format</label>
+                    <select id="dataFormat">
+                        <option value="zreal_zimag">Z' (Real), Z" (Imaginary) - Ohms</option>
+                        <option value="freq_zmag_phase">Frequency, |Z|, Phase</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Sample Data</label>
+                    <div class="button-group">
+                        <button onclick="loadSampleData()">Load Sample</button>
+                        <button onclick="clearData()">Clear</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Paste Data (tab or space separated)</label>
+                    <textarea id="dataInput" placeholder="Frequency	Z_real	Z_imag
+0.01	1000	-500
+0.1	950	-480
+..."></textarea>
+                </div>
+
+                <button onclick="parseData()" style="width: 100%;">Parse Data</button>
+                <div id="dataStatus"></div>
+
+                <h2 style="margin-top: 30px;">⚙️ Circuit Model</h2>
+                
+                <div class="form-group">
+                    <label>Select Model</label>
+                    <select id="modelType">
+                        <option value="R">R (Resistor only)</option>
+                        <option value="RC">R-C (Series)</option>
+                        <option value="RRC">R-(R||C) (Randles-like)</option>
+                        <option value="RCRC">R-C-R-C (Two time constants)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Initial Frequency (Hz)</label>
+                    <input type="number" id="initialFreq" value="1000" min="0.001">
+                </div>
+
+                <button onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
+                <div id="fitStatus"></div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="panel">
+                <h2>📈 Fit Results</h2>
+                <div id="fitResults"></div>
+            </div>
+
+            <!-- Nyquist Plot -->
+            <div class="panel full-width">
+                <h2>Nyquist Plot (Z' vs -Z")</h2>
+                <div id="nyquistPlot" class="plot-container"></div>
+            </div>
+
+            <!-- Bode Plot -->
+            <div class="panel full-width">
+                <h2>Bode Plot</h2>
+                <div class="two-col">
+                    <div id="bodeMagnitudePlot" class="plot-container"></div>
+                    <div id="bodePhase" class="plot-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global data storage
+        let eisData = {
+            frequency: [],
+            zReal: [],
+            zImag: [],
+            zMag: [],
+            zPhase: []
+        };
+
+        function loadSampleData() {
+            const sampleData = `1000	100	-50
+500	105	-55
+200	110	-60
+100	120	-70
+50	135	-85
+20	160	-110
+10	200	-150
+5	250	-200
+2	350	-300
+1	500	-450
+0.5	700	-600
+0.2	1200	-800
+0.1	1500	-900
+0.05	1800	-950
+0.02	2000	-950
+0.01	2050	-900`;
+            document.getElementById('dataInput').value = sampleData;
+            document.getElementById('dataFormat').value = 'freq_zmag_phase';
+            parseData();
+        }
+
+        function clearData() {
+            document.getElementById('dataInput').value = '';
+            eisData = { frequency: [], zReal: [], zImag: [], zMag: [], zPhase: [] };
+            updateStatus('dataStatus', 'Data cleared', 'info');
+        }
+
+        function parseData() {
+            const input = document.getElementById('dataInput').value.trim();
+            const format = document.getElementById('dataFormat').value;
+            
+            if (!input) {
+                updateStatus('dataStatus', 'No data entered', 'error');
+                return;
+            }
+
+            try {
+                const lines = input.split('\n').filter(l => l.trim());
+                eisData = { frequency: [], zReal: [], zImag: [], zMag: [], zPhase: [] };
+
+                for (let line of lines) {
+                    const parts = line.trim().split(/[\s\t,]+/).map(p => parseFloat(p));
+                    if (parts.length < 2 || parts.some(isNaN)) continue;
+
+                    if (format === 'zreal_zimag') {
+                        // Assuming frequency, zReal, zImag
+                        eisData.frequency.push(parts[0]);
+                        eisData.zReal.push(parts[1]);
+                        eisData.zImag.push(parts[2]);
+                    } else if (format === 'freq_zmag_phase') {
+                        eisData.frequency.push(parts[0]);
+                        const mag = parts[1];
+                        const phase = parts[2] * Math.PI / 180; // Convert to radians
+                        eisData.zReal.push(mag * Math.cos(phase));
+                        eisData.zImag.push(-mag * Math.sin(phase));
+                    }
+                }
+
+                // Calculate magnitude and phase
+                eisData.zMag = eisData.zReal.map((r, i) => Math.sqrt(r*r + eisData.zImag[i]*eisData.zImag[i]));
+                eisData.zPhase = eisData.zReal.map((r, i) => Math.atan2(-eisData.zImag[i], r) * 180 / Math.PI);
+
+                updateStatus('dataStatus', `Loaded ${eisData.frequency.length} points`, 'success');
+                plotNyquist();
+                plotBode();
+            } catch (e) {
+                updateStatus('dataStatus', `Error: ${e.message}`, 'error');
+            }
+        }
+
+        function fitModel() {
+            if (eisData.frequency.length === 0) {
+                updateStatus('fitStatus', 'No data loaded', 'error');
+                return;
+            }
+
+            const modelType = document.getElementById('modelType').value;
+            const omega = eisData.frequency.map(f => 2 * Math.PI * f);
+            
+            try {
+                let fitParams, predicted;
+                
+                if (modelType === 'R') {
+                    // Simple resistor
+                    const avgR = eisData.zReal.reduce((a, b) => a + b) / eisData.zReal.length;
+                    fitParams = { R: avgR };
+                    predicted = eisData.frequency.map(() => ({ real: avgR, imag: 0 }));
+                } 
+                else if (modelType === 'RC') {
+                    fitParams = fitRCModel(omega);
+                    predicted = omega.map(w => predictRC(fitParams, w));
+                }
+                else if (modelType === 'RRC') {
+                    fitParams = fitRRCModel(omega);
+                    predicted = omega.map(w => predictRRC(fitParams, w));
+                }
+                else if (modelType === 'RCRC') {
+                    fitParams = fitRCRCModel(omega);
+                    predicted = omega.map(w => predictRCRC(fitParams, w));
+                }
+
+                const residuals = eisData.zReal.map((r, i) => ({
+                    real: r - predicted[i].real,
+                    imag: eisData.zImag[i] - predicted[i].imag
+                }));
+
+                const chiSquared = residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
+
+                displayFitResults(fitParams, chiSquared);
+                plotFit(predicted);
+            } catch (e) {
+                updateStatus('fitStatus', `Fit error: ${e.message}`, 'error');
+            }
+        }
+
+        function fitRCModel(omega) {
+            // R-(R||C) model optimization (simplified)
+            let bestParams = { R0: 100, R1: 100, C: 1e-6 };
+            let bestError = Infinity;
+
+            for (let R0 of [50, 100, 200]) {
+                for (let R1 of [50, 100, 200]) {
+                    for (let C of [1e-7, 1e-6, 1e-5]) {
+                        let error = 0;
+                        for (let i = 0; i < omega.length; i++) {
+                            const pred = predictRC({ R: R0 + R1, C: C }, omega[i]);
+                            error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
+                        }
+                        if (error < bestError) {
+                            bestError = error;
+                            bestParams = { R: R0 + R1, C: C };
+                        }
+                    }
+                }
+            }
+            return bestParams;
+        }
+
+        function fitRRCModel(omega) {
+            // R-(R||C) Randles model
+            let best = { R0: 100, R1: 100, C: 1e-6 };
+            let bestError = Infinity;
+
+            for (let R0 of [50, 100, 200]) {
+                for (let R1 of [50, 100, 200]) {
+                    for (let C of [1e-8, 1e-7, 1e-6, 1e-5]) {
+                        let error = 0;
+                        for (let i = 0; i < omega.length; i++) {
+                            const pred = predictRRC({ R0, R1, C }, omega[i]);
+                            error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
+                        }
+                        if (error < bestError) {
+                            bestError = error;
+                            best = { R0, R1, C };
+                        }
+                    }
+                }
+            }
+            return best;
+        }
+
+        function fitRCRCModel(omega) {
+            // Two RC time constants - simplified
+            let best = { R0: 50, R1: 100, C1: 1e-6, R2: 100, C2: 1e-5 };
+            let bestError = Infinity;
+
+            for (let C1 of [1e-7, 1e-6, 1e-5]) {
+                for (let C2 of [1e-6, 1e-5, 1e-4]) {
+                    let error = 0;
+                    for (let i = 0; i < omega.length; i++) {
+                        const pred = predictRCRC({ R0: 50, R1: 100, C1, R2: 100, C2 }, omega[i]);
+                        error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
+                    }
+                    if (error < bestError) {
+                        bestError = error;
+                        best = { R0: 50, R1: 100, C1, R2: 100, C2 };
+                    }
+                }
+            }
+            return best;
+        }
+
+        function predictRC(params, omega) {
+            // R-C series impedance: Z = R - i/(omega*C)
+            return {
+                real: params.R,
+                imag: -1 / (omega * params.C)
+            };
+        }
+
+        function predictRRC(params, omega) {
+            // R0 + (R1 || (1/jωC))
+            const R1 = params.R1;
+            const C = params.C;
+            
+            // Parallel: R || C impedance = R / (1 + jωRC)
+            const denom = 1 + Math.pow(omega * R1 * C, 2);
+            const parReal = R1 / denom;
+            const parImag = -(omega * R1 * R1 * C) / denom;
+            
+            return {
+                real: params.R0 + parReal,
+                imag: parImag
+            };
+        }
+
+        function predictRCRC(params, omega) {
+            // R0 + (R1 || C1) + (R2 || C2)
+            const par1 = predictParallel(params.R1, params.C1, omega);
+            const par2 = predictParallel(params.R2, params.C2, omega);
+            
+            return {
+                real: params.R0 + par1.real + par2.real,
+                imag: par1.imag + par2.imag
+            };
+        }
+
+        function predictParallel(R, C, omega) {
+            const denom = 1 + Math.pow(omega * R * C, 2);
+            return {
+                real: R / denom,
+                imag: -(omega * R * R * C) / denom
+            };
+        }
+
+        function displayFitResults(params, chiSquared) {
+            let html = '<div class="results"><h3>Fitted Parameters</h3>';
+            
+            for (const [key, value] of Object.entries(params)) {
+                let unit = '';
+                if (key.includes('R')) unit = ' Ω';
+                else if (key.includes('C')) unit = ' F';
+                
+                const displayValue = Math.abs(value) < 0.001 ? value.toExponential(3) : value.toFixed(3);
+                html += `<div class="result-row"><span class="result-label">${key}</span><span class="result-value">${displayValue}${unit}</span></div>`;
+            }
+            
+            html += `<div class="result-row"><span class="result-label">χ²/N</span><span class="result-value">${chiSquared.toExponential(3)}</span></div>`;
+            html += '</div>';
+            
+            document.getElementById('fitResults').innerHTML = html;
+            updateStatus('fitStatus', 'Fit completed', 'success');
+        }
+
+        function plotNyquist() {
+            const trace = {
+                x: eisData.zReal,
+                y: eisData.zImag.map(z => -z),
+                mode: 'markers+lines',
+                name: 'EIS Data',
+                marker: { size: 6, color: '#667eea' },
+                line: { color: '#667eea', width: 2 }
+            };
+
+            const layout = {
+                title: 'Nyquist Plot',
+                xaxis: { title: "Z' (Ω)" },
+                yaxis: { title: "-Z\" (Ω)" },
+                hovermode: 'closest',
+                margin: { t: 40, b: 40, l: 60, r: 20 }
+            };
+
+            Plotly.newPlot('nyquistPlot', [trace], layout, { responsive: true });
+        }
+
+        function plotBode() {
+            const magTrace = {
+                x: eisData.frequency,
+                y: eisData.zMag,
+                mode: 'lines+markers',
+                name: '|Z|',
+                line: { color: '#667eea' }
+            };
+
+            const phaseTrace = {
+                x: eisData.frequency,
+                y: eisData.zPhase,
+                mode: 'lines+markers',
+                name: 'Phase',
+                line: { color: '#764ba2' }
+            };
+
+            const magLayout = {
+                title: 'Impedance Magnitude',
+                xaxis: { title: 'Frequency (Hz)', type: 'log' },
+                yaxis: { title: '|Z| (Ω)', type: 'log' },
+                hovermode: 'x unified',
+                margin: { t: 40, b: 40, l: 60, r: 20 }
+            };
+
+            const phaseLayout = {
+                title: 'Phase Angle',
+                xaxis: { title: 'Frequency (Hz)', type: 'log' },
+                yaxis: { title: 'Phase (°)' },
+                hovermode: 'x unified',
+                margin: { t: 40, b: 40, l: 60, r: 20 }
+            };
+
+            Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, { responsive: true });
+            Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, { responsive: true });
+        }
+
+        function plotFit(predicted) {
+            const nyquistData = [{
+                x: eisData.zReal,
+                y: eisData.zImag.map(z => -z),
+                mode: 'markers',
+                name: 'Experimental',
+                marker: { size: 6, color: '#667eea' }
+            }, {
+                x: predicted.map(p => p.real),
+                y: predicted.map(p => -p.imag),
+                mode: 'lines',
+                name: 'Fitted',
+                line: { color: '#ff6b6b', width: 2, dash: 'dash' }
+            }];
+
+            const layout = {
+                title: 'Nyquist Plot - Fit Overlay',
+                xaxis: { title: "Z' (Ω)" },
+                yaxis: { title: "-Z\" (Ω)" },
+                hovermode: 'closest',
+                margin: { t: 40, b: 40, l: 60, r: 20 }
+            };
+
+            Plotly.newPlot('nyquistPlot', nyquistData, layout, { responsive: true });
+        }
+
+        function updateStatus(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.className = `status ${type}`;
+            el.textContent = message;
+        }
+    </script>
+</body>
+</html>
