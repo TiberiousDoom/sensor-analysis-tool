@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Electrochemical Impedance Spectroscopy (EIS) data analysis tool with circuit model fitting, Nyquist plots, and Bode plots">
     <title>EIS Analyzer - Circuit Model Fitting</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js" integrity="sha512-oexyNp8PhRCvSbkTNLLLWjBhXjTRPthRZGkQ1bfpcDVyXlZ7qGdEIxPE2FWLA5N6VfuKOOY2fmDjsgZJPBJoHg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js" integrity="sha512-n/t4Lcf7LXKA4LVwMfRLXU4jhJpf2VgLPQEDG03RMIVLjkQQ5KdFp9XP9T3HofFfG6m1xB80ghRwqBzN3z4KKA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -119,8 +120,39 @@
         .plot-container {
             width: 100%;
             height: 400px;
+            min-height: 300px;
             border-radius: 8px;
             overflow: hidden;
+        }
+        .file-upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+        .file-upload-area:hover, .file-upload-area.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        .file-upload-area.loaded {
+            border-color: #28a745;
+            border-style: solid;
+        }
+        .file-upload-area input[type="file"] {
+            display: none;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
         }
         .status {
             padding: 12px;
@@ -154,6 +186,22 @@
         @media (max-width: 1000px) {
             .content { grid-template-columns: 1fr; }
             .two-col { grid-template-columns: 1fr; }
+            .plot-container { height: 350px; }
+        }
+        @media (max-width: 600px) {
+            header h1 { font-size: 1.8em; }
+            .content { padding: 15px; }
+            .panel { padding: 15px; }
+            .plot-container { height: 300px; }
+        }
+        /* Focus styles for accessibility */
+        button:focus, select:focus, textarea:focus, input:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+        .file-upload-area:focus-within {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
         }
     </style>
 </head>
@@ -164,80 +212,92 @@
             <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
         </header>
 
-        <div class="content">
+        <main class="content" role="main">
             <!-- Input Panel -->
-            <div class="panel">
-                <h2>📊 Data Input</h2>
-                
-                <div class="form-group">
-                    <label>Data Format</label>
-                    <select id="dataFormat">
-                        <option value="zreal_zimag">Z' (Real), Z" (Imaginary) - Ohms</option>
-                        <option value="freq_zmag_phase">Frequency, |Z|, Phase</option>
-                    </select>
+            <div class="panel" role="region" aria-labelledby="data-input-heading">
+                <h2 id="data-input-heading">📊 Data Input</h2>
+
+                <!-- File Upload Area -->
+                <div class="file-upload-area" id="fileDropZone" role="button" tabindex="0" aria-label="Upload CSV or TXT file with EIS data">
+                    <div>📁 Drop file here or click to upload</div>
+                    <div style="font-size: 0.85em; color: #666; margin-top: 5px;">Supports CSV, TXT (tab/space separated)</div>
+                    <input type="file" id="fileInput" accept=".csv,.txt,.tsv" aria-label="File upload input">
+                    <div id="fileStatus" style="margin-top: 10px; color: #28a745;"></div>
                 </div>
 
                 <div class="form-group">
-                    <label>Sample Data</label>
-                    <div class="button-group">
-                        <button onclick="loadSampleData()">Load Sample</button>
-                        <button onclick="clearData()">Clear</button>
+                    <label for="dataFormat">Data Format</label>
+                    <select id="dataFormat" aria-describedby="format-help">
+                        <option value="zreal_zimag">Frequency, Z' (Real), Z" (Imaginary) - Ohms</option>
+                        <option value="freq_zmag_phase">Frequency, |Z|, Phase (degrees)</option>
+                    </select>
+                    <small id="format-help" style="color: #666; font-size: 0.8em;">Select the format matching your data columns</small>
+                </div>
+
+                <div class="form-group">
+                    <label id="sample-data-label">Sample Data</label>
+                    <div class="button-group" role="group" aria-labelledby="sample-data-label">
+                        <button type="button" onclick="loadSampleData()">Load Sample</button>
+                        <button type="button" onclick="clearData()">Clear</button>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>Paste Data (tab or space separated)</label>
-                    <textarea id="dataInput" placeholder="Frequency	Z_real	Z_imag
+                    <label for="dataInput">Paste Data (tab or space separated)</label>
+                    <textarea id="dataInput" aria-describedby="data-format-hint" placeholder="Frequency	Z_real	Z_imag
 0.01	1000	-500
 0.1	950	-480
 ..."></textarea>
+                    <small id="data-format-hint" class="sr-only">Enter data with frequency in the first column, followed by impedance values</small>
                 </div>
 
-                <button onclick="parseData()" style="width: 100%;">Parse Data</button>
-                <div id="dataStatus"></div>
+                <button type="button" onclick="parseData()" style="width: 100%;" aria-describedby="parse-status">Parse Data</button>
+                <div id="dataStatus" role="status" aria-live="polite"></div>
 
-                <h2 style="margin-top: 30px;">⚙️ Circuit Model</h2>
-                
+                <h2 id="circuit-model-heading" style="margin-top: 30px;">⚙️ Circuit Model</h2>
+
                 <div class="form-group">
-                    <label>Select Model</label>
-                    <select id="modelType">
+                    <label for="modelType">Select Model</label>
+                    <select id="modelType" aria-describedby="model-help">
                         <option value="R">R (Resistor only)</option>
                         <option value="RC">R-C (Series)</option>
                         <option value="RRC">R-(R||C) (Randles-like)</option>
                         <option value="RCRC">R-C-R-C (Two time constants)</option>
                     </select>
+                    <small id="model-help" style="color: #666; font-size: 0.8em;">Choose a circuit model to fit your EIS data</small>
                 </div>
 
                 <div class="form-group">
-                    <label>Initial Frequency (Hz)</label>
-                    <input type="number" id="initialFreq" value="1000" min="0.001">
+                    <label for="initialFreq">Initial Frequency (Hz)</label>
+                    <input type="number" id="initialFreq" value="1000" min="0.001" step="any" aria-describedby="freq-help">
+                    <small id="freq-help" style="color: #666; font-size: 0.8em;">Starting frequency for optimization (Hz)</small>
                 </div>
 
-                <button onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
-                <div id="fitStatus"></div>
+                <button type="button" onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
+                <div id="fitStatus" role="status" aria-live="polite"></div>
             </div>
 
             <!-- Results Panel -->
-            <div class="panel">
-                <h2>📈 Fit Results</h2>
-                <div id="fitResults"></div>
+            <div class="panel" role="region" aria-labelledby="results-heading">
+                <h2 id="results-heading">📈 Fit Results</h2>
+                <div id="fitResults" aria-live="polite"></div>
             </div>
 
             <!-- Nyquist Plot -->
-            <div class="panel full-width">
-                <h2>Nyquist Plot (Z' vs -Z")</h2>
-                <div id="nyquistPlot" class="plot-container"></div>
+            <div class="panel full-width" role="region" aria-labelledby="nyquist-heading">
+                <h2 id="nyquist-heading">Nyquist Plot (Z' vs -Z")</h2>
+                <div id="nyquistPlot" class="plot-container" role="img" aria-label="Nyquist plot showing real vs imaginary impedance"></div>
             </div>
 
             <!-- Bode Plot -->
-            <div class="panel full-width">
-                <h2>Bode Plot</h2>
+            <div class="panel full-width" role="region" aria-labelledby="bode-heading">
+                <h2 id="bode-heading">Bode Plot</h2>
                 <div class="two-col">
-                    <div id="bodeMagnitudePlot" class="plot-container"></div>
-                    <div id="bodePhase" class="plot-container"></div>
+                    <div id="bodeMagnitudePlot" class="plot-container" role="img" aria-label="Bode magnitude plot showing impedance vs frequency"></div>
+                    <div id="bodePhase" class="plot-container" role="img" aria-label="Bode phase plot showing phase angle vs frequency"></div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <script>
@@ -250,7 +310,81 @@
             zPhase: []
         };
 
+        // Initialize file upload functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            initFileUpload();
+        });
+
+        function initFileUpload() {
+            const dropZone = document.getElementById('fileDropZone');
+            const fileInput = document.getElementById('fileInput');
+
+            // Click to upload
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            // Keyboard accessibility
+            dropZone.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    fileInput.click();
+                }
+            });
+
+            // Drag and drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file) handleFileUpload(file);
+            });
+
+            // File input change
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) handleFileUpload(file);
+            });
+        }
+
+        function handleFileUpload(file) {
+            const status = document.getElementById('fileStatus');
+            const dropZone = document.getElementById('fileDropZone');
+
+            // Validate file type
+            const validTypes = ['.csv', '.txt', '.tsv'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!validTypes.includes(ext)) {
+                status.textContent = 'Error: Please upload CSV or TXT file';
+                status.style.color = '#dc3545';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('dataInput').value = e.target.result;
+                status.textContent = `✓ Loaded: ${file.name}`;
+                status.style.color = '#28a745';
+                dropZone.classList.add('loaded');
+                parseData();
+            };
+            reader.onerror = () => {
+                status.textContent = 'Error reading file';
+                status.style.color = '#dc3545';
+            };
+            reader.readAsText(file);
+        }
+
         function loadSampleData() {
+            // Sample EIS data: Frequency (Hz), Z' (Real, Ohms), Z" (Imaginary, Ohms)
+            // This represents a typical R-(R||C) circuit response
             const sampleData = `1000	100	-50
 500	105	-55
 200	110	-60
@@ -268,22 +402,30 @@
 0.02	2000	-950
 0.01	2050	-900`;
             document.getElementById('dataInput').value = sampleData;
-            document.getElementById('dataFormat').value = 'freq_zmag_phase';
+            // Fix: Sample data is in Z' Z" format, not magnitude/phase
+            document.getElementById('dataFormat').value = 'zreal_zimag';
             parseData();
         }
 
         function clearData() {
             document.getElementById('dataInput').value = '';
+            document.getElementById('fileStatus').textContent = '';
+            document.getElementById('fileDropZone').classList.remove('loaded');
             eisData = { frequency: [], zReal: [], zImag: [], zMag: [], zPhase: [] };
             updateStatus('dataStatus', 'Data cleared', 'info');
+            // Clear plots
+            Plotly.purge('nyquistPlot');
+            Plotly.purge('bodeMagnitudePlot');
+            Plotly.purge('bodePhase');
+            document.getElementById('fitResults').innerHTML = '';
         }
 
         function parseData() {
             const input = document.getElementById('dataInput').value.trim();
             const format = document.getElementById('dataFormat').value;
-            
+
             if (!input) {
-                updateStatus('dataStatus', 'No data entered', 'error');
+                updateStatus('dataStatus', 'No data entered. Paste data or upload a file.', 'error');
                 return;
             }
 
@@ -291,16 +433,47 @@
                 const lines = input.split('\n').filter(l => l.trim());
                 eisData = { frequency: [], zReal: [], zImag: [], zMag: [], zPhase: [] };
 
+                let skippedLines = 0;
+                let headerSkipped = false;
+
                 for (let line of lines) {
                     const parts = line.trim().split(/[\s\t,]+/).map(p => parseFloat(p));
-                    if (parts.length < 2 || parts.some(isNaN)) continue;
+
+                    // Skip header rows (non-numeric first value)
+                    if (isNaN(parts[0])) {
+                        if (!headerSkipped) {
+                            headerSkipped = true;
+                            continue;
+                        }
+                        skippedLines++;
+                        continue;
+                    }
+
+                    // Validate we have enough columns
+                    if (parts.length < 3) {
+                        skippedLines++;
+                        continue;
+                    }
+
+                    // Validate numeric values
+                    if (parts.slice(0, 3).some(isNaN)) {
+                        skippedLines++;
+                        continue;
+                    }
+
+                    // Validate frequency is positive
+                    if (parts[0] <= 0) {
+                        skippedLines++;
+                        continue;
+                    }
 
                     if (format === 'zreal_zimag') {
-                        // Assuming frequency, zReal, zImag
+                        // Format: frequency, zReal, zImag
                         eisData.frequency.push(parts[0]);
                         eisData.zReal.push(parts[1]);
                         eisData.zImag.push(parts[2]);
                     } else if (format === 'freq_zmag_phase') {
+                        // Format: frequency, |Z|, phase (degrees)
                         eisData.frequency.push(parts[0]);
                         const mag = parts[1];
                         const phase = parts[2] * Math.PI / 180; // Convert to radians
@@ -309,15 +482,25 @@
                     }
                 }
 
+                if (eisData.frequency.length === 0) {
+                    updateStatus('dataStatus', 'No valid data found. Check format: Frequency, Z\' (or |Z|), Z" (or Phase)', 'error');
+                    return;
+                }
+
                 // Calculate magnitude and phase
                 eisData.zMag = eisData.zReal.map((r, i) => Math.sqrt(r*r + eisData.zImag[i]*eisData.zImag[i]));
                 eisData.zPhase = eisData.zReal.map((r, i) => Math.atan2(-eisData.zImag[i], r) * 180 / Math.PI);
 
-                updateStatus('dataStatus', `Loaded ${eisData.frequency.length} points`, 'success');
+                let statusMsg = `Loaded ${eisData.frequency.length} data points`;
+                if (skippedLines > 0) {
+                    statusMsg += ` (${skippedLines} lines skipped)`;
+                }
+                updateStatus('dataStatus', statusMsg, 'success');
                 plotNyquist();
                 plotBode();
             } catch (e) {
-                updateStatus('dataStatus', `Error: ${e.message}`, 'error');
+                updateStatus('dataStatus', `Parse error: ${e.message}. Check data format.`, 'error');
+                console.error('Parse error:', e);
             }
         }
 
