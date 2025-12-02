@@ -275,6 +275,68 @@
             color: #666;
             font-size: 0.85em;
         }
+        /* Model comparison table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .comparison-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        .comparison-table tr:hover {
+            background: #f5f5f5;
+        }
+        .comparison-table .best {
+            background: #d4edda;
+        }
+        .compare-btn {
+            background: #fd7e14;
+            margin-top: 10px;
+        }
+        .compare-btn:hover { background: #e96a00; }
+        /* Data table */
+        .data-table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8em;
+            font-family: monospace;
+        }
+        .data-table th {
+            position: sticky;
+            top: 0;
+            background: #667eea;
+            color: white;
+            padding: 6px;
+            text-align: right;
+        }
+        .data-table td {
+            padding: 4px 6px;
+            text-align: right;
+            border-bottom: 1px solid #eee;
+        }
+        .data-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .toggle-btn {
+            background: #6c757d;
+            font-size: 0.8em;
+            padding: 6px 10px;
+        }
     </style>
 </head>
 <body>
@@ -309,6 +371,12 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
 
                 <div id="dataStatus" role="status" aria-live="polite"></div>
+
+                <!-- Data Table Toggle -->
+                <div style="margin-top: 10px;">
+                    <button type="button" class="toggle-btn" onclick="toggleDataTable()">Show Data Table</button>
+                </div>
+                <div id="dataTableContainer" class="data-table-container" style="display: none;"></div>
 
                 <h2 id="circuit-model-heading" style="margin-top: 30px;">⚙️ Circuit Model</h2>
 
@@ -348,7 +416,14 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
 
                 <button type="button" onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
+                <button type="button" class="compare-btn" onclick="compareAllModels()" style="width: 100%;">Compare All Models</button>
                 <div id="fitStatus" role="status" aria-live="polite"></div>
+
+                <!-- Model Comparison Results -->
+                <div id="comparisonPanel" style="display: none; margin-top: 15px;">
+                    <h3 style="font-size: 1em; color: #333; margin-bottom: 10px;">Model Comparison</h3>
+                    <div id="comparisonResults"></div>
+                </div>
 
                 <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
                 <div class="form-group">
@@ -2014,6 +2089,180 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             // Reset file input
             event.target.value = '';
+        }
+
+        // Data Table functions
+        function toggleDataTable() {
+            const container = document.getElementById('dataTableContainer');
+            const btn = container.previousElementSibling.querySelector('button');
+
+            if (container.style.display === 'none') {
+                if (eisData.frequency.length === 0) {
+                    alert('No data loaded. Please load data first.');
+                    return;
+                }
+                renderDataTable();
+                container.style.display = 'block';
+                btn.textContent = 'Hide Data Table';
+            } else {
+                container.style.display = 'none';
+                btn.textContent = 'Show Data Table';
+            }
+        }
+
+        function renderDataTable() {
+            let html = '<table class="data-table">';
+            html += '<thead><tr><th>#</th><th>Freq (Hz)</th><th>Z\' (Ω)</th><th>Z" (Ω)</th><th>|Z| (Ω)</th><th>Phase (°)</th></tr></thead>';
+            html += '<tbody>';
+
+            for (let i = 0; i < eisData.frequency.length; i++) {
+                html += `<tr>`;
+                html += `<td>${i + 1}</td>`;
+                html += `<td>${formatNumber(eisData.frequency[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zReal[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zImag[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zMag[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zPhase[i])}</td>`;
+                html += `</tr>`;
+            }
+
+            html += '</tbody></table>';
+            document.getElementById('dataTableContainer').innerHTML = html;
+        }
+
+        function formatNumber(num) {
+            if (Math.abs(num) < 0.001 || Math.abs(num) >= 10000) {
+                return num.toExponential(3);
+            }
+            return num.toFixed(3);
+        }
+
+        // Model Comparison functions
+        function compareAllModels() {
+            if (eisData.frequency.length === 0) {
+                updateStatus('fitStatus', 'No data loaded', 'error');
+                return;
+            }
+
+            // Show loading spinner
+            const fitStatus = document.getElementById('fitStatus');
+            fitStatus.className = 'status loading';
+            fitStatus.innerHTML = '<span class="spinner"></span>Comparing all models...';
+
+            setTimeout(() => {
+                // Get filtered data based on frequency range
+                filteredData = getFilteredData();
+
+                if (filteredData.frequency.length === 0) {
+                    updateStatus('fitStatus', 'No data in selected frequency range', 'error');
+                    return;
+                }
+
+                const omega = filteredData.frequency.map(f => 2 * Math.PI * f);
+                const results = [];
+
+                // Try all models
+                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPECPE', 'CPEpCPE'];
+
+                for (const modelType of modelsToTry) {
+                    try {
+                        const model = modelRegistry[modelType];
+                        const fitParams = model.fit(omega, filteredData);
+                        const predicted = omega.map(w => model.predict(fitParams, w));
+
+                        // Calculate chi-squared
+                        const chiSq = calcChiSquared(predicted);
+
+                        // Calculate R²
+                        const meanReal = filteredData.zReal.reduce((a, b) => a + b, 0) / filteredData.zReal.length;
+                        const meanImag = filteredData.zImag.reduce((a, b) => a + b, 0) / filteredData.zImag.length;
+                        let ssTot = 0, ssRes = 0;
+                        for (let i = 0; i < filteredData.zReal.length; i++) {
+                            ssTot += Math.pow(filteredData.zReal[i] - meanReal, 2) + Math.pow(filteredData.zImag[i] - meanImag, 2);
+                            ssRes += Math.pow(filteredData.zReal[i] - predicted[i].real, 2) + Math.pow(filteredData.zImag[i] - predicted[i].imag, 2);
+                        }
+                        const rSquared = Math.max(0, 1 - ssRes / ssTot);
+
+                        // Calculate AIC
+                        const n = filteredData.zReal.length * 2;
+                        const k = model.params;
+                        const aic = n * Math.log(ssRes / n) + 2 * k;
+
+                        results.push({
+                            type: modelType,
+                            name: model.name,
+                            params: model.params,
+                            chiSquared: chiSq,
+                            rSquared: rSquared,
+                            aic: aic,
+                            fitParams: fitParams,
+                            predicted: predicted
+                        });
+                    } catch (e) {
+                        console.warn(`Model ${modelType} failed:`, e.message);
+                    }
+                }
+
+                // Sort by AIC (lower is better)
+                results.sort((a, b) => a.aic - b.aic);
+
+                // Display comparison
+                displayComparison(results);
+                updateStatus('fitStatus', `Compared ${results.length} models`, 'success');
+            }, 10);
+        }
+
+        function displayComparison(results) {
+            const panel = document.getElementById('comparisonPanel');
+            const container = document.getElementById('comparisonResults');
+
+            let html = '<table class="comparison-table">';
+            html += '<thead><tr><th>Model</th><th>Params</th><th>R²</th><th>χ²/N</th><th>AIC</th><th>Action</th></tr></thead>';
+            html += '<tbody>';
+
+            const bestAIC = results[0]?.aic || 0;
+
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const isBest = i === 0;
+                html += `<tr class="${isBest ? 'best' : ''}">`;
+                html += `<td>${r.name}${isBest ? ' ⭐' : ''}</td>`;
+                html += `<td>${r.params}</td>`;
+                html += `<td>${(r.rSquared * 100).toFixed(1)}%</td>`;
+                html += `<td>${r.chiSquared.toExponential(2)}</td>`;
+                html += `<td>${r.aic.toFixed(1)}</td>`;
+                html += `<td><button type="button" onclick="selectComparedModel('${r.type}')" style="padding: 3px 8px; font-size: 0.8em;">Select</button></td>`;
+                html += `</tr>`;
+            }
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+            panel.style.display = 'block';
+
+            // Store comparison results
+            window.comparisonResults = results;
+        }
+
+        function selectComparedModel(modelType) {
+            const result = window.comparisonResults?.find(r => r.type === modelType);
+            if (!result) return;
+
+            // Set the model type in dropdown
+            document.getElementById('modelType').value = modelType;
+
+            // Store results
+            lastFitResults = {
+                model: result.name,
+                params: result.fitParams,
+                chiSquared: result.chiSquared,
+                predicted: result.predicted
+            };
+
+            // Display results
+            displayFitResults(result.fitParams, result.chiSquared, result.name);
+            plotFit(result.predicted);
+            plotBodeFit(result.predicted);
+            plotResiduals(result.predicted);
         }
     </script>
 </body>
