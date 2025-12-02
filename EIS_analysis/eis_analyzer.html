@@ -252,6 +252,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
                     </select>
                     <small id="model-help" style="color: #666; font-size: 0.8em;">Choose a circuit model or use Auto to find the best fit</small>
                 </div>
@@ -274,6 +276,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -504,7 +508,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RRCW': { name: 'R-(R||C)-W (Randles+Warburg)', fit: fitRRCWModel, predict: predictRRCW, params: 4 },
             'RCRC': { name: 'R-(R||C)-(R||C) (Two RC)', fit: fitRCRCModel, predict: predictRCRC, params: 5 },
             'RRCRC': { name: 'R-(R||C)-(R||C)-(R||C) (Three RC)', fit: fitRRCRCModel, predict: predictRRCRC, params: 7 },
-            'CPE': { name: 'R-(R||CPE)', fit: fitCPEModel, predict: predictCPE, params: 4 }
+            'CPE': { name: 'R-(R||CPE)', fit: fitCPEModel, predict: predictCPE, params: 4 },
+            'CPECPE': { name: 'R-(R||CPE)-(R||CPE) (Two CPE)', fit: fitCPECPEModel, predict: predictCPECPE, params: 7 },
+            'CPEpCPE': { name: 'R-(R||CPE)||(R||CPE) (Parallel CPE)', fit: fitCPEpCPEModel, predict: predictCPEpCPE, params: 7 }
         };
 
         function fitModel() {
@@ -544,7 +550,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         }
 
         function autoSelectModel(omega) {
-            const modelsToTry = ['RRC', 'RCRC', 'RRCW', 'CPE', 'RRCRC', 'RpC', 'RC'];
+            const modelsToTry = ['RRC', 'RCRC', 'RRCW', 'CPE', 'CPECPE', 'CPEpCPE', 'RRCRC', 'RpC', 'RC'];
             let bestModel = null;
             let bestAIC = Infinity;
             let bestParams = null;
@@ -826,6 +832,193 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             return {
                 real: params.R0 + zParReal,
                 imag: zParImag
+            };
+        }
+
+        // Two CPE model: R0 + (R1 || CPE1) + (R2 || CPE2) in series
+        // Uses multi-start optimization due to 7 parameters
+        function fitCPECPEModel(omega) {
+            const R0_est = Math.min(...eisData.zReal);
+            const R_total = Math.max(...eisData.zReal);
+            const R_range = R_total - R0_est;
+            const C_est = estimateCapacitance(omega);
+
+            // Multi-start with different n values and parameter combinations
+            const startConfigs = [
+                { n1: 0.85, Q1: C_est * 0.5, R1: R_range * 0.6, n2: 0.80, Q2: C_est * 5, R2: R_range * 0.4 },
+                { n1: 0.75, Q1: C_est * 0.3, R1: R_range * 0.5, n2: 0.85, Q2: C_est * 3, R2: R_range * 0.5 },
+                { n1: 0.90, Q1: C_est, R1: R_range * 0.4, n2: 0.75, Q2: C_est * 8, R2: R_range * 0.6 },
+                { n1: 0.80, Q1: C_est * 0.2, R1: R_range * 0.55, n2: 0.90, Q2: C_est * 2, R2: R_range * 0.45 },
+                { n1: 0.70, Q1: C_est * 0.1, R1: R_range * 0.65, n2: 0.70, Q2: C_est * 10, R2: R_range * 0.35 },
+                { n1: 0.95, Q1: C_est * 2, R1: R_range * 0.45, n2: 0.85, Q2: C_est * 4, R2: R_range * 0.55 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                const initial = {
+                    R0: R0_est,
+                    R1: config.R1,
+                    Q1: config.Q1,
+                    n1: config.n1,
+                    R2: config.R2,
+                    Q2: config.Q2,
+                    n2: config.n2
+                };
+
+                const steps = {
+                    R0: Math.max(R0_est * 0.5, 1),
+                    R1: initial.R1 * 0.5,
+                    Q1: initial.Q1 * 0.5,
+                    n1: 0.15,
+                    R2: initial.R2 * 0.5,
+                    Q2: initial.Q2 * 0.5,
+                    n2: 0.15
+                };
+
+                try {
+                    const params = nelderMead(
+                        (p) => calcError(p, omega, predictCPECPE),
+                        initial,
+                        steps,
+                        1000
+                    );
+                    const error = calcError(params, omega, predictCPECPE);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('Two CPE fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || {
+                R0: R0_est, R1: R_range * 0.6, Q1: C_est * 0.5, n1: 0.85,
+                R2: R_range * 0.4, Q2: C_est * 5, n2: 0.80
+            };
+        }
+
+        function predictCPECPE(params, omega) {
+            // Two R||CPE elements in series: R0 + (R1||CPE1) + (R2||CPE2)
+            const cpe1 = predictRCPEParallel(params.R1, params.Q1, params.n1, omega);
+            const cpe2 = predictRCPEParallel(params.R2, params.Q2, params.n2, omega);
+
+            return {
+                real: params.R0 + cpe1.real + cpe2.real,
+                imag: cpe1.imag + cpe2.imag
+            };
+        }
+
+        // Helper function to calculate impedance of R||CPE
+        function predictRCPEParallel(R, Q, n, omega) {
+            const nClamped = Math.min(Math.max(n, 0.1), 1);
+
+            // Admittance of CPE: Y_CPE = Q*(jω)^n
+            const yCpeReal = Q * Math.pow(omega, nClamped) * Math.cos(nClamped * Math.PI / 2);
+            const yCpeImag = Q * Math.pow(omega, nClamped) * Math.sin(nClamped * Math.PI / 2);
+
+            // Total admittance (parallel): Y = 1/R + Y_CPE
+            const yTotalReal = 1 / R + yCpeReal;
+            const yTotalImag = yCpeImag;
+
+            // Convert back to impedance: Z = 1/Y
+            const yMag2 = yTotalReal * yTotalReal + yTotalImag * yTotalImag;
+            return {
+                real: yTotalReal / yMag2,
+                imag: -yTotalImag / yMag2
+            };
+        }
+
+        // Parallel CPE model: R0 + [(R1 || CPE1) || (R2 || CPE2)]
+        // Two R||CPE elements in parallel with each other, then series with R0
+        function fitCPEpCPEModel(omega) {
+            const R0_est = Math.min(...eisData.zReal);
+            const R_total = Math.max(...eisData.zReal);
+            const R_range = R_total - R0_est;
+            const C_est = estimateCapacitance(omega);
+
+            // Multi-start with different configurations
+            const startConfigs = [
+                { n1: 0.85, Q1: C_est * 0.3, R1: R_range * 1.5, n2: 0.80, Q2: C_est * 3, R2: R_range * 1.2 },
+                { n1: 0.75, Q1: C_est * 0.5, R1: R_range * 2, n2: 0.85, Q2: C_est * 2, R2: R_range },
+                { n1: 0.90, Q1: C_est, R1: R_range * 1.2, n2: 0.75, Q2: C_est * 5, R2: R_range * 1.8 },
+                { n1: 0.80, Q1: C_est * 0.2, R1: R_range * 1.8, n2: 0.90, Q2: C_est, R2: R_range * 1.5 },
+                { n1: 0.70, Q1: C_est * 0.1, R1: R_range * 2.5, n2: 0.70, Q2: C_est * 8, R2: R_range * 0.8 },
+                { n1: 0.95, Q1: C_est * 1.5, R1: R_range, n2: 0.85, Q2: C_est * 4, R2: R_range * 2 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                const initial = {
+                    R0: R0_est,
+                    R1: config.R1,
+                    Q1: config.Q1,
+                    n1: config.n1,
+                    R2: config.R2,
+                    Q2: config.Q2,
+                    n2: config.n2
+                };
+
+                const steps = {
+                    R0: Math.max(R0_est * 0.5, 1),
+                    R1: initial.R1 * 0.5,
+                    Q1: initial.Q1 * 0.5,
+                    n1: 0.15,
+                    R2: initial.R2 * 0.5,
+                    Q2: initial.Q2 * 0.5,
+                    n2: 0.15
+                };
+
+                try {
+                    const params = nelderMead(
+                        (p) => calcError(p, omega, predictCPEpCPE),
+                        initial,
+                        steps,
+                        1000
+                    );
+                    const error = calcError(params, omega, predictCPEpCPE);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('Parallel CPE fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || {
+                R0: R0_est, R1: R_range * 1.5, Q1: C_est * 0.3, n1: 0.85,
+                R2: R_range * 1.2, Q2: C_est * 3, n2: 0.80
+            };
+        }
+
+        function predictCPEpCPE(params, omega) {
+            // Two R||CPE elements in parallel: R0 + [(R1||CPE1) || (R2||CPE2)]
+            // First get impedance of each R||CPE element
+            const z1 = predictRCPEParallel(params.R1, params.Q1, params.n1, omega);
+            const z2 = predictRCPEParallel(params.R2, params.Q2, params.n2, omega);
+
+            // Parallel combination: Z_total = Z1 * Z2 / (Z1 + Z2)
+            // Using complex arithmetic: (a+bi)(c+di) / ((a+c)+(b+d)i)
+            const sumReal = z1.real + z2.real;
+            const sumImag = z1.imag + z2.imag;
+
+            // Product: (z1.real + z1.imag*i) * (z2.real + z2.imag*i)
+            const prodReal = z1.real * z2.real - z1.imag * z2.imag;
+            const prodImag = z1.real * z2.imag + z1.imag * z2.real;
+
+            // Division: prod / sum
+            const sumMag2 = sumReal * sumReal + sumImag * sumImag;
+            const parReal = (prodReal * sumReal + prodImag * sumImag) / sumMag2;
+            const parImag = (prodImag * sumReal - prodReal * sumImag) / sumMag2;
+
+            return {
+                real: params.R0 + parReal,
+                imag: parImag
             };
         }
 
@@ -1132,7 +1325,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RRCW': { R0: 60, R1: 120, C: 3e-6, W: 50 },
             'RCRC': { R0: 50, R1: 120, C1: 1.5e-6, R2: 80, C2: 8e-6 },
             'RRCRC': { R0: 40, R1: 100, C1: 5e-7, R2: 80, C2: 3e-6, R3: 60, C3: 2e-5 },
-            'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 }
+            'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 },
+            'CPECPE': { R0: 50, R1: 120, Q1: 2e-6, n1: 0.85, R2: 80, Q2: 1e-5, n2: 0.78 },
+            'CPEpCPE': { R0: 45, R1: 200, Q1: 1.5e-6, n1: 0.82, R2: 150, Q2: 8e-6, n2: 0.75 }
         };
 
         function runDebugTest() {
