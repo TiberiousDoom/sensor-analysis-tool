@@ -751,12 +751,16 @@
             const R1_est = (R_total - R0_est) * 0.4;
             const R2_est = (R_total - R0_est) * 0.35;
             const R3_est = (R_total - R0_est) * 0.25;
+
+            // Find characteristic frequencies from peaks in -Z"
             const C_est = estimateCapacitance(omega);
 
+            // Use more iterations for this complex model
             return nelderMead(
                 (params) => calcError(params, omega, predictRRCRC),
-                { R0: R0_est, R1: R1_est, C1: C_est * 0.1, R2: R2_est, C2: C_est, R3: R3_est, C3: C_est * 10 },
-                { R0: R0_est * 0.3, R1: R1_est * 0.3, C1: C_est * 0.1, R2: R2_est * 0.3, C2: C_est * 0.5, R3: R3_est * 0.3, C3: C_est * 3 }
+                { R0: R0_est, R1: R1_est, C1: C_est * 0.01, R2: R2_est, C2: C_est, R3: R3_est, C3: C_est * 100 },
+                { R0: R0_est * 0.5, R1: R1_est * 0.5, C1: C_est * 0.01, R2: R2_est * 0.5, C2: C_est, R3: R3_est * 0.5, C3: C_est * 50 },
+                1000  // More iterations for 7-parameter model
             );
         }
         function predictRRCRC(params, omega) {
@@ -779,26 +783,31 @@
             return nelderMead(
                 (params) => calcError(params, omega, predictCPE),
                 { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85 },
-                { R0: R0_est * 0.3, R1: R1_est * 0.3, Q: C_est * 0.5, n: 0.15 }
+                { R0: R0_est * 0.3, R1: R1_est * 0.3, Q: C_est * 0.5, n: 0.1 },
+                800  // More iterations for CPE
             );
         }
         function predictCPE(params, omega) {
-            // CPE impedance: Z_CPE = 1/(Q*(j*omega)^n)
-            // Z_CPE = 1/(Q * omega^n) * (cos(n*pi/2) - j*sin(n*pi/2))
+            // Use admittance approach for cleaner calculation
             const Q = params.Q;
             const n = Math.min(Math.max(params.n, 0.1), 1); // Clamp n between 0.1 and 1
-            const cpeReal = Math.cos(n * Math.PI / 2) / (Q * Math.pow(omega, n));
-            const cpeImag = -Math.sin(n * Math.PI / 2) / (Q * Math.pow(omega, n));
 
-            // Parallel combination of R1 and CPE: 1/Z_total = 1/R1 + 1/Z_CPE
-            const r1 = params.R1;
-            const denomReal = 1/r1 + cpeReal / (cpeReal*cpeReal + cpeImag*cpeImag);
-            const denomImag = cpeImag / (cpeReal*cpeReal + cpeImag*cpeImag);
-            const denomMag2 = denomReal*denomReal + denomImag*denomImag;
+            // Admittance of CPE: Y_CPE = Q*(jω)^n = Q*ω^n * (cos(nπ/2) + j*sin(nπ/2))
+            const yCpeReal = Q * Math.pow(omega, n) * Math.cos(n * Math.PI / 2);
+            const yCpeImag = Q * Math.pow(omega, n) * Math.sin(n * Math.PI / 2);
+
+            // Total admittance (parallel): Y = 1/R1 + Y_CPE
+            const yTotalReal = 1 / params.R1 + yCpeReal;
+            const yTotalImag = yCpeImag;
+
+            // Convert back to impedance: Z = 1/Y = Y* / |Y|^2
+            const yMag2 = yTotalReal * yTotalReal + yTotalImag * yTotalImag;
+            const zParReal = yTotalReal / yMag2;
+            const zParImag = -yTotalImag / yMag2;
 
             return {
-                real: params.R0 + denomReal / denomMag2,
-                imag: -denomImag / denomMag2
+                real: params.R0 + zParReal,
+                imag: zParImag
             };
         }
 
