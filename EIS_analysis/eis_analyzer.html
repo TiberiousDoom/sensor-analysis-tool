@@ -28,9 +28,31 @@
             color: white;
             padding: 30px;
             text-align: center;
+            position: relative;
         }
         header h1 { font-size: 2.5em; margin-bottom: 5px; }
         header p { opacity: 0.9; }
+        .home-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-btn:hover {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.6);
+        }
         .content {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -342,6 +364,7 @@
 <body>
     <div class="container">
         <header>
+            <a href="../index.html" class="home-btn">← Home</a>
             <h1>⚡ EIS Analyzer</h1>
             <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
         </header>

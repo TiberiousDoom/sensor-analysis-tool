@@ -56,6 +56,25 @@
             color: var(--text-secondary);
             margin-bottom: 2rem;
         }
+        .home-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-light);
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9em;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-btn:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent);
+        }
 
         .card {
             background: var(--bg-card);
@@ -377,6 +396,7 @@
 </head>
 <body>
     <div class="container">
+        <a href="../index.html" class="home-btn">← Home</a>
         <h1>📊 Excel Database Builder</h1>
         <p class="subtitle">Compile multiple Excel spreadsheets into a SQLite database</p>
 

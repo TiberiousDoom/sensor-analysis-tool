@@ -53,6 +53,27 @@
             margin-bottom: 3rem;
             position: relative;
         }
+        .home-btn {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-btn:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-cyan);
+        }
 
         header::before {
             content: '';
@@ -683,6 +704,7 @@
 <body>
     <div class="container" role="main">
         <header>
+            <a href="../index.html" class="home-btn">← Home</a>
             <h1>⚡ Sensor Statistical Analysis</h1>
             <p class="subtitle">Drop your data files to begin analysis</p>
         </header>
