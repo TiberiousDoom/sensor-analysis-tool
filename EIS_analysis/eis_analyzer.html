@@ -441,16 +441,24 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     return;
                 }
 
-                // Auto-detect format: check if column 3 looks like phase angles (-90 to 90)
-                // or like impedance values (typically larger magnitude, often negative)
+                // Auto-detect format by comparing column 2 (Z' or |Z|) and column 3 (Z" or Phase)
+                const col2Values = rawData.map(r => r[1]);
                 const col3Values = rawData.map(r => r[2]);
+                const col2Avg = col2Values.reduce((a, b) => a + b, 0) / col2Values.length;
                 const col3Avg = col3Values.reduce((a, b) => a + b, 0) / col3Values.length;
                 const col3Max = Math.max(...col3Values.map(Math.abs));
-                const col2Avg = rawData.map(r => r[1]).reduce((a, b) => a + b, 0) / rawData.length;
+                const col2Max = Math.max(...col2Values);
 
-                // Phase angles are typically between -90 and 0 (or 0 to -90)
-                // Z" values are typically similar magnitude to Z' but negative
-                const looksLikePhase = col3Max <= 90 && col3Avg > -91 && col3Avg < 91;
+                // Heuristics to distinguish formats:
+                // 1. Phase angles: typically -90 to 0 degrees, all values bounded by ±90
+                // 2. For |Z|/Phase: |Z| >> |Phase| (impedance magnitude much larger than phase angle)
+                // 3. For Z'/Z": Z' and Z" are similar magnitude (both in ohms)
+                const col3InPhaseRange = col3Max <= 90;
+                const magnitudeRatio = col2Avg / Math.max(col3Max, 0.1);
+
+                // If col3 is in phase range AND col2 is much larger than col3, it's likely |Z|/Phase
+                // If col3 values are similar magnitude to col2, it's likely Z'/Z"
+                const looksLikePhase = col3InPhaseRange && magnitudeRatio > 3;
                 const format = looksLikePhase ? 'freq_zmag_phase' : 'zreal_zimag';
 
                 // Parse data according to detected format
