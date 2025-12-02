@@ -240,6 +240,41 @@
             height: 250px;
             min-height: 200px;
         }
+        /* Export buttons */
+        .export-btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .export-btn {
+            background: #17a2b8;
+            font-size: 0.85em;
+            padding: 8px 12px;
+            flex: 1;
+            min-width: 80px;
+        }
+        .export-btn:hover { background: #138496; }
+        .session-btn {
+            background: #6c757d;
+            font-size: 0.85em;
+            padding: 8px 12px;
+        }
+        .session-btn:hover { background: #5a6268; }
+        /* Frequency range inputs */
+        .freq-range {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .freq-range input {
+            width: 100px;
+            padding: 6px;
+        }
+        .freq-range span {
+            color: #666;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 <body>
@@ -301,6 +336,17 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     <small id="freq-help" style="color: #666; font-size: 0.8em;">Starting frequency for optimization (Hz)</small>
                 </div>
 
+                <div class="form-group">
+                    <label>Frequency Range (optional)</label>
+                    <div class="freq-range">
+                        <input type="number" id="freqMin" placeholder="Min Hz" min="0" step="any">
+                        <span>to</span>
+                        <input type="number" id="freqMax" placeholder="Max Hz" min="0" step="any">
+                        <button type="button" onclick="resetFreqRange()" style="padding: 6px 10px; font-size: 0.8em;">Reset</button>
+                    </div>
+                    <small style="color: #666; font-size: 0.8em;">Limit fitting to a frequency range (leave empty for all data)</small>
+                </div>
+
                 <button type="button" onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
                 <div id="fitStatus" role="status" aria-live="polite"></div>
 
@@ -324,12 +370,26 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
                 <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
                 <div id="debugStatus" role="status" aria-live="polite"></div>
+
+                <h2 id="session-heading" style="margin-top: 30px;">💾 Session</h2>
+                <div class="button-group">
+                    <button type="button" class="session-btn" onclick="saveSession()">Save Session</button>
+                    <button type="button" class="session-btn" onclick="document.getElementById('loadSessionInput').click()">Load Session</button>
+                    <input type="file" id="loadSessionInput" accept=".json" style="display: none;" onchange="loadSession(event)">
+                </div>
+                <small style="color: #666; font-size: 0.8em;">Save/load complete analysis state including data, model, and fit results</small>
             </div>
 
             <!-- Results Panel -->
             <div class="panel" role="region" aria-labelledby="results-heading">
                 <h2 id="results-heading">📈 Fit Results</h2>
                 <div id="fitResults" aria-live="polite"></div>
+                <div id="exportButtons" style="display: none;">
+                    <div class="export-btn-group">
+                        <button type="button" class="export-btn" onclick="exportJSON()">Export JSON</button>
+                        <button type="button" class="export-btn" onclick="exportCSV()">Export CSV</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Nyquist Plot -->
@@ -562,6 +622,38 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         // Store last fit results for export
         let lastFitResults = null;
 
+        // Store filtered data for fitting
+        let filteredData = null;
+
+        function getFilteredData() {
+            const freqMinInput = document.getElementById('freqMin').value;
+            const freqMaxInput = document.getElementById('freqMax').value;
+            const freqMin = freqMinInput ? parseFloat(freqMinInput) : 0;
+            const freqMax = freqMaxInput ? parseFloat(freqMaxInput) : Infinity;
+
+            // Create filtered arrays
+            const indices = [];
+            for (let i = 0; i < eisData.frequency.length; i++) {
+                if (eisData.frequency[i] >= freqMin && eisData.frequency[i] <= freqMax) {
+                    indices.push(i);
+                }
+            }
+
+            return {
+                frequency: indices.map(i => eisData.frequency[i]),
+                zReal: indices.map(i => eisData.zReal[i]),
+                zImag: indices.map(i => eisData.zImag[i]),
+                zMag: indices.map(i => eisData.zMag[i]),
+                zPhase: indices.map(i => eisData.zPhase[i]),
+                indices: indices
+            };
+        }
+
+        function resetFreqRange() {
+            document.getElementById('freqMin').value = '';
+            document.getElementById('freqMax').value = '';
+        }
+
         function fitModel() {
             if (eisData.frequency.length === 0) {
                 updateStatus('fitStatus', 'No data loaded', 'error');
@@ -576,7 +668,16 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             // Use setTimeout to allow UI to update before blocking computation
             setTimeout(() => {
                 let modelType = document.getElementById('modelType').value;
-                const omega = eisData.frequency.map(f => 2 * Math.PI * f);
+
+                // Get filtered data based on frequency range
+                filteredData = getFilteredData();
+
+                if (filteredData.frequency.length === 0) {
+                    updateStatus('fitStatus', 'No data in selected frequency range', 'error');
+                    return;
+                }
+
+                const omega = filteredData.frequency.map(f => 2 * Math.PI * f);
 
                 try {
                     let fitParams, predicted, selectedModel;
@@ -618,6 +719,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         }
 
         function autoSelectModel(omega) {
+            // Use filtered data if available
+            const dataSource = filteredData || eisData;
             const modelsToTry = ['RRC', 'RCRC', 'RRCW', 'CPE', 'CPECPE', 'CPEpCPE', 'RRCRC', 'RpC', 'RC'];
             let bestModel = null;
             let bestAIC = Infinity;
@@ -627,15 +730,15 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             for (const modelType of modelsToTry) {
                 try {
                     const model = modelRegistry[modelType];
-                    const fitParams = model.fit(omega);
+                    const fitParams = model.fit(omega, dataSource);
                     const predicted = omega.map(w => model.predict(fitParams, w));
 
                     // Calculate AIC (Akaike Information Criterion) for model comparison
                     // AIC = n * ln(RSS/n) + 2k, where k is number of parameters
-                    const rss = eisData.zReal.reduce((sum, r, i) => {
-                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(eisData.zImag[i] - predicted[i].imag, 2);
+                    const rss = dataSource.zReal.reduce((sum, r, i) => {
+                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
                     }, 0);
-                    const n = eisData.zReal.length * 2; // Real + Imag points
+                    const n = dataSource.zReal.length * 2; // Real + Imag points
                     const k = model.params;
                     const aic = n * Math.log(rss / n) + 2 * k;
 
@@ -659,11 +762,13 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         }
 
         function calcChiSquared(predicted) {
-            const residuals = eisData.zReal.map((r, i) => ({
+            // Use filtered data if available
+            const dataSource = filteredData || eisData;
+            const residuals = dataSource.zReal.map((r, i) => ({
                 real: r - predicted[i].real,
-                imag: eisData.zImag[i] - predicted[i].imag
+                imag: dataSource.zImag[i] - predicted[i].imag
             }));
-            return residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
+            return residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / dataSource.zReal.length;
         }
 
         // Simple R model
@@ -1369,6 +1474,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             html += '</div>';
 
             document.getElementById('fitResults').innerHTML = html;
+            document.getElementById('exportButtons').style.display = 'block';
             updateStatus('fitStatus', 'Fit completed', 'success');
         }
 
@@ -1764,6 +1870,150 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const el = document.getElementById(elementId);
             el.className = `status ${type}`;
             el.textContent = message;
+        }
+
+        // Export functions
+        function exportJSON() {
+            if (!lastFitResults) {
+                alert('No fit results to export. Please fit a model first.');
+                return;
+            }
+
+            const exportData = {
+                metadata: {
+                    exportDate: new Date().toISOString(),
+                    tool: 'EIS Analyzer',
+                    dataPoints: eisData.frequency.length
+                },
+                model: lastFitResults.model,
+                parameters: lastFitResults.params,
+                chiSquared: lastFitResults.chiSquared,
+                data: {
+                    frequency: eisData.frequency,
+                    zReal: eisData.zReal,
+                    zImag: eisData.zImag,
+                    zMag: eisData.zMag,
+                    zPhase: eisData.zPhase
+                },
+                fit: {
+                    zReal: lastFitResults.predicted.map(p => p.real),
+                    zImag: lastFitResults.predicted.map(p => p.imag)
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            downloadBlob(blob, 'eis_results.json');
+        }
+
+        function exportCSV() {
+            if (!lastFitResults) {
+                alert('No fit results to export. Please fit a model first.');
+                return;
+            }
+
+            // Create CSV with data and fit values
+            let csv = 'Frequency (Hz),Z_real (Ω),Z_imag (Ω),|Z| (Ω),Phase (°),Z_real_fit (Ω),Z_imag_fit (Ω)\n';
+            for (let i = 0; i < eisData.frequency.length; i++) {
+                csv += `${eisData.frequency[i]},${eisData.zReal[i]},${eisData.zImag[i]},`;
+                csv += `${eisData.zMag[i]},${eisData.zPhase[i]},`;
+                csv += `${lastFitResults.predicted[i].real},${lastFitResults.predicted[i].imag}\n`;
+            }
+
+            // Add parameters as comments at the end
+            csv += '\n# Model: ' + lastFitResults.model + '\n';
+            csv += '# Chi-squared/N: ' + lastFitResults.chiSquared.toExponential(3) + '\n';
+            csv += '# Parameters:\n';
+            for (const [key, value] of Object.entries(lastFitResults.params)) {
+                csv += `# ${key}: ${value}\n`;
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            downloadBlob(blob, 'eis_results.csv');
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Session save/load functions
+        function saveSession() {
+            const session = {
+                version: 1,
+                savedAt: new Date().toISOString(),
+                data: eisData,
+                modelType: document.getElementById('modelType').value,
+                freqRange: {
+                    min: document.getElementById('freqMin').value,
+                    max: document.getElementById('freqMax').value
+                },
+                fitResults: lastFitResults
+            };
+
+            const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' });
+            downloadBlob(blob, 'eis_session.json');
+        }
+
+        function loadSession(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const session = JSON.parse(e.target.result);
+
+                    if (!session.data || !session.data.frequency) {
+                        throw new Error('Invalid session file format');
+                    }
+
+                    // Restore data
+                    eisData = session.data;
+
+                    // Restore model selection
+                    if (session.modelType) {
+                        document.getElementById('modelType').value = session.modelType;
+                    }
+
+                    // Restore frequency range
+                    if (session.freqRange) {
+                        document.getElementById('freqMin').value = session.freqRange.min || '';
+                        document.getElementById('freqMax').value = session.freqRange.max || '';
+                    }
+
+                    // Restore fit results
+                    if (session.fitResults) {
+                        lastFitResults = session.fitResults;
+                        displayFitResults(
+                            session.fitResults.params,
+                            session.fitResults.chiSquared,
+                            session.fitResults.model
+                        );
+                        plotFit(session.fitResults.predicted);
+                        plotBodeFit(session.fitResults.predicted);
+                        plotResiduals(session.fitResults.predicted);
+                    }
+
+                    // Update plots
+                    plotNyquist();
+                    plotBode();
+
+                    updateStatus('dataStatus', `Session loaded: ${eisData.frequency.length} data points`, 'success');
+                } catch (err) {
+                    alert('Error loading session: ' + err.message);
+                    console.error('Load session error:', err);
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset file input
+            event.target.value = '';
         }
     </script>
 </body>
