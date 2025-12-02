@@ -2433,16 +2433,47 @@
         // Regression Analysis
         function updateRegressionAnalysis() {
             if (!buildData || !kpiData) return;
-            
+
             const yVar = document.getElementById('yVariable').value;
             const x1Var = document.getElementById('x1Variable').value;
             const x2Var = document.getElementById('x2Variable').value;
             const includeCat = document.getElementById('includeCategoricals').value === 'yes';
-            
-            const sensors = buildData.sensors;
-            const y = sensors.map(s => kpiData[s]?.[yVar] || 0);
-            const x1 = buildData[x1Var];
-            const x2 = x2Var !== 'none' ? buildData[x2Var] : null;
+
+            // Normalize sensor names for matching between build data and KPI data
+            function normalizeName(name) {
+                return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+            }
+
+            // Create lookup dictionary with normalized keys
+            const kpiLookup = {};
+            Object.keys(kpiData).forEach(s => {
+                kpiLookup[normalizeName(s)] = kpiData[s];
+            });
+
+            // Match build data sensors to KPI data and filter to only matched sensors
+            const matchedIndices = [];
+            const matchedSensors = [];
+            buildData.sensors.forEach((sensor, idx) => {
+                const kpi = kpiLookup[normalizeName(sensor)];
+                if (kpi) {
+                    matchedIndices.push(idx);
+                    matchedSensors.push(sensor);
+                }
+            });
+
+            if (matchedIndices.length === 0) {
+                console.warn('No sensors matched for regression analysis!');
+                return;
+            }
+
+            // Build matched arrays using only matched sensors
+            const sensors = matchedSensors;
+            const y = sensors.map((s, i) => {
+                const kpi = kpiLookup[normalizeName(s)];
+                return kpi?.[yVar] || 0;
+            });
+            const x1 = matchedIndices.map(idx => buildData[x1Var][idx]);
+            const x2 = x2Var !== 'none' ? matchedIndices.map(idx => buildData[x2Var][idx]) : null;
             
             // Model 1: Simple regression
             const reg1 = linearRegression(x1, y);
@@ -2476,10 +2507,10 @@
             document.getElementById('model3Card').style.display = includeCat ? 'block' : 'none';
             if (includeCat) {
                 const X3 = sensors.map((_, i) => [
-                    x1[i], 
-                    buildData.traceCarbon[i], 
-                    buildData.traceSilver[i], 
-                    buildData.refSide[i]
+                    x1[i],
+                    buildData.traceCarbon[matchedIndices[i]],
+                    buildData.traceSilver[matchedIndices[i]],
+                    buildData.refSide[matchedIndices[i]]
                 ]);
                 const reg3 = multipleRegression(X3, y);
                 updateRegressionTable('model3Table', [
