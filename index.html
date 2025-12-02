@@ -97,6 +97,21 @@
             margin-bottom: 1rem;
         }
 
+        .tool-icon img {
+            width: 3.5rem;
+            height: auto;
+        }
+
+        .tool-card.eis .tool-icon img {
+            filter: invert(27%) sepia(89%) saturate(1234%) hue-rotate(241deg) brightness(91%) contrast(96%);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .tool-card.eis .tool-icon img {
+                filter: invert(70%) sepia(50%) saturate(500%) hue-rotate(210deg) brightness(100%) contrast(95%);
+            }
+        }
+
         .tool-card h2 {
             font-size: 1.35rem;
             font-weight: 600;
@@ -197,7 +212,7 @@
             <div class="tools-grid" role="list">
                 <a href="EIS_analysis/eis_analyzer.html" class="tool-card eis" role="listitem">
                     <div class="category-label">Electrochemistry</div>
-                    <div class="tool-icon" aria-hidden="true">⚡</div>
+                    <div class="tool-icon" aria-hidden="true"><img src="assets/eis-logo.svg" alt=""></div>
                     <h2>EIS Analyzer</h2>
                     <p>Electrochemical Impedance Spectroscopy data analysis with circuit model fitting. Generate Nyquist and Bode plots from your impedance data.</p>
                     <div class="tool-features">
