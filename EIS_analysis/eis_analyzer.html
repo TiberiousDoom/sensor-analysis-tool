@@ -1513,8 +1513,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 return costFn(linearParams);
             };
 
-            // Run optimization
-            const logResult = nelderMead(logCostFn, logInitial, logSteps, maxIter, tol);
+            // Run optimization without Math.abs (log values can be negative)
+            const logResult = nelderMeadCore(logCostFn, logInitial, logSteps, maxIter, tol, false);
 
             // Convert back to linear space
             const result = {...logResult};
@@ -1524,8 +1524,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             return result;
         }
 
-        // Nelder-Mead simplex optimization
-        function nelderMead(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8) {
+        // Core Nelder-Mead simplex optimization
+        // ensurePositive: if true, uses Math.abs to keep values positive (for linear-space params)
+        function nelderMeadCore(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8, ensurePositive = true) {
             const keys = Object.keys(initial);
             const n = keys.length;
 
@@ -1533,7 +1534,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const toArray = (obj) => keys.map(k => obj[k]);
             const toObj = (arr) => {
                 const obj = {};
-                keys.forEach((k, i) => obj[k] = Math.abs(arr[i])); // Ensure positive
+                keys.forEach((k, i) => obj[k] = ensurePositive ? Math.abs(arr[i]) : arr[i]);
                 return obj;
             };
 
@@ -1613,6 +1614,11 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             // Return best
             const bestIdx = values.indexOf(Math.min(...values));
             return toObj(simplex[bestIdx]);
+        }
+
+        // Wrapper for backwards compatibility - ensures positive values by default
+        function nelderMead(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8) {
+            return nelderMeadCore(costFn, initial, stepSizes, maxIter, tol, true);
         }
 
         function predictRC(params, omega) {
