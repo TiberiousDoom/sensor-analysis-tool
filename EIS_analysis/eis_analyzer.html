@@ -248,10 +248,9 @@
 0.01	1000	-500
 0.1	950	-480
 ..."></textarea>
-                    <small id="data-format-hint" class="sr-only">Enter data with frequency in the first column, followed by impedance values</small>
+                    <small id="data-format-hint" style="color: #666; font-size: 0.8em;">Data will be parsed automatically when pasted or when format is changed</small>
                 </div>
 
-                <button type="button" onclick="parseData()" style="width: 100%;" aria-describedby="parse-status">Parse Data</button>
                 <div id="dataStatus" role="status" aria-live="polite"></div>
 
                 <h2 id="circuit-model-heading" style="margin-top: 30px;">⚙️ Circuit Model</h2>
@@ -310,10 +309,34 @@
             zPhase: []
         };
 
-        // Initialize file upload functionality
+        // Initialize file upload and auto-parse functionality
         document.addEventListener('DOMContentLoaded', function() {
             initFileUpload();
+            initAutoParse();
         });
+
+        function initAutoParse() {
+            const dataInput = document.getElementById('dataInput');
+            const dataFormat = document.getElementById('dataFormat');
+            let parseTimeout;
+
+            // Auto-parse when data is pasted or typed (with debounce)
+            dataInput.addEventListener('input', () => {
+                clearTimeout(parseTimeout);
+                parseTimeout = setTimeout(() => {
+                    if (dataInput.value.trim()) {
+                        parseData();
+                    }
+                }, 500); // 500ms debounce
+            });
+
+            // Auto-parse when format changes (if data exists)
+            dataFormat.addEventListener('change', () => {
+                if (dataInput.value.trim()) {
+                    parseData();
+                }
+            });
+        }
 
         function initFileUpload() {
             const dropZone = document.getElementById('fileDropZone');
