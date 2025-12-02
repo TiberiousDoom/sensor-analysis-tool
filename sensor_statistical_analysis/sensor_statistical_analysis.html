@@ -974,32 +974,32 @@
                     <div class="chart-container large">
                         <div class="chart-title">🔥 Correlation Heatmap: Design Parameters vs KPIs</div>
                         <div class="chart-plot tall" id="correlationHeatmap"></div>
+                        <div class="chart-interpretation" id="correlationHeatmapInterpretation"></div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">📈 W:C Ratio vs Response Magnitude</div>
                         <div class="chart-plot" id="wcVsResponseChart"></div>
+                        <div class="chart-interpretation" id="wcVsResponseInterpretation"></div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">📈 W:C Ratio vs T90 Rise</div>
                         <div class="chart-plot" id="wcVsT90Chart"></div>
+                        <div class="chart-interpretation" id="wcVsT90Interpretation"></div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">📈 Working SA vs Response</div>
                         <div class="chart-plot" id="workSaVsResponseChart"></div>
+                        <div class="chart-interpretation" id="workSaVsResponseInterpretation"></div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">🔮 3D: W:C × W:R × Response</div>
                         <div class="chart-plot" id="scatter3dChart"></div>
+                        <div class="chart-interpretation" id="scatter3dInterpretation"></div>
                     </div>
                     <div class="chart-container large">
-                        <div class="chart-title">
-                            📊 Parallel Coordinates: All Parameters
-                            <span class="tooltip-container">
-                                <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Each line is one sensor. Trace a line across axes to see how that sensor's values compare. Lines are colored by Response magnitude (yellow=high). Look for patterns: do high-response sensors cluster together on other axes?</span>
-                            </span>
-                        </div>
+                        <div class="chart-title">📊 Parallel Coordinates: All Parameters</div>
                         <div class="chart-plot tall" id="parallelChart"></div>
+                        <div class="chart-interpretation" id="parallelChartInterpretation"></div>
                     </div>
                 </div>
             </div>
@@ -1020,6 +1020,8 @@
                             <option value="t90Rise">T90 Rise (s)</option>
                             <option value="riseRate">Rise Rate (V/s)</option>
                             <option value="percentRecovery">% Recovery</option>
+                            <option value="t50R">T50 Recovery (s)</option>
+                            <option value="t10R">T10 Recovery (s)</option>
                             <option value="recoveryRate">Recovery Rate</option>
                             <option value="snr">Signal-to-Noise Ratio</option>
                         </select>
@@ -1532,12 +1534,17 @@
                 const finalValue = mean(finalRegion);
                 const recoveryMag = peakValue - finalValue;
                 const percentRecovery = responseMag > 0 ? (recoveryMag / responseMag) * 100 : 0;
-                
+
                 // Recovery times (absolute values)
                 const t50RecTarget = peakValue - 0.5 * recoveryMag;
                 const t10RecTarget = peakValue - 0.9 * recoveryMag;
                 const t50Recovery = findTimeAtValue(time, values, t50RecTarget, peakIndex, values.length, -1);
                 const t10Recovery = findTimeAtValue(time, values, t10RecTarget, peakIndex, values.length, -1);
+
+                // Relative recovery times from peak (T50R, T10R)
+                const t50R = Math.max(0, t50Recovery - peakTime);  // Time to 50% recovery
+                const t10R = Math.max(0, t10Recovery - peakTime);  // Time to 90% recovery (10% remaining)
+
                 const recoveryRate = (t10Recovery - peakTime) > 0 ? recoveryMag / (t10Recovery - peakTime) : 0;
                 
                 // SNR
@@ -1549,7 +1556,7 @@
                     responseMag, percentResponse, responseStartTime,
                     t50Rise, t90Rise, t50RiseAbs, t90RiseAbs, riseRate,
                     peakStd, finalValue, recoveryMag, percentRecovery,
-                    t50Recovery, t10Recovery, recoveryRate, snr, responseNoise,
+                    t50Recovery, t10Recovery, t50R, t10R, recoveryRate, snr, responseNoise,
                     isSignificant, threshold
                 };
             });
@@ -2305,10 +2312,13 @@
             }
             
             const sensors = matchedData.map(d => d.sensor);
-            const kpiList = ['responseMag', 'percentResponse', 't90Rise', 't90RiseAbs', 'riseRate', 
-                            'percentRecovery', 'recoveryRate', 'snr', 'baselineStd'];
+            const kpiList = ['responseMag', 'percentResponse', 't90Rise', 't90RiseAbs', 'riseRate',
+                            'percentRecovery', 't50R', 't10R', 'recoveryRate', 'snr', 'baselineStd'];
+            const kpiLabels = ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate',
+                              '% Recov', 'T50R', 'T10R', 'Recov Rate', 'SNR', 'Baseline σ'];
             const designParams = ['wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
-            
+            const designLabels = ['W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
+
             // Build correlation matrix
             const corrMatrix = [];
             kpiList.forEach(kpi => {
@@ -2321,14 +2331,42 @@
                 });
                 corrMatrix.push(row);
             });
-            
+
             console.log('Correlation matrix computed:', corrMatrix.length, 'x', corrMatrix[0]?.length);
-            
+
+            // Find strongest correlations for interpretation
+            let strongestCorr = { r: 0, kpi: '', param: '' };
+            let strongestNeg = { r: 0, kpi: '', param: '' };
+            corrMatrix.forEach((row, i) => {
+                row.forEach((r, j) => {
+                    if (r > strongestCorr.r) {
+                        strongestCorr = { r, kpi: kpiLabels[i], param: designLabels[j] };
+                    }
+                    if (r < strongestNeg.r) {
+                        strongestNeg = { r, kpi: kpiLabels[i], param: designLabels[j] };
+                    }
+                });
+            });
+
+            // Heatmap interpretation
+            let heatmapInterp = `This heatmap shows Pearson correlations between design parameters (columns) and sensor KPIs (rows). `;
+            heatmapInterp += `<strong>Blue = positive correlation</strong> (both increase together), <strong>Red = negative</strong> (one increases as other decreases). `;
+            if (strongestCorr.r > 0.5) {
+                heatmapInterp += `Strongest positive: <span class="interpretation-highlight highlight-positive">${strongestCorr.param} → ${strongestCorr.kpi} (r=${strongestCorr.r.toFixed(2)})</span>. `;
+            }
+            if (strongestNeg.r < -0.5) {
+                heatmapInterp += `Strongest negative: <span class="interpretation-highlight highlight-negative">${strongestNeg.param} → ${strongestNeg.kpi} (r=${strongestNeg.r.toFixed(2)})</span>. `;
+            }
+            if (Math.abs(strongestCorr.r) < 0.3 && Math.abs(strongestNeg.r) < 0.3) {
+                heatmapInterp += `No strong correlations found — design parameters may have limited influence on sensor performance.`;
+            }
+            document.getElementById('correlationHeatmapInterpretation').innerHTML = heatmapInterp;
+
             // Heatmap
             safePlot('correlationHeatmap', [{
                 z: corrMatrix,
-                x: ['W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'],
-                y: ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate', '% Recov', 'Recov Rate', 'SNR', 'Baseline σ'],
+                x: designLabels,
+                y: kpiLabels,
                 type: 'heatmap',
                 colorscale: 'RdBu',
                 zmid: 0,
@@ -2373,7 +2411,15 @@
                 yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
                 showlegend: true
             }, plotlyConfig);
-            
+
+            // W:C vs Response interpretation
+            const wcRespInterp = generateScatterInterpretation(
+                'W:C Ratio', 'Response Magnitude', regWcResp.r2, regWcResp.slope,
+                'Adjusting the working-to-counter electrode ratio'
+            );
+            document.getElementById('wcVsResponseInterpretation').innerHTML = wcRespInterp.text;
+            document.getElementById('wcVsResponseInterpretation').className = `chart-interpretation interpretation-${wcRespInterp.class}`;
+
             // W:C vs T90
             const regWcT90 = linearRegression(wcRatio, t90);
             const yLineT90 = xLine.map(x => regWcT90.slope * x + regWcT90.intercept);
@@ -2398,7 +2444,15 @@
                 yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s from response start)' },
                 showlegend: true
             }, plotlyConfig);
-            
+
+            // W:C vs T90 interpretation
+            const wcT90Interp = generateScatterInterpretation(
+                'W:C Ratio', 'T90 Rise Time', regWcT90.r2, regWcT90.slope,
+                'Modifying the working-to-counter ratio'
+            );
+            document.getElementById('wcVsT90Interpretation').innerHTML = wcT90Interp.text;
+            document.getElementById('wcVsT90Interpretation').className = `chart-interpretation interpretation-${wcT90Interp.class}`;
+
             // Working SA vs Response
             const regWorkResp = linearRegression(workSA, respMag);
             const xLineWork = [Math.min(...workSA), Math.max(...workSA)];
@@ -2424,7 +2478,15 @@
                 yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
                 showlegend: true
             }, plotlyConfig);
-            
+
+            // Working SA vs Response interpretation
+            const workRespInterp = generateScatterInterpretation(
+                'Working Electrode Surface Area', 'Response Magnitude', regWorkResp.r2, regWorkResp.slope,
+                'Increasing the working electrode surface area'
+            );
+            document.getElementById('workSaVsResponseInterpretation').innerHTML = workRespInterp.text;
+            document.getElementById('workSaVsResponseInterpretation').className = `chart-interpretation interpretation-${workRespInterp.class}`;
+
             // 3D Scatter
             safePlot('scatter3dChart', [{
                 x: wcRatio,
@@ -2449,7 +2511,14 @@
                     bgcolor: '#111827'
                 }
             }, plotlyConfig);
-            
+
+            // 3D Scatter interpretation
+            let scatter3dInterp = `This 3D plot visualizes how <strong>W:C Ratio</strong> and <strong>W:R Ratio</strong> together influence <strong>Response Magnitude</strong>. `;
+            scatter3dInterp += `Color intensity indicates response strength (brighter = higher). `;
+            scatter3dInterp += `<strong>Rotate</strong> the plot by dragging to explore the relationship from different angles. `;
+            scatter3dInterp += `Look for clusters or patterns — sensors with similar ratios should have similar responses if the relationship is strong.`;
+            document.getElementById('scatter3dInterpretation').innerHTML = scatter3dInterp;
+
             // Parallel Coordinates
             // Format large SNR values for display
             const snrValues = matchedData.map(d => d.snr);
@@ -2482,9 +2551,55 @@
                 ...plotlyLayout,
                 margin: { t: 50, r: 50, b: 30, l: 50 }
             }, plotlyConfig);
-            
+
+            // Parallel Coordinates interpretation
+            let parallelInterp = `This parallel coordinates plot shows each sensor as a line crossing multiple axes. `;
+            parallelInterp += `<strong>Drag on any axis</strong> to filter and highlight sensors within a range. `;
+            parallelInterp += `Lines that stay together across axes indicate correlated parameters. `;
+            parallelInterp += `Color represents Response Magnitude — look for patterns in how high-response sensors (bright) differ from low-response sensors (dark).`;
+            document.getElementById('parallelChartInterpretation').innerHTML = parallelInterp;
+
             // Store matched data for regression
             window.matchedData = matchedData;
+        }
+
+        // Helper function to generate scatter plot interpretations
+        function generateScatterInterpretation(xName, yName, r2, slope, actionPhrase) {
+            let strengthClass, strengthText;
+            if (r2 >= 0.7) {
+                strengthClass = 'good';
+                strengthText = 'strong';
+            } else if (r2 >= 0.4) {
+                strengthClass = 'moderate';
+                strengthText = 'moderate';
+            } else if (r2 >= 0.2) {
+                strengthClass = 'weak';
+                strengthText = 'weak';
+            } else {
+                strengthClass = 'weak';
+                strengthText = 'very weak';
+            }
+
+            const direction = slope >= 0 ? 'increases' : 'decreases';
+            const directionWord = slope >= 0 ? 'positive' : 'negative';
+
+            let text = `<strong>${xName}</strong> shows a <strong>${strengthText} ${directionWord}</strong> correlation with <strong>${yName}</strong> `;
+            text += `(R² = ${(r2 * 100).toFixed(1)}%). `;
+
+            if (r2 >= 0.4) {
+                text += `${actionPhrase} ${direction} ${yName.toLowerCase()}. `;
+                if (r2 >= 0.7) {
+                    text += `This is a <span class="interpretation-highlight highlight-positive">key design lever</span> for optimizing sensor performance.`;
+                } else {
+                    text += `Consider this alongside other factors for optimization.`;
+                }
+            } else if (r2 >= 0.2) {
+                text += `There may be a trend, but other factors likely have more influence on ${yName.toLowerCase()}.`;
+            } else {
+                text += `${xName} alone does not meaningfully predict ${yName.toLowerCase()} — other variables may be more important.`;
+            }
+
+            return { text, class: strengthClass };
         }
 
         // Regression Analysis
@@ -2540,6 +2655,8 @@
                 't90Rise': 'T90 Rise Time',
                 'riseRate': 'Rise Rate',
                 'percentRecovery': '% Recovery',
+                't50R': 'T50 Recovery Time',
+                't10R': 'T10 Recovery Time',
                 'recoveryRate': 'Recovery Rate',
                 'snr': 'Signal-to-Noise Ratio',
                 'wcRatio': 'W:C Ratio',
