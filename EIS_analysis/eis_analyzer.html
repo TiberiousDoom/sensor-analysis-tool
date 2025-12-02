@@ -658,15 +658,22 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const col2Max = Math.max(...col2Values);
 
                 // Heuristics to distinguish formats:
-                // 1. Phase angles: typically -90 to 0 degrees, all values bounded by ±90
+                // 1. Phase angles: typically -90 to 0 degrees for capacitive, bounded by ±90
                 // 2. For |Z|/Phase: |Z| >> |Phase| (impedance magnitude much larger than phase angle)
-                // 3. For Z'/Z": Z' and Z" are similar magnitude (both in ohms)
+                // 3. For Z'/Z": Z' and Z" are similar magnitude (both in ohms), Z" typically all same sign
                 const col3InPhaseRange = col3Max <= 90;
                 const magnitudeRatio = col2Avg / Math.max(col3Max, 0.1);
 
-                // If col3 is in phase range AND col2 is much larger than col3, it's likely |Z|/Phase
-                // If col3 values are similar magnitude to col2, it's likely Z'/Z"
-                const looksLikePhase = col3InPhaseRange && magnitudeRatio > 3;
+                // Additional heuristics for better detection:
+                // - For Z"/ohms data: values are typically ALL negative (capacitive) or rarely all positive
+                // - For Phase/degrees: values vary but stay within -90 to 0 for capacitive elements
+                // - Check if col3 values are predominantly negative (suggests Z" in ohms)
+                const negativeCount = col3Values.filter(v => v < 0).length;
+                const mostlyNegative = negativeCount > col3Values.length * 0.7;
+
+                // If col3 is in phase range AND col2 is much larger than col3 AND not mostly negative, it's likely |Z|/Phase
+                // If col3 values are mostly negative OR similar magnitude to col2, it's likely Z'/Z"
+                const looksLikePhase = col3InPhaseRange && magnitudeRatio > 3 && !mostlyNegative;
                 const format = looksLikePhase ? 'freq_zmag_phase' : 'zreal_zimag';
 
                 // Parse data according to detected format
