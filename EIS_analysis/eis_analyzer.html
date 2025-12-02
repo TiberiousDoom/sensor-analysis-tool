@@ -696,15 +696,16 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const R_range = R_total - R0_est;
             const C_est = estimateCapacitance(omega);
 
-            // Try multiple starting configurations
+            // Try multiple starting configurations with varied R and C combinations
             const startConfigs = [
-                // Spread capacitances evenly on log scale
-                { C1: C_est * 0.1, C2: C_est, C3: C_est * 10 },
-                { C1: C_est * 0.01, C2: C_est * 0.1, C3: C_est },
-                { C1: C_est, C2: C_est * 10, C3: C_est * 100 },
-                // Different R distributions
-                { R1: R_range * 0.5, R2: R_range * 0.3, R3: R_range * 0.2 },
-                { R1: R_range * 0.33, R2: R_range * 0.33, R3: R_range * 0.34 },
+                // Different capacitance spreads
+                { C1: C_est * 0.1, C2: C_est, C3: C_est * 10, R1: R_range * 0.4, R2: R_range * 0.35, R3: R_range * 0.25 },
+                { C1: C_est * 0.5, C2: C_est * 3, C3: C_est * 20, R1: R_range * 0.4, R2: R_range * 0.33, R3: R_range * 0.27 },
+                { C1: C_est * 0.01, C2: C_est * 0.1, C3: C_est, R1: R_range * 0.5, R2: R_range * 0.3, R3: R_range * 0.2 },
+                { C1: C_est, C2: C_est * 5, C3: C_est * 50, R1: R_range * 0.33, R2: R_range * 0.33, R3: R_range * 0.34 },
+                { C1: C_est * 0.2, C2: C_est * 2, C3: C_est * 15, R1: R_range * 0.45, R2: R_range * 0.3, R3: R_range * 0.25 },
+                // Reverse order (high freq to low freq)
+                { C1: C_est * 10, C2: C_est, C3: C_est * 0.1, R1: R_range * 0.25, R2: R_range * 0.35, R3: R_range * 0.4 },
             ];
 
             let bestParams = null;
@@ -713,12 +714,12 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             for (const config of startConfigs) {
                 const initial = {
                     R0: R0_est,
-                    R1: config.R1 || R_range * 0.4,
-                    C1: config.C1 || C_est * 0.1,
-                    R2: config.R2 || R_range * 0.35,
-                    C2: config.C2 || C_est,
-                    R3: config.R3 || R_range * 0.25,
-                    C3: config.C3 || C_est * 10
+                    R1: config.R1,
+                    C1: config.C1,
+                    R2: config.R2,
+                    C2: config.C2,
+                    R3: config.R3,
+                    C3: config.C3
                 };
 
                 const steps = {
@@ -736,7 +737,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         (p) => calcError(p, omega, predictRRCRC),
                         initial,
                         steps,
-                        800
+                        1000
                     );
                     const error = calcError(params, omega, predictRRCRC);
                     if (error < bestError) {
@@ -764,18 +765,45 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         }
 
         // Constant Phase Element model: R0 + (R1 || CPE)
+        // Uses multi-start optimization due to sensitivity of n exponent
         function fitCPEModel(omega) {
             const R0_est = Math.min(...eisData.zReal);
             const R_total = Math.max(...eisData.zReal);
             const R1_est = R_total - R0_est;
             const C_est = estimateCapacitance(omega);
 
-            return nelderMead(
-                (params) => calcError(params, omega, predictCPE),
-                { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85 },
-                { R0: R0_est * 0.3, R1: R1_est * 0.3, Q: C_est * 0.5, n: 0.1 },
-                800  // More iterations for CPE
-            );
+            // Multi-start with different n values and Q estimates
+            const startConfigs = [
+                { n: 0.85, Q: C_est, R0: R0_est, R1: R1_est },
+                { n: 0.75, Q: C_est * 0.5, R0: R0_est, R1: R1_est },
+                { n: 0.90, Q: C_est * 2, R0: R0_est, R1: R1_est },
+                { n: 0.80, Q: C_est * 0.8, R0: R0_est * 0.9, R1: R1_est * 1.1 },
+                { n: 0.70, Q: C_est * 0.3, R0: R0_est, R1: R1_est },
+                { n: 0.95, Q: C_est * 3, R0: R0_est, R1: R1_est * 0.9 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                try {
+                    const params = nelderMead(
+                        (p) => calcError(p, omega, predictCPE),
+                        config,
+                        { R0: config.R0 * 0.3, R1: config.R1 * 0.3, Q: config.Q * 0.5, n: 0.15 },
+                        800
+                    );
+                    const error = calcError(params, omega, predictCPE);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('CPE fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85 };
         }
         function predictCPE(params, omega) {
             // Use admittance approach for cleaner calculation
@@ -985,33 +1013,39 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             updateStatus('fitStatus', 'Fit completed', 'success');
         }
 
+        // Detect mobile for plot config
+        const isMobile = () => window.innerWidth < 600;
+
         function plotNyquist() {
             const trace = {
                 x: eisData.zReal,
                 y: eisData.zImag.map(z => -z),
                 mode: 'markers+lines',
                 name: 'EIS Data',
-                marker: { size: 6, color: '#667eea' },
+                marker: { size: isMobile() ? 5 : 6, color: '#667eea' },
                 line: { color: '#667eea', width: 2 }
             };
 
             const layout = {
-                title: 'Nyquist Plot',
-                xaxis: { title: "Z' (Ω)" },
-                yaxis: { title: "-Z\" (Ω)" },
+                xaxis: { title: "Z' (Ω)", tickfont: { size: isMobile() ? 10 : 12 } },
+                yaxis: { title: "-Z\" (Ω)", tickfont: { size: isMobile() ? 10 : 12 } },
                 hovermode: 'closest',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: 50, l: 55, r: 10 },
+                showlegend: false
             };
 
-            Plotly.newPlot('nyquistPlot', [trace], layout, { responsive: true });
+            const config = { responsive: true, displayModeBar: !isMobile() };
+            Plotly.newPlot('nyquistPlot', [trace], layout, config);
         }
 
         function plotBode() {
+            const mobile = isMobile();
             const magTrace = {
                 x: eisData.frequency,
                 y: eisData.zMag,
                 mode: 'lines+markers',
                 name: '|Z|',
+                marker: { size: mobile ? 4 : 6 },
                 line: { color: '#667eea' }
             };
 
@@ -1020,30 +1054,34 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 y: eisData.zPhase,
                 mode: 'lines+markers',
                 name: 'Phase',
+                marker: { size: mobile ? 4 : 6 },
                 line: { color: '#764ba2' }
             };
 
             const magLayout = {
-                title: 'Impedance Magnitude',
-                xaxis: { title: 'Frequency (Hz)', type: 'log' },
-                yaxis: { title: '|Z| (Ω)', type: 'log' },
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: '|Z| (Ω)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'x unified',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: 50, l: 55, r: 10 },
+                showlegend: false
             };
 
             const phaseLayout = {
-                title: 'Phase Angle',
-                xaxis: { title: 'Frequency (Hz)', type: 'log' },
-                yaxis: { title: 'Phase (°)' },
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: 'Phase (°)', tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'x unified',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: 50, l: 55, r: 10 },
+                showlegend: false
             };
 
-            Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, { responsive: true });
-            Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, { responsive: true });
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, config);
+            Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, config);
         }
 
         function plotFit(predicted) {
+            const mobile = isMobile();
+
             // Calculate R² (coefficient of determination)
             const meanReal = eisData.zReal.reduce((a, b) => a + b, 0) / eisData.zReal.length;
             const meanImag = eisData.zImag.reduce((a, b) => a + b, 0) / eisData.zImag.length;
@@ -1061,24 +1099,31 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 y: eisData.zImag.map(z => -z),
                 mode: 'markers',
                 name: 'Experimental',
-                marker: { size: 6, color: '#667eea' }
+                marker: { size: mobile ? 5 : 6, color: '#667eea' }
             }, {
                 x: predicted.map(p => p.real),
                 y: predicted.map(p => -p.imag),
                 mode: 'lines',
-                name: `Fitted (R² = ${rSquaredPct}%)`,
+                name: `Fit (R²=${rSquaredPct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
             }];
 
             const layout = {
-                title: 'Nyquist Plot - Fit Overlay',
-                xaxis: { title: "Z' (Ω)" },
-                yaxis: { title: "-Z\" (Ω)" },
+                xaxis: { title: "Z' (Ω)", tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: "-Z\" (Ω)", tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'closest',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: mobile ? 80 : 50, l: 55, r: 10 },
+                legend: {
+                    orientation: 'h',
+                    y: mobile ? -0.25 : -0.15,
+                    x: 0.5,
+                    xanchor: 'center',
+                    font: { size: mobile ? 11 : 12 }
+                }
             };
 
-            Plotly.newPlot('nyquistPlot', nyquistData, layout, { responsive: true });
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('nyquistPlot', nyquistData, layout, config);
         }
 
         // True parameters for debug tests
