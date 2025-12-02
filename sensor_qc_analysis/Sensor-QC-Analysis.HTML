@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sensor QC Analysis Dashboard for quality control testing, threshold analysis, and pass/fail status tracking of sensor data">
     <title>Sensor Analysis Dashboard v2.1</title>
-    
+
     <style>
         :root {
             --primary: #667eea;
@@ -564,6 +565,46 @@
         .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
         
         .hidden { display: none !important; }
+
+        /* Accessibility: Focus styles */
+        .tab-btn:focus,
+        .btn:focus,
+        .upload-tab:focus,
+        .filter-pill:focus,
+        input:focus,
+        select:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .upload-area:focus-within,
+        .upload-area:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+            border-color: var(--primary);
+        }
+
+        .collapsible-header:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -2px;
+        }
+
+        .help-tooltip:focus .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Screen reader only */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
         
         .loading-overlay {
             position: fixed;
@@ -665,17 +706,17 @@
                             <button class="upload-tab" data-type="db" onclick="switchUploadType('db')">Database</button>
                         </div>
                         <div id="csvUpload" class="upload-content active">
-                            <div class="upload-area" id="csvUploadArea">
-                                <div class="upload-icon">📤</div>
+                            <div class="upload-area" id="csvUploadArea" role="button" tabindex="0" aria-label="Upload CSV file with sensor data">
+                                <div class="upload-icon" aria-hidden="true">📤</div>
                                 <div>Drop CSV or click to browse</div>
-                                <input type="file" id="csvFileInput" accept=".csv">
+                                <input type="file" id="csvFileInput" accept=".csv" aria-label="CSV file input">
                             </div>
                         </div>
                         <div id="dbUpload" class="upload-content">
-                            <div class="upload-area" id="dbUploadArea">
-                                <div class="upload-icon">💾</div>
+                            <div class="upload-area" id="dbUploadArea" role="button" tabindex="0" aria-label="Upload database file">
+                                <div class="upload-icon" aria-hidden="true">💾</div>
                                 <div>Drop .db file or click to browse</div>
-                                <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3">
+                                <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3" aria-label="Database file input">
                             </div>
                         </div>
                     </div>
@@ -743,14 +784,14 @@
                     </div>
                 </div>
 
-                <div class="tabs">
-                    <button class="tab-btn active" data-tab="dataTable">📋 Data Table</button>
-                    <button class="tab-btn" data-tab="visualization">📈 Visualization</button>
-                    <button class="tab-btn" data-tab="statusKey">ℹ️ Status Key</button>
+                <div class="tabs" role="tablist" aria-label="Analysis results tabs">
+                    <button class="tab-btn active" data-tab="dataTable" role="tab" aria-selected="true" aria-controls="dataTable">📋 Data Table</button>
+                    <button class="tab-btn" data-tab="visualization" role="tab" aria-selected="false" aria-controls="visualization">📈 Visualization</button>
+                    <button class="tab-btn" data-tab="statusKey" role="tab" aria-selected="false" aria-controls="statusKey">ℹ️ Status Key</button>
                 </div>
                 
                 <!-- Data Table Tab -->
-                <div id="dataTable" class="tab-content active">
+                <div id="dataTable" class="tab-content active" role="tabpanel" aria-labelledby="dataTable-tab">
                     <div class="card">
                         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem;">
                             <div class="filter-pills" id="statusFilters"></div>
@@ -769,7 +810,7 @@
                 </div>
                 
                 <!-- Visualization Tab -->
-                <div id="visualization" class="tab-content">
+                <div id="visualization" class="tab-content" role="tabpanel" aria-labelledby="visualization-tab">
                     <div class="charts-grid">
                         <div class="card">
                             <div class="card-title">📈 Sensor Readings by Test</div>
@@ -805,7 +846,7 @@
                 </div>
                 
                 <!-- Status Key Tab (renamed from Thresholds) -->
-                <div id="statusKey" class="tab-content">
+                <div id="statusKey" class="tab-content" role="tabpanel" aria-labelledby="statusKey-tab">
                     <div class="card">
                         <div class="card-title">⚙️ Current Threshold Settings</div>
                         <div id="thresholdInfo"></div>
@@ -2036,7 +2077,9 @@ else if (typeof exports === 'object'){
     
     function switchTab(tabId) {
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === tabId);
+            const isActive = btn.dataset.tab === tabId;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
         });
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.toggle('active', content.id === tabId);
@@ -2858,6 +2901,9 @@ else if (typeof exports === 'object'){
         const csvFileInput = document.getElementById('csvFileInput');
         
         csvUploadArea.addEventListener('click', () => csvFileInput.click());
+        csvUploadArea.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); csvFileInput.click(); }
+        });
         csvUploadArea.addEventListener('dragover', e => { e.preventDefault(); csvUploadArea.classList.add('dragover'); });
         csvUploadArea.addEventListener('dragleave', () => csvUploadArea.classList.remove('dragover'));
         csvUploadArea.addEventListener('drop', e => {
@@ -2868,12 +2914,15 @@ else if (typeof exports === 'object'){
         csvFileInput.addEventListener('change', e => {
             if (e.target.files[0]) handleCSVFile(e.target.files[0]);
         });
-        
+
         // DB upload
         const dbUploadArea = document.getElementById('dbUploadArea');
         const dbFileInput = document.getElementById('dbFileInput');
-        
+
         dbUploadArea.addEventListener('click', () => dbFileInput.click());
+        dbUploadArea.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dbFileInput.click(); }
+        });
         dbUploadArea.addEventListener('dragover', e => { e.preventDefault(); dbUploadArea.classList.add('dragover'); });
         dbUploadArea.addEventListener('dragleave', () => dbUploadArea.classList.remove('dragover'));
         dbUploadArea.addEventListener('drop', e => {
