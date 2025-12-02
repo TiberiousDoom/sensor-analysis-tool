@@ -1988,9 +1988,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 return;
             }
 
-            // Generate frequency range (log scale from 0.01 Hz to 10 kHz)
+            // Generate frequency range (log scale from 100 kHz to 0.0001 Hz)
             const frequencies = [];
-            for (let exp = -2; exp <= 4; exp += 0.25) {
+            for (let exp = 5; exp >= -4; exp -= 0.25) {
                 frequencies.push(Math.pow(10, exp));
             }
 
