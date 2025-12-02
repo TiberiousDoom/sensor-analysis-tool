@@ -355,6 +355,58 @@
             height: 450px;
         }
 
+        .chart-interpretation, .model-interpretation {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 3px solid var(--accent-violet);
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .chart-interpretation strong, .model-interpretation strong {
+            color: var(--text-primary);
+        }
+
+        .interpretation-good {
+            border-left-color: var(--accent-emerald);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .interpretation-moderate {
+            border-left-color: var(--accent-amber);
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .interpretation-weak {
+            border-left-color: var(--accent-rose);
+            background: rgba(244, 63, 94, 0.1);
+        }
+
+        .interpretation-highlight {
+            display: inline-block;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .highlight-positive {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-emerald);
+        }
+
+        .highlight-negative {
+            background: rgba(244, 63, 94, 0.2);
+            color: var(--accent-rose);
+        }
+
+        .highlight-neutral {
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent-violet);
+        }
+
         /* Regression Panel */
         .regression-section {
             display: none;
@@ -1006,18 +1058,20 @@
 
                 <div class="chart-grid">
                     <div class="chart-container">
-                        <div class="chart-title">📈 Regression: X1 vs Y</div>
+                        <div class="chart-title" id="regressionScatterTitle">📈 Regression: X1 vs Y</div>
                         <div class="chart-plot" id="regressionScatter"></div>
+                        <div class="chart-interpretation" id="regressionScatterInterpretation"></div>
                     </div>
                     <div class="chart-container">
-                        <div class="chart-title">📊 Residual Plot</div>
+                        <div class="chart-title" id="residualPlotTitle">📊 Residual Plot</div>
                         <div class="chart-plot" id="residualPlot"></div>
+                        <div class="chart-interpretation" id="residualPlotInterpretation"></div>
                     </div>
                 </div>
 
                 <div class="regression-results" id="regressionResults">
                     <div class="result-card">
-                        <h3>Model 1: Simple Regression</h3>
+                        <h3 id="model1Title">Model 1: Simple Regression</h3>
                         <table class="result-table" id="model1Table">
                             <thead>
                                 <tr><th>Term</th><th>Coefficient</th><th>Std Error</th><th>t-stat</th></tr>
@@ -1027,9 +1081,10 @@
                         <div style="margin-top: 1rem;">
                             <span class="stat-highlight">R² = <span id="model1R2">--</span></span>
                         </div>
+                        <div class="model-interpretation" id="model1Interpretation"></div>
                     </div>
                     <div class="result-card">
-                        <h3>Model 2: Multiple Regression</h3>
+                        <h3 id="model2Title">Model 2: Multiple Regression</h3>
                         <table class="result-table" id="model2Table">
                             <thead>
                                 <tr><th>Term</th><th>Coefficient</th><th>Std Error</th><th>t-stat</th></tr>
@@ -1040,9 +1095,10 @@
                             <span class="stat-highlight">R² = <span id="model2R2">--</span></span>
                             <span style="margin-left: 1rem;">Adj R² = <span id="model2AdjR2">--</span></span>
                         </div>
+                        <div class="model-interpretation" id="model2Interpretation"></div>
                     </div>
                     <div class="result-card" id="model3Card" style="display: none;">
-                        <h3>Model 3: With Categoricals</h3>
+                        <h3 id="model3Title">Model 3: With Categoricals</h3>
                         <table class="result-table" id="model3Table">
                             <thead>
                                 <tr><th>Term</th><th>Coefficient</th><th>Std Error</th><th>t-stat</th></tr>
@@ -1053,6 +1109,7 @@
                             <span class="stat-highlight">R² = <span id="model3R2">--</span></span>
                             <span style="margin-left: 1rem;">Adj R² = <span id="model3AdjR2">--</span></span>
                         </div>
+                        <div class="model-interpretation" id="model3Interpretation"></div>
                     </div>
                 </div>
             </div>
@@ -2475,6 +2532,43 @@
             const x1 = matchedIndices.map(idx => buildData[x1Var][idx]);
             const x2 = x2Var !== 'none' ? matchedIndices.map(idx => buildData[x2Var][idx]) : null;
             
+            // Helper function for friendly variable names
+            const varLabels = {
+                'responseMag': 'Response Magnitude',
+                'percentResponse': '% Response',
+                't50Rise': 'T50 Rise Time',
+                't90Rise': 'T90 Rise Time',
+                'riseRate': 'Rise Rate',
+                'percentRecovery': '% Recovery',
+                'recoveryRate': 'Recovery Rate',
+                'snr': 'Signal-to-Noise Ratio',
+                'wcRatio': 'W:C Ratio',
+                'wrRatio': 'W:R Ratio',
+                'workingSA': 'Working SA',
+                'counterSA': 'Counter SA',
+                'referenceSA': 'Reference SA',
+                'totalSA': 'Total SA'
+            };
+            const getLabel = (v) => varLabels[v] || v;
+            const yLabel = getLabel(yVar);
+            const x1Label = getLabel(x1Var);
+            const x2Label = x2Var !== 'none' ? getLabel(x2Var) : null;
+
+            // Helper to interpret R² strength
+            const interpretR2 = (r2) => {
+                if (r2 >= 0.7) return { text: 'strong', class: 'good' };
+                if (r2 >= 0.4) return { text: 'moderate', class: 'moderate' };
+                if (r2 >= 0.2) return { text: 'weak', class: 'weak' };
+                return { text: 'very weak', class: 'weak' };
+            };
+
+            // Helper to interpret coefficient direction
+            const interpretSlope = (slope, xName, yName) => {
+                if (Math.abs(slope) < 0.0001) return `${xName} has no meaningful effect on ${yName}`;
+                const direction = slope > 0 ? 'increases' : 'decreases';
+                return `As ${xName} increases, ${yName} ${direction}`;
+            };
+
             // Model 1: Simple regression
             const reg1 = linearRegression(x1, y);
             updateRegressionTable('model1Table', [
@@ -2522,12 +2616,142 @@
                 ]);
                 document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
                 document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
+
+                // Model 3 interpretation
+                const r2Interp3 = interpretR2(reg3.r2);
+                const sigTerms3 = [];
+                const tStat3_1 = reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0;
+                const tStat3_2 = reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0;
+                const tStat3_3 = reg3.stdErrors[3] > 0 ? reg3.coeffs[3] / reg3.stdErrors[3] : 0;
+                const tStat3_4 = reg3.stdErrors[4] > 0 ? reg3.coeffs[4] / reg3.stdErrors[4] : 0;
+                if (Math.abs(tStat3_1) > 2) sigTerms3.push(x1Label);
+                if (Math.abs(tStat3_2) > 2) sigTerms3.push('Trace Carbon');
+                if (Math.abs(tStat3_3) > 2) sigTerms3.push('Trace Silver');
+                if (Math.abs(tStat3_4) > 2) sigTerms3.push('Reference Side');
+
+                let model3Interp = `This model adds categorical manufacturing variables. `;
+                model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
+                if (sigTerms3.length > 0) {
+                    model3Interp += `<strong>${sigTerms3.join(', ')}</strong> ${sigTerms3.length === 1 ? 'is' : 'are'} statistically significant (|t| > 2). `;
+                } else {
+                    model3Interp += `No terms reach statistical significance. `;
+                }
+                const r2Improvement = reg3.r2 - reg1.r2;
+                if (r2Improvement > 0.05) {
+                    model3Interp += `Adding categoricals improved R² by <span class="interpretation-highlight highlight-positive">+${(r2Improvement * 100).toFixed(1)}%</span>.`;
+                } else {
+                    model3Interp += `Categoricals add minimal predictive value beyond ${x1Label}.`;
+                }
+                document.getElementById('model3Interpretation').innerHTML = model3Interp;
+                document.getElementById('model3Interpretation').className = `model-interpretation interpretation-${r2Interp3.class}`;
             }
-            
+
+            // Update model titles
+            document.getElementById('model1Title').textContent = `Model 1: ${yLabel} ~ ${x1Label}`;
+            document.getElementById('model2Title').textContent = x2Label
+                ? `Model 2: ${yLabel} ~ ${x1Label} + ${x2Label}`
+                : `Model 2: ${yLabel} ~ ${x1Label}`;
+            document.getElementById('model3Title').textContent = `Model 3: ${yLabel} ~ ${x1Label} + Categoricals`;
+
+            // Model 1 interpretation
+            const r2Interp1 = interpretR2(reg1.r2);
+            const tStat1 = reg1.seSlope > 0 ? reg1.slope / reg1.seSlope : 0;
+            const isSignificant1 = Math.abs(tStat1) > 2;
+            let model1Interp = `<strong>${x1Label}</strong> explains <strong>${(reg1.r2 * 100).toFixed(1)}%</strong> of variance in <strong>${yLabel}</strong> — a <strong>${r2Interp1.text}</strong> relationship. `;
+            model1Interp += interpretSlope(reg1.slope, x1Label, yLabel) + `. `;
+            if (isSignificant1) {
+                model1Interp += `The coefficient is <span class="interpretation-highlight highlight-positive">statistically significant</span> (t=${tStat1.toFixed(2)}).`;
+            } else {
+                model1Interp += `The coefficient is <span class="interpretation-highlight highlight-neutral">not statistically significant</span> (t=${tStat1.toFixed(2)}).`;
+            }
+            document.getElementById('model1Interpretation').innerHTML = model1Interp;
+            document.getElementById('model1Interpretation').className = `model-interpretation interpretation-${r2Interp1.class}`;
+
+            // Model 2 interpretation
+            const r2_2 = reg2.r2 || reg1.r2;
+            const r2Interp2 = interpretR2(r2_2);
+            let model2Interp = '';
+            if (x2Label) {
+                const tStat2_1 = reg2.stdErrors[1] > 0 ? reg2.coeffs[1] / reg2.stdErrors[1] : 0;
+                const tStat2_2 = reg2.stdErrors[2] > 0 ? reg2.coeffs[2] / reg2.stdErrors[2] : 0;
+                const sig1 = Math.abs(tStat2_1) > 2;
+                const sig2 = Math.abs(tStat2_2) > 2;
+                model2Interp = `Adding <strong>${x2Label}</strong> as a second predictor explains <strong>${(r2_2 * 100).toFixed(1)}%</strong> of variance (${r2Interp2.text}). `;
+                const r2Gain = r2_2 - reg1.r2;
+                if (r2Gain > 0.05) {
+                    model2Interp += `This improves R² by <span class="interpretation-highlight highlight-positive">+${(r2Gain * 100).toFixed(1)}%</span>. `;
+                } else if (r2Gain > 0) {
+                    model2Interp += `Modest improvement of +${(r2Gain * 100).toFixed(1)}% over Model 1. `;
+                } else {
+                    model2Interp += `No improvement over the simpler model. `;
+                }
+                if (sig1 && sig2) {
+                    model2Interp += `Both predictors are significant.`;
+                } else if (sig1) {
+                    model2Interp += `Only <strong>${x1Label}</strong> is significant; ${x2Label} may be redundant.`;
+                } else if (sig2) {
+                    model2Interp += `Only <strong>${x2Label}</strong> is significant when both are included.`;
+                } else {
+                    model2Interp += `Neither predictor reaches significance in this model.`;
+                }
+            } else {
+                model2Interp = `Same as Model 1 (no secondary predictor selected). Select a secondary predictor (X2) to compare models.`;
+            }
+            document.getElementById('model2Interpretation').innerHTML = model2Interp;
+            document.getElementById('model2Interpretation').className = `model-interpretation interpretation-${r2Interp2.class}`;
+
+            // Update chart titles
+            document.getElementById('regressionScatterTitle').innerHTML = `📈 ${yLabel} vs ${x1Label}`;
+            document.getElementById('residualPlotTitle').innerHTML = `📊 Residuals: ${yLabel} ~ ${x1Label}`;
+
+            // Scatter plot interpretation
+            const correlation = reg1.slope >= 0 ? 'positive' : 'negative';
+            const corrStrength = r2Interp1.text;
+            let scatterInterp = `This scatter plot shows the relationship between <strong>${x1Label}</strong> (x-axis) and <strong>${yLabel}</strong> (y-axis). `;
+            scatterInterp += `The orange line is the best-fit regression line. `;
+            scatterInterp += `The <strong>${correlation}</strong> slope and <strong>${corrStrength}</strong> R² (${(reg1.r2 * 100).toFixed(1)}%) indicate `;
+            if (reg1.r2 >= 0.7) {
+                scatterInterp += `that ${x1Label} is a strong predictor of ${yLabel}. Points cluster tightly around the line.`;
+            } else if (reg1.r2 >= 0.4) {
+                scatterInterp += `a meaningful but imperfect relationship. Other factors also influence ${yLabel}.`;
+            } else if (reg1.r2 >= 0.2) {
+                scatterInterp += `a weak relationship. ${x1Label} alone does not adequately explain ${yLabel}.`;
+            } else {
+                scatterInterp += `little to no linear relationship between these variables.`;
+            }
+            document.getElementById('regressionScatterInterpretation').innerHTML = scatterInterp;
+            document.getElementById('regressionScatterInterpretation').className = `chart-interpretation interpretation-${r2Interp1.class}`;
+
+            // Calculate predicted values for plots and interpretation
+            const predicted = x1.map(xi => reg1.slope * xi + reg1.intercept);
+
+            // Residual plot interpretation
+            const residualMean = mean(reg1.residuals);
+            const residualStd = std(reg1.residuals);
+            let residualInterp = `Residuals are the differences between actual and predicted values. `;
+            residualInterp += `Ideally, they should scatter randomly around zero (dashed line). `;
+            if (Math.abs(residualMean) < 0.1 * residualStd) {
+                residualInterp += `<span class="interpretation-highlight highlight-positive">Good:</span> Residuals are centered near zero (mean: ${residualMean.toFixed(3)}). `;
+            } else {
+                residualInterp += `<span class="interpretation-highlight highlight-negative">Warning:</span> Residuals show bias (mean: ${residualMean.toFixed(3)}). `;
+            }
+            // Check for patterns (simplified)
+            const sortedByPred = predicted.map((p, i) => ({ p, r: reg1.residuals[i] })).sort((a, b) => a.p - b.p);
+            const firstHalf = sortedByPred.slice(0, Math.floor(sortedByPred.length / 2)).map(d => d.r);
+            const secondHalf = sortedByPred.slice(Math.floor(sortedByPred.length / 2)).map(d => d.r);
+            const firstMean = mean(firstHalf);
+            const secondMean = mean(secondHalf);
+            if (Math.abs(firstMean - secondMean) > residualStd) {
+                residualInterp += `Pattern detected: residuals differ across prediction range, suggesting non-linearity.`;
+            } else {
+                residualInterp += `No obvious pattern — the linear model appears appropriate.`;
+            }
+            document.getElementById('residualPlotInterpretation').innerHTML = residualInterp;
+
             // Regression scatter plot
             const xLine = [Math.min(...x1), Math.max(...x1)];
             const yLine = xLine.map(x => reg1.slope * x + reg1.intercept);
-            
+
             safePlot('regressionScatter', [
                 {
                     x: x1, y: y,
@@ -2544,12 +2768,11 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: x1Var },
-                yaxis: { ...plotlyLayout.yaxis, title: yVar }
+                xaxis: { ...plotlyLayout.xaxis, title: x1Label },
+                yaxis: { ...plotlyLayout.yaxis, title: yLabel }
             }, plotlyConfig);
-            
+
             // Residual plot
-            const predicted = x1.map(xi => reg1.slope * xi + reg1.intercept);
             safePlot('residualPlot', [{
                 x: predicted,
                 y: reg1.residuals,
@@ -2565,7 +2788,7 @@
                 line: { color: '#64748b', width: 1, dash: 'dash' }
             }], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'Predicted' },
+                xaxis: { ...plotlyLayout.xaxis, title: `Predicted ${yLabel}` },
                 yaxis: { ...plotlyLayout.yaxis, title: 'Residual' },
                 showlegend: false
             }, plotlyConfig);
