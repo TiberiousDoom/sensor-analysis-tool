@@ -274,6 +274,22 @@
 
                 <button type="button" onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
                 <div id="fitStatus" role="status" aria-live="polite"></div>
+
+                <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
+                <div class="form-group">
+                    <label for="debugModel">Test Model</label>
+                    <select id="debugModel">
+                        <option value="RRC">R-(R||C) (Randles-like)</option>
+                        <option value="RCRC">R-C-R-C (Two time constants)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="noiseLevel">Noise Level (%)</label>
+                    <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
+                    <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
+                </div>
+                <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
+                <div id="debugStatus" role="status" aria-live="polite"></div>
             </div>
 
             <!-- Results Panel -->
@@ -783,6 +799,133 @@
             };
 
             Plotly.newPlot('nyquistPlot', nyquistData, layout, { responsive: true });
+        }
+
+        function runDebugTest() {
+            const modelType = document.getElementById('debugModel').value;
+            const noiseLevel = parseFloat(document.getElementById('noiseLevel').value) / 100;
+
+            // Define true parameters for the test
+            let trueParams;
+            if (modelType === 'RRC') {
+                trueParams = { R0: 75, R1: 150, C: 2.5e-6 };
+            } else if (modelType === 'RCRC') {
+                trueParams = { R0: 50, R1: 120, C1: 1.5e-6, R2: 80, C2: 8e-6 };
+            }
+
+            // Generate frequency range (log scale from 0.01 Hz to 10 kHz)
+            const frequencies = [];
+            for (let exp = -2; exp <= 4; exp += 0.25) {
+                frequencies.push(Math.pow(10, exp));
+            }
+
+            // Generate ideal impedance data
+            const mockData = [];
+            for (const freq of frequencies) {
+                const omega = 2 * Math.PI * freq;
+                let z;
+
+                if (modelType === 'RRC') {
+                    z = predictRRC(trueParams, omega);
+                } else if (modelType === 'RCRC') {
+                    z = predictRCRC(trueParams, omega);
+                }
+
+                // Add noise
+                const noiseFactor = 1 + (Math.random() - 0.5) * 2 * noiseLevel;
+                const noiseFactorImag = 1 + (Math.random() - 0.5) * 2 * noiseLevel;
+
+                mockData.push({
+                    freq: freq,
+                    zReal: z.real * noiseFactor,
+                    zImag: z.imag * noiseFactorImag
+                });
+            }
+
+            // Format as tab-separated data and load into textarea
+            const dataStr = mockData.map(d => `${d.freq}\t${d.zReal.toFixed(4)}\t${d.zImag.toFixed(4)}`).join('\n');
+            document.getElementById('dataInput').value = dataStr;
+            document.getElementById('dataFormat').value = 'zreal_zimag';
+
+            // Parse the data
+            parseData();
+
+            // Set the model type to match
+            document.getElementById('modelType').value = modelType;
+
+            // Fit the model
+            const omega = eisData.frequency.map(f => 2 * Math.PI * f);
+            let fitParams, predicted;
+
+            if (modelType === 'RRC') {
+                fitParams = fitRRCModel(omega);
+                predicted = omega.map(w => predictRRC(fitParams, w));
+            } else if (modelType === 'RCRC') {
+                fitParams = fitRCRCModel(omega);
+                predicted = omega.map(w => predictRCRC(fitParams, w));
+            }
+
+            // Calculate fit quality
+            const residuals = eisData.zReal.map((r, i) => ({
+                real: r - predicted[i].real,
+                imag: eisData.zImag[i] - predicted[i].imag
+            }));
+            const chiSquared = residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
+
+            // Calculate parameter recovery accuracy
+            const paramErrors = {};
+            let totalError = 0;
+            let paramCount = 0;
+
+            for (const [key, trueValue] of Object.entries(trueParams)) {
+                const fittedValue = fitParams[key];
+                const percentError = Math.abs((fittedValue - trueValue) / trueValue) * 100;
+                paramErrors[key] = {
+                    true: trueValue,
+                    fitted: fittedValue,
+                    error: percentError
+                };
+                totalError += percentError;
+                paramCount++;
+            }
+
+            const avgError = totalError / paramCount;
+            const score = Math.max(0, 100 - avgError);
+
+            // Display debug results
+            let html = '<div class="results"><h3>🧪 Debug Test Results</h3>';
+            html += `<div class="result-row" style="background: ${score >= 80 ? '#d4edda' : score >= 50 ? '#fff3cd' : '#f8d7da'}; padding: 10px; border-radius: 4px; margin-bottom: 10px;">`;
+            html += `<span class="result-label" style="font-size: 1.1em;">Overall Score</span>`;
+            html += `<span class="result-value" style="font-size: 1.2em; font-weight: bold;">${score.toFixed(1)}%</span></div>`;
+
+            html += '<h4 style="margin-top: 15px; color: #555;">Parameter Recovery</h4>';
+            html += '<table style="width: 100%; font-size: 0.85em; border-collapse: collapse;">';
+            html += '<tr style="border-bottom: 2px solid #ddd;"><th style="text-align: left; padding: 5px;">Param</th><th>True</th><th>Fitted</th><th>Error</th></tr>';
+
+            for (const [key, data] of Object.entries(paramErrors)) {
+                const errorColor = data.error < 10 ? '#28a745' : data.error < 25 ? '#ffc107' : '#dc3545';
+                const trueDisplay = data.true < 0.001 ? data.true.toExponential(2) : data.true.toFixed(2);
+                const fittedDisplay = data.fitted < 0.001 ? data.fitted.toExponential(2) : data.fitted.toFixed(2);
+
+                html += `<tr style="border-bottom: 1px solid #eee;">`;
+                html += `<td style="padding: 5px; font-weight: 500;">${key}</td>`;
+                html += `<td style="text-align: center; font-family: monospace;">${trueDisplay}</td>`;
+                html += `<td style="text-align: center; font-family: monospace;">${fittedDisplay}</td>`;
+                html += `<td style="text-align: center; color: ${errorColor}; font-weight: 500;">${data.error.toFixed(1)}%</td>`;
+                html += `</tr>`;
+            }
+            html += '</table>';
+
+            html += `<div class="result-row" style="margin-top: 10px;"><span class="result-label">χ²/N</span><span class="result-value">${chiSquared.toExponential(3)}</span></div>`;
+            html += `<div class="result-row"><span class="result-label">Noise Level</span><span class="result-value">${(noiseLevel * 100).toFixed(1)}%</span></div>`;
+            html += `<div class="result-row"><span class="result-label">Data Points</span><span class="result-value">${frequencies.length}</span></div>`;
+            html += '</div>';
+
+            document.getElementById('fitResults').innerHTML = html;
+            plotFit(predicted);
+
+            const scoreEmoji = score >= 80 ? '✅' : score >= 50 ? '⚠️' : '❌';
+            updateStatus('debugStatus', `${scoreEmoji} Test complete: ${score.toFixed(1)}% accuracy`, score >= 80 ? 'success' : score >= 50 ? 'info' : 'error');
         }
 
         function updateStatus(elementId, message, type) {
