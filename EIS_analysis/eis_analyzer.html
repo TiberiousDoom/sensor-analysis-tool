@@ -1013,33 +1013,39 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             updateStatus('fitStatus', 'Fit completed', 'success');
         }
 
+        // Detect mobile for plot config
+        const isMobile = () => window.innerWidth < 600;
+
         function plotNyquist() {
             const trace = {
                 x: eisData.zReal,
                 y: eisData.zImag.map(z => -z),
                 mode: 'markers+lines',
                 name: 'EIS Data',
-                marker: { size: 6, color: '#667eea' },
+                marker: { size: isMobile() ? 5 : 6, color: '#667eea' },
                 line: { color: '#667eea', width: 2 }
             };
 
             const layout = {
-                title: 'Nyquist Plot',
-                xaxis: { title: "Z' (Ω)" },
-                yaxis: { title: "-Z\" (Ω)" },
+                xaxis: { title: "Z' (Ω)", tickfont: { size: isMobile() ? 10 : 12 } },
+                yaxis: { title: "-Z\" (Ω)", tickfont: { size: isMobile() ? 10 : 12 } },
                 hovermode: 'closest',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: 50, l: 55, r: 10 },
+                showlegend: false
             };
 
-            Plotly.newPlot('nyquistPlot', [trace], layout, { responsive: true });
+            const config = { responsive: true, displayModeBar: !isMobile() };
+            Plotly.newPlot('nyquistPlot', [trace], layout, config);
         }
 
         function plotBode() {
+            const mobile = isMobile();
             const magTrace = {
                 x: eisData.frequency,
                 y: eisData.zMag,
                 mode: 'lines+markers',
                 name: '|Z|',
+                marker: { size: mobile ? 4 : 6 },
                 line: { color: '#667eea' }
             };
 
@@ -1048,30 +1054,34 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 y: eisData.zPhase,
                 mode: 'lines+markers',
                 name: 'Phase',
+                marker: { size: mobile ? 4 : 6 },
                 line: { color: '#764ba2' }
             };
 
             const magLayout = {
-                title: 'Impedance Magnitude',
-                xaxis: { title: 'Frequency (Hz)', type: 'log' },
-                yaxis: { title: '|Z| (Ω)', type: 'log' },
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: '|Z| (Ω)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'x unified',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: 50, l: 55, r: 10 },
+                showlegend: false
             };
 
             const phaseLayout = {
-                title: 'Phase Angle',
-                xaxis: { title: 'Frequency (Hz)', type: 'log' },
-                yaxis: { title: 'Phase (°)' },
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: 'Phase (°)', tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'x unified',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: 50, l: 55, r: 10 },
+                showlegend: false
             };
 
-            Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, { responsive: true });
-            Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, { responsive: true });
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, config);
+            Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, config);
         }
 
         function plotFit(predicted) {
+            const mobile = isMobile();
+
             // Calculate R² (coefficient of determination)
             const meanReal = eisData.zReal.reduce((a, b) => a + b, 0) / eisData.zReal.length;
             const meanImag = eisData.zImag.reduce((a, b) => a + b, 0) / eisData.zImag.length;
@@ -1089,24 +1099,31 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 y: eisData.zImag.map(z => -z),
                 mode: 'markers',
                 name: 'Experimental',
-                marker: { size: 6, color: '#667eea' }
+                marker: { size: mobile ? 5 : 6, color: '#667eea' }
             }, {
                 x: predicted.map(p => p.real),
                 y: predicted.map(p => -p.imag),
                 mode: 'lines',
-                name: `Fitted (R² = ${rSquaredPct}%)`,
+                name: `Fit (R²=${rSquaredPct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
             }];
 
             const layout = {
-                title: 'Nyquist Plot - Fit Overlay',
-                xaxis: { title: "Z' (Ω)" },
-                yaxis: { title: "-Z\" (Ω)" },
+                xaxis: { title: "Z' (Ω)", tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: "-Z\" (Ω)", tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'closest',
-                margin: { t: 40, b: 40, l: 60, r: 20 }
+                margin: { t: 10, b: mobile ? 80 : 50, l: 55, r: 10 },
+                legend: {
+                    orientation: 'h',
+                    y: mobile ? -0.25 : -0.15,
+                    x: 0.5,
+                    xanchor: 'center',
+                    font: { size: mobile ? 11 : 12 }
+                }
             };
 
-            Plotly.newPlot('nyquistPlot', nyquistData, layout, { responsive: true });
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('nyquistPlot', nyquistData, layout, config);
         }
 
         // True parameters for debug tests
