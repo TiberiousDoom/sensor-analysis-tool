@@ -203,6 +203,43 @@
             outline: 2px solid #667eea;
             outline-offset: 2px;
         }
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        /* Copy button */
+        .copy-btn {
+            background: #6c757d;
+            font-size: 0.8em;
+            padding: 5px 10px;
+            margin-left: 10px;
+        }
+        .copy-btn:hover { background: #5a6268; }
+        .copy-btn.copied {
+            background: #28a745;
+        }
+        /* Residual plot container */
+        .residual-container {
+            height: 250px;
+            min-height: 200px;
+        }
     </style>
 </head>
 <body>
@@ -307,6 +344,15 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 <div class="two-col">
                     <div id="bodeMagnitudePlot" class="plot-container" role="img" aria-label="Bode magnitude plot showing impedance vs frequency"></div>
                     <div id="bodePhase" class="plot-container" role="img" aria-label="Bode phase plot showing phase angle vs frequency"></div>
+                </div>
+            </div>
+
+            <!-- Residual Plot (shown after fitting) -->
+            <div class="panel full-width" role="region" aria-labelledby="residual-heading" id="residualPanel" style="display: none;">
+                <h2 id="residual-heading">Residuals (Fit Error)</h2>
+                <div class="two-col">
+                    <div id="residualRealPlot" class="residual-container" role="img" aria-label="Real impedance residuals vs frequency"></div>
+                    <div id="residualImagPlot" class="residual-container" role="img" aria-label="Imaginary impedance residuals vs frequency"></div>
                 </div>
             </div>
         </main>
@@ -513,40 +559,62 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'CPEpCPE': { name: 'R-(R||CPE)||(R||CPE) (Parallel CPE)', fit: fitCPEpCPEModel, predict: predictCPEpCPE, params: 7 }
         };
 
+        // Store last fit results for export
+        let lastFitResults = null;
+
         function fitModel() {
             if (eisData.frequency.length === 0) {
                 updateStatus('fitStatus', 'No data loaded', 'error');
                 return;
             }
 
-            let modelType = document.getElementById('modelType').value;
-            const omega = eisData.frequency.map(f => 2 * Math.PI * f);
+            // Show loading spinner
+            const fitStatus = document.getElementById('fitStatus');
+            fitStatus.className = 'status loading';
+            fitStatus.innerHTML = '<span class="spinner"></span>Fitting model...';
 
-            try {
-                let fitParams, predicted, selectedModel;
+            // Use setTimeout to allow UI to update before blocking computation
+            setTimeout(() => {
+                let modelType = document.getElementById('modelType').value;
+                const omega = eisData.frequency.map(f => 2 * Math.PI * f);
 
-                if (modelType === 'auto') {
-                    // Auto-select best model
-                    const result = autoSelectModel(omega);
-                    modelType = result.modelType;
-                    fitParams = result.fitParams;
-                    predicted = result.predicted;
-                    selectedModel = modelRegistry[modelType].name;
-                    updateStatus('fitStatus', `Auto-selected: ${selectedModel}`, 'success');
-                } else {
-                    const model = modelRegistry[modelType];
-                    fitParams = model.fit(omega);
-                    predicted = omega.map(w => model.predict(fitParams, w));
-                    selectedModel = model.name;
+                try {
+                    let fitParams, predicted, selectedModel;
+
+                    if (modelType === 'auto') {
+                        // Auto-select best model
+                        const result = autoSelectModel(omega);
+                        modelType = result.modelType;
+                        fitParams = result.fitParams;
+                        predicted = result.predicted;
+                        selectedModel = modelRegistry[modelType].name;
+                        updateStatus('fitStatus', `Auto-selected: ${selectedModel}`, 'success');
+                    } else {
+                        const model = modelRegistry[modelType];
+                        fitParams = model.fit(omega);
+                        predicted = omega.map(w => model.predict(fitParams, w));
+                        selectedModel = model.name;
+                    }
+
+                    const chiSquared = calcChiSquared(predicted);
+
+                    // Store results for export
+                    lastFitResults = {
+                        model: selectedModel,
+                        params: fitParams,
+                        chiSquared: chiSquared,
+                        predicted: predicted
+                    };
+
+                    displayFitResults(fitParams, chiSquared, selectedModel);
+                    plotFit(predicted);
+                    plotBodeFit(predicted);
+                    plotResiduals(predicted);
+                } catch (e) {
+                    updateStatus('fitStatus', `Fit error: ${e.message}`, 'error');
+                    console.error('Fit error:', e);
                 }
-
-                const chiSquared = calcChiSquared(predicted);
-                displayFitResults(fitParams, chiSquared, selectedModel);
-                plotFit(predicted);
-            } catch (e) {
-                updateStatus('fitStatus', `Fit error: ${e.message}`, 'error');
-                console.error('Fit error:', e);
-            }
+            }, 10);
         }
 
         function autoSelectModel(omega) {
@@ -1281,15 +1349,15 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         function displayFitResults(params, chiSquared, modelName) {
             let html = '<div class="results">';
             if (modelName) {
-                html += `<div style="background: #e8f4fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; color: #0066cc;">📊 Model: ${modelName}</div>`;
+                html += `<div style="background: #e8f4fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; color: #0066cc;">📊 Model: ${modelName}<button class="copy-btn" onclick="copyParameters()" title="Copy to clipboard">Copy</button></div>`;
             }
             html += '<h3>Fitted Parameters</h3>';
 
             for (const [key, value] of Object.entries(params)) {
                 let unit = '';
-                if (key === 'n') unit = ''; // CPE exponent is dimensionless
+                if (key === 'n' || key === 'n1' || key === 'n2') unit = ''; // CPE exponent is dimensionless
                 else if (key === 'W') unit = ' Ω·s⁻⁰·⁵'; // Warburg coefficient
-                else if (key === 'Q') unit = ' S·sⁿ'; // CPE pseudo-capacitance
+                else if (key === 'Q' || key === 'Q1' || key === 'Q2') unit = ' S·sⁿ'; // CPE pseudo-capacitance
                 else if (key.includes('R')) unit = ' Ω';
                 else if (key.includes('C')) unit = ' F';
 
@@ -1302,6 +1370,31 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             document.getElementById('fitResults').innerHTML = html;
             updateStatus('fitStatus', 'Fit completed', 'success');
+        }
+
+        function copyParameters() {
+            if (!lastFitResults) return;
+
+            const lines = [`Model: ${lastFitResults.model}`];
+            for (const [key, value] of Object.entries(lastFitResults.params)) {
+                const displayValue = Math.abs(value) < 0.001 ? value.toExponential(4) : value.toFixed(4);
+                lines.push(`${key}: ${displayValue}`);
+            }
+            lines.push(`χ²/N: ${lastFitResults.chiSquared.toExponential(3)}`);
+
+            const text = lines.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Copy failed. Please select and copy manually.');
+            });
         }
 
         // Detect mobile for plot config
@@ -1368,6 +1461,134 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const config = { responsive: true, displayModeBar: !mobile };
             Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, config);
             Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, config);
+        }
+
+        function plotBodeFit(predicted) {
+            const mobile = isMobile();
+
+            // Calculate predicted magnitude and phase
+            const predMag = predicted.map(p => Math.sqrt(p.real * p.real + p.imag * p.imag));
+            const predPhase = predicted.map(p => Math.atan2(-p.imag, p.real) * 180 / Math.PI);
+
+            // Experimental data traces
+            const magDataTrace = {
+                x: eisData.frequency,
+                y: eisData.zMag,
+                mode: 'markers',
+                name: 'Data',
+                marker: { size: mobile ? 4 : 6, color: '#667eea' }
+            };
+
+            const magFitTrace = {
+                x: eisData.frequency,
+                y: predMag,
+                mode: 'lines',
+                name: 'Fit',
+                line: { color: '#ff6b6b', width: 2, dash: 'dash' }
+            };
+
+            const phaseDataTrace = {
+                x: eisData.frequency,
+                y: eisData.zPhase,
+                mode: 'markers',
+                name: 'Data',
+                marker: { size: mobile ? 4 : 6, color: '#764ba2' }
+            };
+
+            const phaseFitTrace = {
+                x: eisData.frequency,
+                y: predPhase,
+                mode: 'lines',
+                name: 'Fit',
+                line: { color: '#ff6b6b', width: 2, dash: 'dash' }
+            };
+
+            const magLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: '|Z| (Ω)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: mobile ? 70 : 50, l: 55, r: 10 },
+                legend: { orientation: 'h', y: mobile ? -0.25 : -0.15, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
+            };
+
+            const phaseLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: 'Phase (°)', tickfont: { size: mobile ? 10 : 12 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: mobile ? 70 : 50, l: 55, r: 10 },
+                legend: { orientation: 'h', y: mobile ? -0.25 : -0.15, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
+            };
+
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('bodeMagnitudePlot', [magDataTrace, magFitTrace], magLayout, config);
+            Plotly.newPlot('bodePhase', [phaseDataTrace, phaseFitTrace], phaseLayout, config);
+        }
+
+        function plotResiduals(predicted) {
+            const mobile = isMobile();
+
+            // Calculate residuals (percent error)
+            const residualReal = eisData.zReal.map((r, i) => {
+                const err = r - predicted[i].real;
+                return (err / Math.abs(r)) * 100; // Percent error
+            });
+
+            const residualImag = eisData.zImag.map((im, i) => {
+                const err = im - predicted[i].imag;
+                return (err / Math.abs(im || 1)) * 100; // Percent error
+            });
+
+            // Show residual panel
+            document.getElementById('residualPanel').style.display = 'block';
+
+            const realTrace = {
+                x: eisData.frequency,
+                y: residualReal,
+                mode: 'markers+lines',
+                name: "Z' Residual",
+                marker: { size: mobile ? 4 : 5, color: '#667eea' },
+                line: { color: '#667eea', width: 1 }
+            };
+
+            const imagTrace = {
+                x: eisData.frequency,
+                y: residualImag,
+                mode: 'markers+lines',
+                name: 'Z" Residual',
+                marker: { size: mobile ? 4 : 5, color: '#764ba2' },
+                line: { color: '#764ba2', width: 1 }
+            };
+
+            const zeroLine = {
+                type: 'line',
+                x0: Math.min(...eisData.frequency),
+                x1: Math.max(...eisData.frequency),
+                y0: 0,
+                y1: 0,
+                line: { color: '#999', width: 1, dash: 'dash' }
+            };
+
+            const realLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 11 } },
+                yaxis: { title: "Z' Error (%)", tickfont: { size: mobile ? 10 : 11 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: 50, l: 50, r: 10 },
+                showlegend: false,
+                shapes: [zeroLine]
+            };
+
+            const imagLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 11 } },
+                yaxis: { title: 'Z" Error (%)', tickfont: { size: mobile ? 10 : 11 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: 50, l: 50, r: 10 },
+                showlegend: false,
+                shapes: [zeroLine]
+            };
+
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('residualRealPlot', [realTrace], realLayout, config);
+            Plotly.newPlot('residualImagPlot', [imagTrace], imagLayout, config);
         }
 
         function plotFit(predicted) {
