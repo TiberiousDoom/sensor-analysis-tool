@@ -589,70 +589,160 @@
         }
 
         function fitRCModel(omega) {
-            // R-(R||C) model optimization (simplified)
-            let bestParams = { R0: 100, R1: 100, C: 1e-6 };
-            let bestError = Infinity;
+            // Estimate initial parameters from data
+            const R_est = Math.max(...eisData.zReal);
+            const C_est = estimateCapacitance(omega);
 
-            for (let R0 of [50, 100, 200]) {
-                for (let R1 of [50, 100, 200]) {
-                    for (let C of [1e-7, 1e-6, 1e-5]) {
-                        let error = 0;
-                        for (let i = 0; i < omega.length; i++) {
-                            const pred = predictRC({ R: R0 + R1, C: C }, omega[i]);
-                            error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
-                        }
-                        if (error < bestError) {
-                            bestError = error;
-                            bestParams = { R: R0 + R1, C: C };
-                        }
-                    }
-                }
-            }
-            return bestParams;
+            // Use iterative refinement
+            return nelderMead(
+                (params) => calcError(params, omega, predictRC),
+                { R: R_est, C: C_est },
+                { R: R_est * 0.3, C: C_est * 0.5 }
+            );
         }
 
         function fitRRCModel(omega) {
-            // R-(R||C) Randles model
-            let best = { R0: 100, R1: 100, C: 1e-6 };
-            let bestError = Infinity;
+            // Estimate initial parameters from data characteristics
+            const R0_est = Math.min(...eisData.zReal); // High frequency intercept
+            const R_total = Math.max(...eisData.zReal);
+            const R1_est = R_total - R0_est;
+            const C_est = estimateCapacitance(omega);
 
-            for (let R0 of [50, 100, 200]) {
-                for (let R1 of [50, 100, 200]) {
-                    for (let C of [1e-8, 1e-7, 1e-6, 1e-5]) {
-                        let error = 0;
-                        for (let i = 0; i < omega.length; i++) {
-                            const pred = predictRRC({ R0, R1, C }, omega[i]);
-                            error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
-                        }
-                        if (error < bestError) {
-                            bestError = error;
-                            best = { R0, R1, C };
-                        }
-                    }
-                }
-            }
-            return best;
+            return nelderMead(
+                (params) => calcError(params, omega, predictRRC),
+                { R0: R0_est, R1: R1_est, C: C_est },
+                { R0: R0_est * 0.3, R1: R1_est * 0.3, C: C_est * 0.5 }
+            );
         }
 
         function fitRCRCModel(omega) {
-            // Two RC time constants - simplified
-            let best = { R0: 50, R1: 100, C1: 1e-6, R2: 100, C2: 1e-5 };
-            let bestError = Infinity;
+            // Estimate from data
+            const R0_est = Math.min(...eisData.zReal);
+            const R_total = Math.max(...eisData.zReal);
+            const R1_est = (R_total - R0_est) * 0.6;
+            const R2_est = (R_total - R0_est) * 0.4;
+            const C_est = estimateCapacitance(omega);
 
-            for (let C1 of [1e-7, 1e-6, 1e-5]) {
-                for (let C2 of [1e-6, 1e-5, 1e-4]) {
-                    let error = 0;
-                    for (let i = 0; i < omega.length; i++) {
-                        const pred = predictRCRC({ R0: 50, R1: 100, C1, R2: 100, C2 }, omega[i]);
-                        error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
+            return nelderMead(
+                (params) => calcError(params, omega, predictRCRC),
+                { R0: R0_est, R1: R1_est, C1: C_est, R2: R2_est, C2: C_est * 5 },
+                { R0: R0_est * 0.3, R1: R1_est * 0.3, C1: C_est * 0.5, R2: R2_est * 0.3, C2: C_est * 2 }
+            );
+        }
+
+        function estimateCapacitance(omega) {
+            // Find frequency at max -Z" (characteristic frequency)
+            let maxImag = 0;
+            let freqAtMax = omega[0];
+            for (let i = 0; i < omega.length; i++) {
+                if (-eisData.zImag[i] > maxImag) {
+                    maxImag = -eisData.zImag[i];
+                    freqAtMax = omega[i];
+                }
+            }
+            // At characteristic frequency: omega * R * C ≈ 1
+            const R_est = Math.max(...eisData.zReal) - Math.min(...eisData.zReal);
+            return 1 / (freqAtMax * Math.max(R_est, 1));
+        }
+
+        function calcError(params, omega, predictFn) {
+            let error = 0;
+            for (let i = 0; i < omega.length; i++) {
+                const pred = predictFn(params, omega[i]);
+                error += Math.pow(eisData.zReal[i] - pred.real, 2) + Math.pow(eisData.zImag[i] - pred.imag, 2);
+            }
+            return error;
+        }
+
+        // Nelder-Mead simplex optimization
+        function nelderMead(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8) {
+            const keys = Object.keys(initial);
+            const n = keys.length;
+
+            // Convert to array form for optimization
+            const toArray = (obj) => keys.map(k => obj[k]);
+            const toObj = (arr) => {
+                const obj = {};
+                keys.forEach((k, i) => obj[k] = Math.abs(arr[i])); // Ensure positive
+                return obj;
+            };
+
+            // Initialize simplex
+            const x0 = toArray(initial);
+            const steps = toArray(stepSizes);
+            const simplex = [x0];
+
+            for (let i = 0; i < n; i++) {
+                const xi = [...x0];
+                xi[i] += steps[i];
+                simplex.push(xi);
+            }
+
+            // Evaluate initial simplex
+            let values = simplex.map(x => costFn(toObj(x)));
+
+            const alpha = 1, gamma = 2, rho = 0.5, sigma = 0.5;
+
+            for (let iter = 0; iter < maxIter; iter++) {
+                // Sort by cost
+                const order = values.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+                const sorted = order.map(o => simplex[o[1]]);
+                const sortedVals = order.map(o => o[0]);
+
+                for (let i = 0; i <= n; i++) {
+                    simplex[i] = sorted[i];
+                    values[i] = sortedVals[i];
+                }
+
+                // Check convergence
+                if (Math.abs(values[n] - values[0]) < tol) break;
+
+                // Centroid (excluding worst)
+                const centroid = new Array(n).fill(0);
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        centroid[j] += simplex[i][j] / n;
                     }
-                    if (error < bestError) {
-                        bestError = error;
-                        best = { R0: 50, R1: 100, C1, R2: 100, C2 };
+                }
+
+                // Reflection
+                const reflected = centroid.map((c, j) => c + alpha * (c - simplex[n][j]));
+                const reflectedVal = costFn(toObj(reflected));
+
+                if (reflectedVal >= values[0] && reflectedVal < values[n-1]) {
+                    simplex[n] = reflected;
+                    values[n] = reflectedVal;
+                } else if (reflectedVal < values[0]) {
+                    // Expansion
+                    const expanded = centroid.map((c, j) => c + gamma * (reflected[j] - c));
+                    const expandedVal = costFn(toObj(expanded));
+                    if (expandedVal < reflectedVal) {
+                        simplex[n] = expanded;
+                        values[n] = expandedVal;
+                    } else {
+                        simplex[n] = reflected;
+                        values[n] = reflectedVal;
+                    }
+                } else {
+                    // Contraction
+                    const contracted = centroid.map((c, j) => c + rho * (simplex[n][j] - c));
+                    const contractedVal = costFn(toObj(contracted));
+                    if (contractedVal < values[n]) {
+                        simplex[n] = contracted;
+                        values[n] = contractedVal;
+                    } else {
+                        // Shrink
+                        for (let i = 1; i <= n; i++) {
+                            simplex[i] = simplex[i].map((x, j) => simplex[0][j] + sigma * (x - simplex[0][j]));
+                            values[i] = costFn(toObj(simplex[i]));
+                        }
                     }
                 }
             }
-            return best;
+
+            // Return best
+            const bestIdx = values.indexOf(Math.min(...values));
+            return toObj(simplex[bestIdx]);
         }
 
         function predictRC(params, omega) {
