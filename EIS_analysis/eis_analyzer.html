@@ -203,6 +203,140 @@
             outline: 2px solid #667eea;
             outline-offset: 2px;
         }
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        /* Copy button */
+        .copy-btn {
+            background: #6c757d;
+            font-size: 0.8em;
+            padding: 5px 10px;
+            margin-left: 10px;
+        }
+        .copy-btn:hover { background: #5a6268; }
+        .copy-btn.copied {
+            background: #28a745;
+        }
+        /* Residual plot container */
+        .residual-container {
+            height: 250px;
+            min-height: 200px;
+        }
+        /* Export buttons */
+        .export-btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .export-btn {
+            background: #17a2b8;
+            font-size: 0.85em;
+            padding: 8px 12px;
+            flex: 1;
+            min-width: 80px;
+        }
+        .export-btn:hover { background: #138496; }
+        .session-btn {
+            background: #6c757d;
+            font-size: 0.85em;
+            padding: 8px 12px;
+        }
+        .session-btn:hover { background: #5a6268; }
+        /* Frequency range inputs */
+        .freq-range {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .freq-range input {
+            width: 100px;
+            padding: 6px;
+        }
+        .freq-range span {
+            color: #666;
+            font-size: 0.85em;
+        }
+        /* Model comparison table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .comparison-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        .comparison-table tr:hover {
+            background: #f5f5f5;
+        }
+        .comparison-table .best {
+            background: #d4edda;
+        }
+        .compare-btn {
+            background: #fd7e14;
+            margin-top: 10px;
+        }
+        .compare-btn:hover { background: #e96a00; }
+        /* Data table */
+        .data-table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8em;
+            font-family: monospace;
+        }
+        .data-table th {
+            position: sticky;
+            top: 0;
+            background: #667eea;
+            color: white;
+            padding: 6px;
+            text-align: right;
+        }
+        .data-table td {
+            padding: 4px 6px;
+            text-align: right;
+            border-bottom: 1px solid #eee;
+        }
+        .data-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .toggle-btn {
+            background: #6c757d;
+            font-size: 0.8em;
+            padding: 6px 10px;
+        }
     </style>
 </head>
 <body>
@@ -238,6 +372,12 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
                 <div id="dataStatus" role="status" aria-live="polite"></div>
 
+                <!-- Data Table Toggle -->
+                <div style="margin-top: 10px;">
+                    <button type="button" class="toggle-btn" onclick="toggleDataTable()">Show Data Table</button>
+                </div>
+                <div id="dataTableContainer" class="data-table-container" style="display: none;"></div>
+
                 <h2 id="circuit-model-heading" style="margin-top: 30px;">⚙️ Circuit Model</h2>
 
                 <div class="form-group">
@@ -264,8 +404,26 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     <small id="freq-help" style="color: #666; font-size: 0.8em;">Starting frequency for optimization (Hz)</small>
                 </div>
 
+                <div class="form-group">
+                    <label>Frequency Range (optional)</label>
+                    <div class="freq-range">
+                        <input type="number" id="freqMin" placeholder="Min Hz" min="0" step="any">
+                        <span>to</span>
+                        <input type="number" id="freqMax" placeholder="Max Hz" min="0" step="any">
+                        <button type="button" onclick="resetFreqRange()" style="padding: 6px 10px; font-size: 0.8em;">Reset</button>
+                    </div>
+                    <small style="color: #666; font-size: 0.8em;">Limit fitting to a frequency range (leave empty for all data)</small>
+                </div>
+
                 <button type="button" onclick="fitModel()" style="width: 100%; background: #28a745;">Fit Model</button>
+                <button type="button" class="compare-btn" onclick="compareAllModels()" style="width: 100%;">Compare All Models</button>
                 <div id="fitStatus" role="status" aria-live="polite"></div>
+
+                <!-- Model Comparison Results -->
+                <div id="comparisonPanel" style="display: none; margin-top: 15px;">
+                    <h3 style="font-size: 1em; color: #333; margin-bottom: 10px;">Model Comparison</h3>
+                    <div id="comparisonResults"></div>
+                </div>
 
                 <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
                 <div class="form-group">
@@ -287,12 +445,26 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
                 <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
                 <div id="debugStatus" role="status" aria-live="polite"></div>
+
+                <h2 id="session-heading" style="margin-top: 30px;">💾 Session</h2>
+                <div class="button-group">
+                    <button type="button" class="session-btn" onclick="saveSession()">Save Session</button>
+                    <button type="button" class="session-btn" onclick="document.getElementById('loadSessionInput').click()">Load Session</button>
+                    <input type="file" id="loadSessionInput" accept=".json" style="display: none;" onchange="loadSession(event)">
+                </div>
+                <small style="color: #666; font-size: 0.8em;">Save/load complete analysis state including data, model, and fit results</small>
             </div>
 
             <!-- Results Panel -->
             <div class="panel" role="region" aria-labelledby="results-heading">
                 <h2 id="results-heading">📈 Fit Results</h2>
                 <div id="fitResults" aria-live="polite"></div>
+                <div id="exportButtons" style="display: none;">
+                    <div class="export-btn-group">
+                        <button type="button" class="export-btn" onclick="exportJSON()">Export JSON</button>
+                        <button type="button" class="export-btn" onclick="exportCSV()">Export CSV</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Nyquist Plot -->
@@ -307,6 +479,15 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 <div class="two-col">
                     <div id="bodeMagnitudePlot" class="plot-container" role="img" aria-label="Bode magnitude plot showing impedance vs frequency"></div>
                     <div id="bodePhase" class="plot-container" role="img" aria-label="Bode phase plot showing phase angle vs frequency"></div>
+                </div>
+            </div>
+
+            <!-- Residual Plot (shown after fitting) -->
+            <div class="panel full-width" role="region" aria-labelledby="residual-heading" id="residualPanel" style="display: none;">
+                <h2 id="residual-heading">Residuals (Fit Error)</h2>
+                <div class="two-col">
+                    <div id="residualRealPlot" class="residual-container" role="img" aria-label="Real impedance residuals vs frequency"></div>
+                    <div id="residualImagPlot" class="residual-container" role="img" aria-label="Imaginary impedance residuals vs frequency"></div>
                 </div>
             </div>
         </main>
@@ -513,43 +694,108 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'CPEpCPE': { name: 'R-(R||CPE)||(R||CPE) (Parallel CPE)', fit: fitCPEpCPEModel, predict: predictCPEpCPE, params: 7 }
         };
 
+        // Store last fit results for export
+        let lastFitResults = null;
+
+        // Store filtered data for fitting
+        let filteredData = null;
+
+        function getFilteredData() {
+            const freqMinInput = document.getElementById('freqMin').value;
+            const freqMaxInput = document.getElementById('freqMax').value;
+            const freqMin = freqMinInput ? parseFloat(freqMinInput) : 0;
+            const freqMax = freqMaxInput ? parseFloat(freqMaxInput) : Infinity;
+
+            // Create filtered arrays
+            const indices = [];
+            for (let i = 0; i < eisData.frequency.length; i++) {
+                if (eisData.frequency[i] >= freqMin && eisData.frequency[i] <= freqMax) {
+                    indices.push(i);
+                }
+            }
+
+            return {
+                frequency: indices.map(i => eisData.frequency[i]),
+                zReal: indices.map(i => eisData.zReal[i]),
+                zImag: indices.map(i => eisData.zImag[i]),
+                zMag: indices.map(i => eisData.zMag[i]),
+                zPhase: indices.map(i => eisData.zPhase[i]),
+                indices: indices
+            };
+        }
+
+        function resetFreqRange() {
+            document.getElementById('freqMin').value = '';
+            document.getElementById('freqMax').value = '';
+        }
+
         function fitModel() {
             if (eisData.frequency.length === 0) {
                 updateStatus('fitStatus', 'No data loaded', 'error');
                 return;
             }
 
-            let modelType = document.getElementById('modelType').value;
-            const omega = eisData.frequency.map(f => 2 * Math.PI * f);
+            // Show loading spinner
+            const fitStatus = document.getElementById('fitStatus');
+            fitStatus.className = 'status loading';
+            fitStatus.innerHTML = '<span class="spinner"></span>Fitting model...';
 
-            try {
-                let fitParams, predicted, selectedModel;
+            // Use setTimeout to allow UI to update before blocking computation
+            setTimeout(() => {
+                let modelType = document.getElementById('modelType').value;
 
-                if (modelType === 'auto') {
-                    // Auto-select best model
-                    const result = autoSelectModel(omega);
-                    modelType = result.modelType;
-                    fitParams = result.fitParams;
-                    predicted = result.predicted;
-                    selectedModel = modelRegistry[modelType].name;
-                    updateStatus('fitStatus', `Auto-selected: ${selectedModel}`, 'success');
-                } else {
-                    const model = modelRegistry[modelType];
-                    fitParams = model.fit(omega);
-                    predicted = omega.map(w => model.predict(fitParams, w));
-                    selectedModel = model.name;
+                // Get filtered data based on frequency range
+                filteredData = getFilteredData();
+
+                if (filteredData.frequency.length === 0) {
+                    updateStatus('fitStatus', 'No data in selected frequency range', 'error');
+                    return;
                 }
 
-                const chiSquared = calcChiSquared(predicted);
-                displayFitResults(fitParams, chiSquared, selectedModel);
-                plotFit(predicted);
-            } catch (e) {
-                updateStatus('fitStatus', `Fit error: ${e.message}`, 'error');
-                console.error('Fit error:', e);
-            }
+                const omega = filteredData.frequency.map(f => 2 * Math.PI * f);
+
+                try {
+                    let fitParams, predicted, selectedModel;
+
+                    if (modelType === 'auto') {
+                        // Auto-select best model
+                        const result = autoSelectModel(omega);
+                        modelType = result.modelType;
+                        fitParams = result.fitParams;
+                        predicted = result.predicted;
+                        selectedModel = modelRegistry[modelType].name;
+                        updateStatus('fitStatus', `Auto-selected: ${selectedModel}`, 'success');
+                    } else {
+                        const model = modelRegistry[modelType];
+                        fitParams = model.fit(omega);
+                        predicted = omega.map(w => model.predict(fitParams, w));
+                        selectedModel = model.name;
+                    }
+
+                    const chiSquared = calcChiSquared(predicted);
+
+                    // Store results for export
+                    lastFitResults = {
+                        model: selectedModel,
+                        params: fitParams,
+                        chiSquared: chiSquared,
+                        predicted: predicted
+                    };
+
+                    displayFitResults(fitParams, chiSquared, selectedModel);
+                    plotFit(predicted);
+                    plotBodeFit(predicted);
+                    plotResiduals(predicted);
+                } catch (e) {
+                    updateStatus('fitStatus', `Fit error: ${e.message}`, 'error');
+                    console.error('Fit error:', e);
+                }
+            }, 10);
         }
 
         function autoSelectModel(omega) {
+            // Use filtered data if available
+            const dataSource = filteredData || eisData;
             const modelsToTry = ['RRC', 'RCRC', 'RRCW', 'CPE', 'CPECPE', 'CPEpCPE', 'RRCRC', 'RpC', 'RC'];
             let bestModel = null;
             let bestAIC = Infinity;
@@ -559,15 +805,15 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             for (const modelType of modelsToTry) {
                 try {
                     const model = modelRegistry[modelType];
-                    const fitParams = model.fit(omega);
+                    const fitParams = model.fit(omega, dataSource);
                     const predicted = omega.map(w => model.predict(fitParams, w));
 
                     // Calculate AIC (Akaike Information Criterion) for model comparison
                     // AIC = n * ln(RSS/n) + 2k, where k is number of parameters
-                    const rss = eisData.zReal.reduce((sum, r, i) => {
-                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(eisData.zImag[i] - predicted[i].imag, 2);
+                    const rss = dataSource.zReal.reduce((sum, r, i) => {
+                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
                     }, 0);
-                    const n = eisData.zReal.length * 2; // Real + Imag points
+                    const n = dataSource.zReal.length * 2; // Real + Imag points
                     const k = model.params;
                     const aic = n * Math.log(rss / n) + 2 * k;
 
@@ -591,11 +837,13 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         }
 
         function calcChiSquared(predicted) {
-            const residuals = eisData.zReal.map((r, i) => ({
+            // Use filtered data if available
+            const dataSource = filteredData || eisData;
+            const residuals = dataSource.zReal.map((r, i) => ({
                 real: r - predicted[i].real,
-                imag: eisData.zImag[i] - predicted[i].imag
+                imag: dataSource.zImag[i] - predicted[i].imag
             }));
-            return residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
+            return residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / dataSource.zReal.length;
         }
 
         // Simple R model
@@ -1281,15 +1529,15 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         function displayFitResults(params, chiSquared, modelName) {
             let html = '<div class="results">';
             if (modelName) {
-                html += `<div style="background: #e8f4fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; color: #0066cc;">📊 Model: ${modelName}</div>`;
+                html += `<div style="background: #e8f4fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; color: #0066cc;">📊 Model: ${modelName}<button class="copy-btn" onclick="copyParameters()" title="Copy to clipboard">Copy</button></div>`;
             }
             html += '<h3>Fitted Parameters</h3>';
 
             for (const [key, value] of Object.entries(params)) {
                 let unit = '';
-                if (key === 'n') unit = ''; // CPE exponent is dimensionless
+                if (key === 'n' || key === 'n1' || key === 'n2') unit = ''; // CPE exponent is dimensionless
                 else if (key === 'W') unit = ' Ω·s⁻⁰·⁵'; // Warburg coefficient
-                else if (key === 'Q') unit = ' S·sⁿ'; // CPE pseudo-capacitance
+                else if (key === 'Q' || key === 'Q1' || key === 'Q2') unit = ' S·sⁿ'; // CPE pseudo-capacitance
                 else if (key.includes('R')) unit = ' Ω';
                 else if (key.includes('C')) unit = ' F';
 
@@ -1301,7 +1549,33 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             html += '</div>';
 
             document.getElementById('fitResults').innerHTML = html;
+            document.getElementById('exportButtons').style.display = 'block';
             updateStatus('fitStatus', 'Fit completed', 'success');
+        }
+
+        function copyParameters() {
+            if (!lastFitResults) return;
+
+            const lines = [`Model: ${lastFitResults.model}`];
+            for (const [key, value] of Object.entries(lastFitResults.params)) {
+                const displayValue = Math.abs(value) < 0.001 ? value.toExponential(4) : value.toFixed(4);
+                lines.push(`${key}: ${displayValue}`);
+            }
+            lines.push(`χ²/N: ${lastFitResults.chiSquared.toExponential(3)}`);
+
+            const text = lines.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Copy failed. Please select and copy manually.');
+            });
         }
 
         // Detect mobile for plot config
@@ -1368,6 +1642,134 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const config = { responsive: true, displayModeBar: !mobile };
             Plotly.newPlot('bodeMagnitudePlot', [magTrace], magLayout, config);
             Plotly.newPlot('bodePhase', [phaseTrace], phaseLayout, config);
+        }
+
+        function plotBodeFit(predicted) {
+            const mobile = isMobile();
+
+            // Calculate predicted magnitude and phase
+            const predMag = predicted.map(p => Math.sqrt(p.real * p.real + p.imag * p.imag));
+            const predPhase = predicted.map(p => Math.atan2(-p.imag, p.real) * 180 / Math.PI);
+
+            // Experimental data traces
+            const magDataTrace = {
+                x: eisData.frequency,
+                y: eisData.zMag,
+                mode: 'markers',
+                name: 'Data',
+                marker: { size: mobile ? 4 : 6, color: '#667eea' }
+            };
+
+            const magFitTrace = {
+                x: eisData.frequency,
+                y: predMag,
+                mode: 'lines',
+                name: 'Fit',
+                line: { color: '#ff6b6b', width: 2, dash: 'dash' }
+            };
+
+            const phaseDataTrace = {
+                x: eisData.frequency,
+                y: eisData.zPhase,
+                mode: 'markers',
+                name: 'Data',
+                marker: { size: mobile ? 4 : 6, color: '#764ba2' }
+            };
+
+            const phaseFitTrace = {
+                x: eisData.frequency,
+                y: predPhase,
+                mode: 'lines',
+                name: 'Fit',
+                line: { color: '#ff6b6b', width: 2, dash: 'dash' }
+            };
+
+            const magLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: '|Z| (Ω)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: mobile ? 70 : 50, l: 55, r: 10 },
+                legend: { orientation: 'h', y: mobile ? -0.25 : -0.15, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
+            };
+
+            const phaseLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
+                yaxis: { title: 'Phase (°)', tickfont: { size: mobile ? 10 : 12 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: mobile ? 70 : 50, l: 55, r: 10 },
+                legend: { orientation: 'h', y: mobile ? -0.25 : -0.15, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
+            };
+
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('bodeMagnitudePlot', [magDataTrace, magFitTrace], magLayout, config);
+            Plotly.newPlot('bodePhase', [phaseDataTrace, phaseFitTrace], phaseLayout, config);
+        }
+
+        function plotResiduals(predicted) {
+            const mobile = isMobile();
+
+            // Calculate residuals (percent error)
+            const residualReal = eisData.zReal.map((r, i) => {
+                const err = r - predicted[i].real;
+                return (err / Math.abs(r)) * 100; // Percent error
+            });
+
+            const residualImag = eisData.zImag.map((im, i) => {
+                const err = im - predicted[i].imag;
+                return (err / Math.abs(im || 1)) * 100; // Percent error
+            });
+
+            // Show residual panel
+            document.getElementById('residualPanel').style.display = 'block';
+
+            const realTrace = {
+                x: eisData.frequency,
+                y: residualReal,
+                mode: 'markers+lines',
+                name: "Z' Residual",
+                marker: { size: mobile ? 4 : 5, color: '#667eea' },
+                line: { color: '#667eea', width: 1 }
+            };
+
+            const imagTrace = {
+                x: eisData.frequency,
+                y: residualImag,
+                mode: 'markers+lines',
+                name: 'Z" Residual',
+                marker: { size: mobile ? 4 : 5, color: '#764ba2' },
+                line: { color: '#764ba2', width: 1 }
+            };
+
+            const zeroLine = {
+                type: 'line',
+                x0: Math.min(...eisData.frequency),
+                x1: Math.max(...eisData.frequency),
+                y0: 0,
+                y1: 0,
+                line: { color: '#999', width: 1, dash: 'dash' }
+            };
+
+            const realLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 11 } },
+                yaxis: { title: "Z' Error (%)", tickfont: { size: mobile ? 10 : 11 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: 50, l: 50, r: 10 },
+                showlegend: false,
+                shapes: [zeroLine]
+            };
+
+            const imagLayout = {
+                xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 11 } },
+                yaxis: { title: 'Z" Error (%)', tickfont: { size: mobile ? 10 : 11 } },
+                hovermode: 'x unified',
+                margin: { t: 10, b: 50, l: 50, r: 10 },
+                showlegend: false,
+                shapes: [zeroLine]
+            };
+
+            const config = { responsive: true, displayModeBar: !mobile };
+            Plotly.newPlot('residualRealPlot', [realTrace], realLayout, config);
+            Plotly.newPlot('residualImagPlot', [imagTrace], imagLayout, config);
         }
 
         function plotFit(predicted) {
@@ -1543,6 +1945,324 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const el = document.getElementById(elementId);
             el.className = `status ${type}`;
             el.textContent = message;
+        }
+
+        // Export functions
+        function exportJSON() {
+            if (!lastFitResults) {
+                alert('No fit results to export. Please fit a model first.');
+                return;
+            }
+
+            const exportData = {
+                metadata: {
+                    exportDate: new Date().toISOString(),
+                    tool: 'EIS Analyzer',
+                    dataPoints: eisData.frequency.length
+                },
+                model: lastFitResults.model,
+                parameters: lastFitResults.params,
+                chiSquared: lastFitResults.chiSquared,
+                data: {
+                    frequency: eisData.frequency,
+                    zReal: eisData.zReal,
+                    zImag: eisData.zImag,
+                    zMag: eisData.zMag,
+                    zPhase: eisData.zPhase
+                },
+                fit: {
+                    zReal: lastFitResults.predicted.map(p => p.real),
+                    zImag: lastFitResults.predicted.map(p => p.imag)
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            downloadBlob(blob, 'eis_results.json');
+        }
+
+        function exportCSV() {
+            if (!lastFitResults) {
+                alert('No fit results to export. Please fit a model first.');
+                return;
+            }
+
+            // Create CSV with data and fit values
+            let csv = 'Frequency (Hz),Z_real (Ω),Z_imag (Ω),|Z| (Ω),Phase (°),Z_real_fit (Ω),Z_imag_fit (Ω)\n';
+            for (let i = 0; i < eisData.frequency.length; i++) {
+                csv += `${eisData.frequency[i]},${eisData.zReal[i]},${eisData.zImag[i]},`;
+                csv += `${eisData.zMag[i]},${eisData.zPhase[i]},`;
+                csv += `${lastFitResults.predicted[i].real},${lastFitResults.predicted[i].imag}\n`;
+            }
+
+            // Add parameters as comments at the end
+            csv += '\n# Model: ' + lastFitResults.model + '\n';
+            csv += '# Chi-squared/N: ' + lastFitResults.chiSquared.toExponential(3) + '\n';
+            csv += '# Parameters:\n';
+            for (const [key, value] of Object.entries(lastFitResults.params)) {
+                csv += `# ${key}: ${value}\n`;
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            downloadBlob(blob, 'eis_results.csv');
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Session save/load functions
+        function saveSession() {
+            const session = {
+                version: 1,
+                savedAt: new Date().toISOString(),
+                data: eisData,
+                modelType: document.getElementById('modelType').value,
+                freqRange: {
+                    min: document.getElementById('freqMin').value,
+                    max: document.getElementById('freqMax').value
+                },
+                fitResults: lastFitResults
+            };
+
+            const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' });
+            downloadBlob(blob, 'eis_session.json');
+        }
+
+        function loadSession(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const session = JSON.parse(e.target.result);
+
+                    if (!session.data || !session.data.frequency) {
+                        throw new Error('Invalid session file format');
+                    }
+
+                    // Restore data
+                    eisData = session.data;
+
+                    // Restore model selection
+                    if (session.modelType) {
+                        document.getElementById('modelType').value = session.modelType;
+                    }
+
+                    // Restore frequency range
+                    if (session.freqRange) {
+                        document.getElementById('freqMin').value = session.freqRange.min || '';
+                        document.getElementById('freqMax').value = session.freqRange.max || '';
+                    }
+
+                    // Restore fit results
+                    if (session.fitResults) {
+                        lastFitResults = session.fitResults;
+                        displayFitResults(
+                            session.fitResults.params,
+                            session.fitResults.chiSquared,
+                            session.fitResults.model
+                        );
+                        plotFit(session.fitResults.predicted);
+                        plotBodeFit(session.fitResults.predicted);
+                        plotResiduals(session.fitResults.predicted);
+                    }
+
+                    // Update plots
+                    plotNyquist();
+                    plotBode();
+
+                    updateStatus('dataStatus', `Session loaded: ${eisData.frequency.length} data points`, 'success');
+                } catch (err) {
+                    alert('Error loading session: ' + err.message);
+                    console.error('Load session error:', err);
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset file input
+            event.target.value = '';
+        }
+
+        // Data Table functions
+        function toggleDataTable() {
+            const container = document.getElementById('dataTableContainer');
+            const btn = container.previousElementSibling.querySelector('button');
+
+            if (container.style.display === 'none') {
+                if (eisData.frequency.length === 0) {
+                    alert('No data loaded. Please load data first.');
+                    return;
+                }
+                renderDataTable();
+                container.style.display = 'block';
+                btn.textContent = 'Hide Data Table';
+            } else {
+                container.style.display = 'none';
+                btn.textContent = 'Show Data Table';
+            }
+        }
+
+        function renderDataTable() {
+            let html = '<table class="data-table">';
+            html += '<thead><tr><th>#</th><th>Freq (Hz)</th><th>Z\' (Ω)</th><th>Z" (Ω)</th><th>|Z| (Ω)</th><th>Phase (°)</th></tr></thead>';
+            html += '<tbody>';
+
+            for (let i = 0; i < eisData.frequency.length; i++) {
+                html += `<tr>`;
+                html += `<td>${i + 1}</td>`;
+                html += `<td>${formatNumber(eisData.frequency[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zReal[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zImag[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zMag[i])}</td>`;
+                html += `<td>${formatNumber(eisData.zPhase[i])}</td>`;
+                html += `</tr>`;
+            }
+
+            html += '</tbody></table>';
+            document.getElementById('dataTableContainer').innerHTML = html;
+        }
+
+        function formatNumber(num) {
+            if (Math.abs(num) < 0.001 || Math.abs(num) >= 10000) {
+                return num.toExponential(3);
+            }
+            return num.toFixed(3);
+        }
+
+        // Model Comparison functions
+        function compareAllModels() {
+            if (eisData.frequency.length === 0) {
+                updateStatus('fitStatus', 'No data loaded', 'error');
+                return;
+            }
+
+            // Show loading spinner
+            const fitStatus = document.getElementById('fitStatus');
+            fitStatus.className = 'status loading';
+            fitStatus.innerHTML = '<span class="spinner"></span>Comparing all models...';
+
+            setTimeout(() => {
+                // Get filtered data based on frequency range
+                filteredData = getFilteredData();
+
+                if (filteredData.frequency.length === 0) {
+                    updateStatus('fitStatus', 'No data in selected frequency range', 'error');
+                    return;
+                }
+
+                const omega = filteredData.frequency.map(f => 2 * Math.PI * f);
+                const results = [];
+
+                // Try all models
+                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPECPE', 'CPEpCPE'];
+
+                for (const modelType of modelsToTry) {
+                    try {
+                        const model = modelRegistry[modelType];
+                        const fitParams = model.fit(omega, filteredData);
+                        const predicted = omega.map(w => model.predict(fitParams, w));
+
+                        // Calculate chi-squared
+                        const chiSq = calcChiSquared(predicted);
+
+                        // Calculate R²
+                        const meanReal = filteredData.zReal.reduce((a, b) => a + b, 0) / filteredData.zReal.length;
+                        const meanImag = filteredData.zImag.reduce((a, b) => a + b, 0) / filteredData.zImag.length;
+                        let ssTot = 0, ssRes = 0;
+                        for (let i = 0; i < filteredData.zReal.length; i++) {
+                            ssTot += Math.pow(filteredData.zReal[i] - meanReal, 2) + Math.pow(filteredData.zImag[i] - meanImag, 2);
+                            ssRes += Math.pow(filteredData.zReal[i] - predicted[i].real, 2) + Math.pow(filteredData.zImag[i] - predicted[i].imag, 2);
+                        }
+                        const rSquared = Math.max(0, 1 - ssRes / ssTot);
+
+                        // Calculate AIC
+                        const n = filteredData.zReal.length * 2;
+                        const k = model.params;
+                        const aic = n * Math.log(ssRes / n) + 2 * k;
+
+                        results.push({
+                            type: modelType,
+                            name: model.name,
+                            params: model.params,
+                            chiSquared: chiSq,
+                            rSquared: rSquared,
+                            aic: aic,
+                            fitParams: fitParams,
+                            predicted: predicted
+                        });
+                    } catch (e) {
+                        console.warn(`Model ${modelType} failed:`, e.message);
+                    }
+                }
+
+                // Sort by AIC (lower is better)
+                results.sort((a, b) => a.aic - b.aic);
+
+                // Display comparison
+                displayComparison(results);
+                updateStatus('fitStatus', `Compared ${results.length} models`, 'success');
+            }, 10);
+        }
+
+        function displayComparison(results) {
+            const panel = document.getElementById('comparisonPanel');
+            const container = document.getElementById('comparisonResults');
+
+            let html = '<table class="comparison-table">';
+            html += '<thead><tr><th>Model</th><th>Params</th><th>R²</th><th>χ²/N</th><th>AIC</th><th>Action</th></tr></thead>';
+            html += '<tbody>';
+
+            const bestAIC = results[0]?.aic || 0;
+
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const isBest = i === 0;
+                html += `<tr class="${isBest ? 'best' : ''}">`;
+                html += `<td>${r.name}${isBest ? ' ⭐' : ''}</td>`;
+                html += `<td>${r.params}</td>`;
+                html += `<td>${(r.rSquared * 100).toFixed(1)}%</td>`;
+                html += `<td>${r.chiSquared.toExponential(2)}</td>`;
+                html += `<td>${r.aic.toFixed(1)}</td>`;
+                html += `<td><button type="button" onclick="selectComparedModel('${r.type}')" style="padding: 3px 8px; font-size: 0.8em;">Select</button></td>`;
+                html += `</tr>`;
+            }
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+            panel.style.display = 'block';
+
+            // Store comparison results
+            window.comparisonResults = results;
+        }
+
+        function selectComparedModel(modelType) {
+            const result = window.comparisonResults?.find(r => r.type === modelType);
+            if (!result) return;
+
+            // Set the model type in dropdown
+            document.getElementById('modelType').value = modelType;
+
+            // Store results
+            lastFitResults = {
+                model: result.name,
+                params: result.fitParams,
+                chiSquared: result.chiSquared,
+                predicted: result.predicted
+            };
+
+            // Display results
+            displayFitResults(result.fitParams, result.chiSquared, result.name);
+            plotFit(result.predicted);
+            plotBodeFit(result.predicted);
+            plotResiduals(result.predicted);
         }
     </script>
 </body>
