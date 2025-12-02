@@ -700,18 +700,30 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const R0_est = Math.min(...eisData.zReal);
             const R_total = Math.max(...eisData.zReal);
             const R_range = R_total - R0_est;
+
+            // Estimate multiple characteristic frequencies from impedance data
+            const charFreqs = estimateCharacteristicFrequencies(omega, 3);
+
+            // Generate capacitance estimates from characteristic frequencies
+            const R_avg = R_range / 3;
+            const C_estimates = charFreqs.map(f => 1 / (2 * Math.PI * f * R_avg));
             const C_est = estimateCapacitance(omega);
 
             // Try multiple starting configurations with varied R and C combinations
             const startConfigs = [
-                // Different capacitance spreads
-                { C1: C_est * 0.1, C2: C_est, C3: C_est * 10, R1: R_range * 0.4, R2: R_range * 0.35, R3: R_range * 0.25 },
-                { C1: C_est * 0.5, C2: C_est * 3, C3: C_est * 20, R1: R_range * 0.4, R2: R_range * 0.33, R3: R_range * 0.27 },
-                { C1: C_est * 0.01, C2: C_est * 0.1, C3: C_est, R1: R_range * 0.5, R2: R_range * 0.3, R3: R_range * 0.2 },
-                { C1: C_est, C2: C_est * 5, C3: C_est * 50, R1: R_range * 0.33, R2: R_range * 0.33, R3: R_range * 0.34 },
-                { C1: C_est * 0.2, C2: C_est * 2, C3: C_est * 15, R1: R_range * 0.45, R2: R_range * 0.3, R3: R_range * 0.25 },
+                // Based on estimated characteristic frequencies
+                { C1: C_estimates[0] || C_est * 0.1, C2: C_estimates[1] || C_est, C3: C_estimates[2] || C_est * 10, R1: R_range * 0.4, R2: R_range * 0.35, R3: R_range * 0.25 },
+                // Different capacitance spreads (wider range)
+                { C1: C_est * 0.01, C2: C_est * 0.5, C3: C_est * 5, R1: R_range * 0.45, R2: R_range * 0.35, R3: R_range * 0.2 },
+                { C1: C_est * 0.05, C2: C_est * 0.5, C3: C_est * 3, R1: R_range * 0.4, R2: R_range * 0.33, R3: R_range * 0.27 },
+                { C1: C_est * 0.02, C2: C_est * 0.2, C3: C_est * 2, R1: R_range * 0.5, R2: R_range * 0.3, R3: R_range * 0.2 },
+                { C1: C_est * 0.1, C2: C_est, C3: C_est * 8, R1: R_range * 0.33, R2: R_range * 0.33, R3: R_range * 0.34 },
+                { C1: C_est * 0.03, C2: C_est * 0.3, C3: C_est * 2.5, R1: R_range * 0.45, R2: R_range * 0.3, R3: R_range * 0.25 },
+                // Very wide spread
+                { C1: C_est * 0.005, C2: C_est * 0.1, C3: C_est, R1: R_range * 0.35, R2: R_range * 0.35, R3: R_range * 0.3 },
+                { C1: C_est * 0.02, C2: C_est * 0.15, C3: C_est * 1.5, R1: R_range * 0.42, R2: R_range * 0.33, R3: R_range * 0.25 },
                 // Reverse order (high freq to low freq)
-                { C1: C_est * 10, C2: C_est, C3: C_est * 0.1, R1: R_range * 0.25, R2: R_range * 0.35, R3: R_range * 0.4 },
+                { C1: C_est * 5, C2: C_est * 0.5, C3: C_est * 0.05, R1: R_range * 0.25, R2: R_range * 0.35, R3: R_range * 0.4 },
             ];
 
             let bestParams = null;
@@ -731,11 +743,11 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const steps = {
                     R0: Math.max(R0_est * 0.5, 1),
                     R1: initial.R1 * 0.5,
-                    C1: initial.C1 * 0.5,
+                    C1: initial.C1 * 0.8,
                     R2: initial.R2 * 0.5,
-                    C2: initial.C2 * 0.5,
+                    C2: initial.C2 * 0.8,
                     R3: initial.R3 * 0.5,
-                    C3: initial.C3 * 0.5
+                    C3: initial.C3 * 0.8
                 };
 
                 try {
@@ -743,7 +755,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         (p) => calcError(p, omega, predictRRCRC),
                         initial,
                         steps,
-                        1000
+                        1500
                     );
                     const error = calcError(params, omega, predictRRCRC);
                     if (error < bestError) {
@@ -759,6 +771,33 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 R0: R0_est, R1: R_range * 0.4, C1: C_est * 0.1,
                 R2: R_range * 0.35, C2: C_est, R3: R_range * 0.25, C3: C_est * 10
             };
+        }
+
+        // Estimate multiple characteristic frequencies from peaks/inflections in -Z"
+        function estimateCharacteristicFrequencies(omega, numFreqs) {
+            const negZimag = eisData.zImag.map(z => -z);
+            const freqs = [];
+
+            // Find local maxima in -Z"
+            for (let i = 1; i < negZimag.length - 1; i++) {
+                if (negZimag[i] > negZimag[i-1] && negZimag[i] > negZimag[i+1]) {
+                    freqs.push(omega[i] / (2 * Math.PI));
+                }
+            }
+
+            // If not enough peaks found, estimate from frequency range
+            if (freqs.length < numFreqs) {
+                const minFreq = Math.min(...omega) / (2 * Math.PI);
+                const maxFreq = Math.max(...omega) / (2 * Math.PI);
+                const logRange = Math.log10(maxFreq / minFreq);
+                for (let i = freqs.length; i < numFreqs; i++) {
+                    const logF = Math.log10(minFreq) + logRange * (i + 1) / (numFreqs + 1);
+                    freqs.push(Math.pow(10, logF));
+                }
+            }
+
+            // Sort by frequency (high to low for C ordering)
+            return freqs.sort((a, b) => b - a).slice(0, numFreqs);
         }
         function predictRRCRC(params, omega) {
             const par1 = predictParallel(params.R1, params.C1, omega);
@@ -778,14 +817,22 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const R1_est = R_total - R0_est;
             const C_est = estimateCapacitance(omega);
 
+            // Estimate n from the depression angle of the semicircle
+            const n_est = estimateCPEExponent();
+
             // Multi-start with different n values and Q estimates
+            // Q varies over wider range since it depends on n
             const startConfigs = [
+                { n: n_est, Q: C_est, R0: R0_est, R1: R1_est },
                 { n: 0.85, Q: C_est, R0: R0_est, R1: R1_est },
                 { n: 0.75, Q: C_est * 0.5, R0: R0_est, R1: R1_est },
-                { n: 0.90, Q: C_est * 2, R0: R0_est, R1: R1_est },
+                { n: 0.90, Q: C_est * 1.5, R0: R0_est, R1: R1_est },
                 { n: 0.80, Q: C_est * 0.8, R0: R0_est * 0.9, R1: R1_est * 1.1 },
                 { n: 0.70, Q: C_est * 0.3, R0: R0_est, R1: R1_est },
-                { n: 0.95, Q: C_est * 3, R0: R0_est, R1: R1_est * 0.9 },
+                { n: 0.95, Q: C_est * 2, R0: R0_est, R1: R1_est * 0.9 },
+                { n: n_est, Q: C_est * 0.5, R0: R0_est * 0.95, R1: R1_est * 1.05 },
+                { n: 0.82, Q: C_est * 0.7, R0: R0_est, R1: R1_est },
+                { n: 0.88, Q: C_est * 1.2, R0: R0_est, R1: R1_est },
             ];
 
             let bestParams = null;
@@ -796,8 +843,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     const params = nelderMead(
                         (p) => calcError(p, omega, predictCPE),
                         config,
-                        { R0: config.R0 * 0.3, R1: config.R1 * 0.3, Q: config.Q * 0.5, n: 0.15 },
-                        800
+                        { R0: Math.max(config.R0 * 0.4, 1), R1: config.R1 * 0.4, Q: config.Q * 0.7, n: 0.12 },
+                        1200
                     );
                     const error = calcError(params, omega, predictCPE);
                     if (error < bestError) {
@@ -810,6 +857,31 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             }
 
             return bestParams || { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85 };
+        }
+
+        // Estimate CPE exponent n from the depression angle of the Nyquist plot
+        function estimateCPEExponent() {
+            // For a depressed semicircle, n = 1 - (2*alpha/pi) where alpha is depression angle
+            // Find the center of the semicircle approximately
+            const maxZimag = Math.max(...eisData.zImag.map(z => -z));
+            const idxMax = eisData.zImag.findIndex(z => -z === maxZimag);
+
+            if (idxMax > 0 && idxMax < eisData.zImag.length - 1) {
+                const zRealAtMax = eisData.zReal[idxMax];
+                const zRealMin = Math.min(...eisData.zReal);
+                const zRealMax = Math.max(...eisData.zReal);
+                const diameter = zRealMax - zRealMin;
+                const radius = diameter / 2;
+
+                // Depression angle: if center is below real axis
+                // For ideal semicircle, height = radius, so ratio < 1 indicates depression
+                const heightRatio = maxZimag / radius;
+                if (heightRatio > 0 && heightRatio <= 1) {
+                    const alpha = Math.acos(Math.min(heightRatio, 1));
+                    return Math.max(0.5, Math.min(1, 1 - (2 * alpha / Math.PI)));
+                }
+            }
+            return 0.85; // Default estimate
         }
         function predictCPE(params, omega) {
             // Use admittance approach for cleaner calculation
@@ -842,15 +914,27 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const R_total = Math.max(...eisData.zReal);
             const R_range = R_total - R0_est;
             const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+
+            // Estimate characteristic frequencies for two time constants
+            const charFreqs = estimateCharacteristicFrequencies(omega, 2);
+            const R_avg = R_range / 2;
+            const Q_estimates = charFreqs.map(f => 1 / (2 * Math.PI * f * R_avg));
 
             // Multi-start with different n values and parameter combinations
             const startConfigs = [
-                { n1: 0.85, Q1: C_est * 0.5, R1: R_range * 0.6, n2: 0.80, Q2: C_est * 5, R2: R_range * 0.4 },
-                { n1: 0.75, Q1: C_est * 0.3, R1: R_range * 0.5, n2: 0.85, Q2: C_est * 3, R2: R_range * 0.5 },
-                { n1: 0.90, Q1: C_est, R1: R_range * 0.4, n2: 0.75, Q2: C_est * 8, R2: R_range * 0.6 },
-                { n1: 0.80, Q1: C_est * 0.2, R1: R_range * 0.55, n2: 0.90, Q2: C_est * 2, R2: R_range * 0.45 },
-                { n1: 0.70, Q1: C_est * 0.1, R1: R_range * 0.65, n2: 0.70, Q2: C_est * 10, R2: R_range * 0.35 },
-                { n1: 0.95, Q1: C_est * 2, R1: R_range * 0.45, n2: 0.85, Q2: C_est * 4, R2: R_range * 0.55 },
+                // Based on estimated frequencies
+                { n1: n_est, Q1: Q_estimates[0] || C_est * 0.3, R1: R_range * 0.6, n2: n_est * 0.95, Q2: Q_estimates[1] || C_est * 3, R2: R_range * 0.4 },
+                { n1: 0.85, Q1: C_est * 0.5, R1: R_range * 0.6, n2: 0.80, Q2: C_est * 3, R2: R_range * 0.4 },
+                { n1: 0.85, Q1: C_est * 0.3, R1: R_range * 0.6, n2: 0.78, Q2: C_est * 5, R2: R_range * 0.4 },
+                { n1: 0.75, Q1: C_est * 0.2, R1: R_range * 0.5, n2: 0.85, Q2: C_est * 2, R2: R_range * 0.5 },
+                { n1: 0.90, Q1: C_est * 0.8, R1: R_range * 0.55, n2: 0.75, Q2: C_est * 6, R2: R_range * 0.45 },
+                { n1: 0.80, Q1: C_est * 0.15, R1: R_range * 0.55, n2: 0.90, Q2: C_est * 1.5, R2: R_range * 0.45 },
+                { n1: 0.82, Q1: C_est * 0.4, R1: R_range * 0.58, n2: 0.78, Q2: C_est * 4, R2: R_range * 0.42 },
+                { n1: 0.88, Q1: C_est * 0.6, R1: R_range * 0.52, n2: 0.82, Q2: C_est * 2.5, R2: R_range * 0.48 },
+                // Reverse order
+                { n1: 0.78, Q1: C_est * 3, R1: R_range * 0.4, n2: 0.85, Q2: C_est * 0.3, R2: R_range * 0.6 },
+                { n1: n_est, Q1: C_est * 0.4, R1: R_range * 0.6, n2: n_est, Q2: C_est * 4, R2: R_range * 0.4 },
             ];
 
             let bestParams = null;
@@ -870,11 +954,11 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const steps = {
                     R0: Math.max(R0_est * 0.5, 1),
                     R1: initial.R1 * 0.5,
-                    Q1: initial.Q1 * 0.5,
-                    n1: 0.15,
+                    Q1: initial.Q1 * 0.7,
+                    n1: 0.12,
                     R2: initial.R2 * 0.5,
-                    Q2: initial.Q2 * 0.5,
-                    n2: 0.15
+                    Q2: initial.Q2 * 0.7,
+                    n2: 0.12
                 };
 
                 try {
@@ -882,7 +966,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         (p) => calcError(p, omega, predictCPECPE),
                         initial,
                         steps,
-                        1000
+                        1500
                     );
                     const error = calcError(params, omega, predictCPECPE);
                     if (error < bestError) {
@@ -938,15 +1022,29 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const R_total = Math.max(...eisData.zReal);
             const R_range = R_total - R0_est;
             const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+
+            // For parallel elements, individual R values are larger than the total parallel R
+            // R_parallel = (R1 * R2) / (R1 + R2), so R1 and R2 > R_range
+
+            // Estimate characteristic frequencies for two time constants
+            const charFreqs = estimateCharacteristicFrequencies(omega, 2);
+            const Q_estimates = charFreqs.map(f => 1 / (2 * Math.PI * f * R_range));
 
             // Multi-start with different configurations
             const startConfigs = [
-                { n1: 0.85, Q1: C_est * 0.3, R1: R_range * 1.5, n2: 0.80, Q2: C_est * 3, R2: R_range * 1.2 },
-                { n1: 0.75, Q1: C_est * 0.5, R1: R_range * 2, n2: 0.85, Q2: C_est * 2, R2: R_range },
-                { n1: 0.90, Q1: C_est, R1: R_range * 1.2, n2: 0.75, Q2: C_est * 5, R2: R_range * 1.8 },
-                { n1: 0.80, Q1: C_est * 0.2, R1: R_range * 1.8, n2: 0.90, Q2: C_est, R2: R_range * 1.5 },
-                { n1: 0.70, Q1: C_est * 0.1, R1: R_range * 2.5, n2: 0.70, Q2: C_est * 8, R2: R_range * 0.8 },
-                { n1: 0.95, Q1: C_est * 1.5, R1: R_range, n2: 0.85, Q2: C_est * 4, R2: R_range * 2 },
+                // Based on estimated frequencies
+                { n1: n_est, Q1: Q_estimates[0] || C_est * 0.2, R1: R_range * 2, n2: n_est * 0.95, Q2: Q_estimates[1] || C_est * 4, R2: R_range * 1.5 },
+                { n1: 0.82, Q1: C_est * 0.2, R1: R_range * 2, n2: 0.75, Q2: C_est * 4, R2: R_range * 1.5 },
+                { n1: 0.85, Q1: C_est * 0.3, R1: R_range * 1.8, n2: 0.80, Q2: C_est * 3, R2: R_range * 1.3 },
+                { n1: 0.75, Q1: C_est * 0.4, R1: R_range * 2.2, n2: 0.85, Q2: C_est * 2, R2: R_range * 1.2 },
+                { n1: 0.90, Q1: C_est * 0.6, R1: R_range * 1.5, n2: 0.75, Q2: C_est * 5, R2: R_range * 1.8 },
+                { n1: 0.80, Q1: C_est * 0.15, R1: R_range * 2.5, n2: 0.90, Q2: C_est * 1.5, R2: R_range * 1.6 },
+                { n1: 0.78, Q1: C_est * 0.25, R1: R_range * 1.9, n2: 0.82, Q2: C_est * 3.5, R2: R_range * 1.4 },
+                { n1: 0.88, Q1: C_est * 0.5, R1: R_range * 1.7, n2: 0.78, Q2: C_est * 4.5, R2: R_range * 1.6 },
+                // Reverse order
+                { n1: 0.75, Q1: C_est * 4, R1: R_range * 1.5, n2: 0.82, Q2: C_est * 0.2, R2: R_range * 2 },
+                { n1: n_est, Q1: C_est * 0.3, R1: R_range * 2, n2: n_est, Q2: C_est * 3, R2: R_range * 1.5 },
             ];
 
             let bestParams = null;
@@ -966,11 +1064,11 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const steps = {
                     R0: Math.max(R0_est * 0.5, 1),
                     R1: initial.R1 * 0.5,
-                    Q1: initial.Q1 * 0.5,
-                    n1: 0.15,
+                    Q1: initial.Q1 * 0.7,
+                    n1: 0.12,
                     R2: initial.R2 * 0.5,
-                    Q2: initial.Q2 * 0.5,
-                    n2: 0.15
+                    Q2: initial.Q2 * 0.7,
+                    n2: 0.12
                 };
 
                 try {
@@ -978,7 +1076,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         (p) => calcError(p, omega, predictCPEpCPE),
                         initial,
                         steps,
-                        1000
+                        1500
                     );
                     const error = calcError(params, omega, predictCPEpCPE);
                     if (error < bestError) {
@@ -991,8 +1089,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             }
 
             return bestParams || {
-                R0: R0_est, R1: R_range * 1.5, Q1: C_est * 0.3, n1: 0.85,
-                R2: R_range * 1.2, Q2: C_est * 3, n2: 0.80
+                R0: R0_est, R1: R_range * 2, Q1: C_est * 0.2, n1: 0.82,
+                R2: R_range * 1.5, Q2: C_est * 4, n2: 0.75
             };
         }
 
@@ -1406,6 +1504,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             // Display debug results
             let html = '<div class="results"><h3>🧪 Debug Test Results</h3>';
+            html += `<div style="background: #e8f4fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; color: #0066cc;">📊 Model: ${model.name}</div>`;
             html += `<div class="result-row" style="background: ${score >= 80 ? '#d4edda' : score >= 50 ? '#fff3cd' : '#f8d7da'}; padding: 10px; border-radius: 4px; margin-bottom: 10px;">`;
             html += `<span class="result-label" style="font-size: 1.1em;">Overall Score</span>`;
             html += `<span class="result-value" style="font-size: 1.2em; font-weight: bold;">${score.toFixed(1)}%</span></div>`;
