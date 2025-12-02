@@ -258,12 +258,17 @@
                 <div class="form-group">
                     <label for="modelType">Select Model</label>
                     <select id="modelType" aria-describedby="model-help">
+                        <option value="auto">🔍 Auto (Best Fit)</option>
                         <option value="R">R (Resistor only)</option>
                         <option value="RC">R-C (Series)</option>
-                        <option value="RRC">R-(R||C) (Randles-like)</option>
-                        <option value="RCRC">R-C-R-C (Two time constants)</option>
+                        <option value="RpC">R||C (Parallel)</option>
+                        <option value="RRC">R-(R||C) (Randles)</option>
+                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
+                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
+                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
+                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
                     </select>
-                    <small id="model-help" style="color: #666; font-size: 0.8em;">Choose a circuit model to fit your EIS data</small>
+                    <small id="model-help" style="color: #666; font-size: 0.8em;">Choose a circuit model or use Auto to find the best fit</small>
                 </div>
 
                 <div class="form-group">
@@ -279,8 +284,11 @@
                 <div class="form-group">
                     <label for="debugModel">Test Model</label>
                     <select id="debugModel">
-                        <option value="RRC">R-(R||C) (Randles-like)</option>
-                        <option value="RCRC">R-C-R-C (Two time constants)</option>
+                        <option value="RRC">R-(R||C) (Randles)</option>
+                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
+                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
+                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
+                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -543,49 +551,110 @@
             }
         }
 
+        // Model registry for easy lookup
+        const modelRegistry = {
+            'R': { name: 'R (Resistor)', fit: fitRModel, predict: predictR, params: 1 },
+            'RC': { name: 'R-C (Series)', fit: fitRCModel, predict: predictRC, params: 2 },
+            'RpC': { name: 'R||C (Parallel)', fit: fitRpCModel, predict: predictRpC, params: 2 },
+            'RRC': { name: 'R-(R||C) (Randles)', fit: fitRRCModel, predict: predictRRC, params: 3 },
+            'RRCW': { name: 'R-(R||C)-W (Randles+Warburg)', fit: fitRRCWModel, predict: predictRRCW, params: 4 },
+            'RCRC': { name: 'R-(R||C)-(R||C) (Two RC)', fit: fitRCRCModel, predict: predictRCRC, params: 5 },
+            'RRCRC': { name: 'R-(R||C)-(R||C)-(R||C) (Three RC)', fit: fitRRCRCModel, predict: predictRRCRC, params: 7 },
+            'CPE': { name: 'R-(R||CPE)', fit: fitCPEModel, predict: predictCPE, params: 4 }
+        };
+
         function fitModel() {
             if (eisData.frequency.length === 0) {
                 updateStatus('fitStatus', 'No data loaded', 'error');
                 return;
             }
 
-            const modelType = document.getElementById('modelType').value;
+            let modelType = document.getElementById('modelType').value;
             const omega = eisData.frequency.map(f => 2 * Math.PI * f);
-            
+
             try {
-                let fitParams, predicted;
-                
-                if (modelType === 'R') {
-                    // Simple resistor
-                    const avgR = eisData.zReal.reduce((a, b) => a + b) / eisData.zReal.length;
-                    fitParams = { R: avgR };
-                    predicted = eisData.frequency.map(() => ({ real: avgR, imag: 0 }));
-                } 
-                else if (modelType === 'RC') {
-                    fitParams = fitRCModel(omega);
-                    predicted = omega.map(w => predictRC(fitParams, w));
-                }
-                else if (modelType === 'RRC') {
-                    fitParams = fitRRCModel(omega);
-                    predicted = omega.map(w => predictRRC(fitParams, w));
-                }
-                else if (modelType === 'RCRC') {
-                    fitParams = fitRCRCModel(omega);
-                    predicted = omega.map(w => predictRCRC(fitParams, w));
+                let fitParams, predicted, selectedModel;
+
+                if (modelType === 'auto') {
+                    // Auto-select best model
+                    const result = autoSelectModel(omega);
+                    modelType = result.modelType;
+                    fitParams = result.fitParams;
+                    predicted = result.predicted;
+                    selectedModel = modelRegistry[modelType].name;
+                    updateStatus('fitStatus', `Auto-selected: ${selectedModel}`, 'success');
+                } else {
+                    const model = modelRegistry[modelType];
+                    fitParams = model.fit(omega);
+                    predicted = omega.map(w => model.predict(fitParams, w));
+                    selectedModel = model.name;
                 }
 
-                const residuals = eisData.zReal.map((r, i) => ({
-                    real: r - predicted[i].real,
-                    imag: eisData.zImag[i] - predicted[i].imag
-                }));
-
-                const chiSquared = residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
-
-                displayFitResults(fitParams, chiSquared);
+                const chiSquared = calcChiSquared(predicted);
+                displayFitResults(fitParams, chiSquared, selectedModel);
                 plotFit(predicted);
             } catch (e) {
                 updateStatus('fitStatus', `Fit error: ${e.message}`, 'error');
+                console.error('Fit error:', e);
             }
+        }
+
+        function autoSelectModel(omega) {
+            const modelsToTry = ['RRC', 'RCRC', 'RRCW', 'CPE', 'RRCRC', 'RpC', 'RC'];
+            let bestModel = null;
+            let bestAIC = Infinity;
+            let bestParams = null;
+            let bestPredicted = null;
+
+            for (const modelType of modelsToTry) {
+                try {
+                    const model = modelRegistry[modelType];
+                    const fitParams = model.fit(omega);
+                    const predicted = omega.map(w => model.predict(fitParams, w));
+
+                    // Calculate AIC (Akaike Information Criterion) for model comparison
+                    // AIC = n * ln(RSS/n) + 2k, where k is number of parameters
+                    const rss = eisData.zReal.reduce((sum, r, i) => {
+                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(eisData.zImag[i] - predicted[i].imag, 2);
+                    }, 0);
+                    const n = eisData.zReal.length * 2; // Real + Imag points
+                    const k = model.params;
+                    const aic = n * Math.log(rss / n) + 2 * k;
+
+                    if (aic < bestAIC) {
+                        bestAIC = aic;
+                        bestModel = modelType;
+                        bestParams = fitParams;
+                        bestPredicted = predicted;
+                    }
+                } catch (e) {
+                    console.warn(`Model ${modelType} failed:`, e.message);
+                }
+            }
+
+            return {
+                modelType: bestModel,
+                fitParams: bestParams,
+                predicted: bestPredicted,
+                aic: bestAIC
+            };
+        }
+
+        function calcChiSquared(predicted) {
+            const residuals = eisData.zReal.map((r, i) => ({
+                real: r - predicted[i].real,
+                imag: eisData.zImag[i] - predicted[i].imag
+            }));
+            return residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
+        }
+
+        // Simple R model
+        function fitRModel(omega) {
+            const avgR = eisData.zReal.reduce((a, b) => a + b) / eisData.zReal.length;
+            return { R: avgR };
+        }
+        function predictR(params, omega) {
+            return { real: params.R, imag: 0 };
         }
 
         function fitRCModel(omega) {
@@ -628,6 +697,109 @@
                 { R0: R0_est, R1: R1_est, C1: C_est, R2: R2_est, C2: C_est * 5 },
                 { R0: R0_est * 0.3, R1: R1_est * 0.3, C1: C_est * 0.5, R2: R2_est * 0.3, C2: C_est * 2 }
             );
+        }
+
+        // Parallel R||C model
+        function fitRpCModel(omega) {
+            const R_est = Math.max(...eisData.zReal);
+            const C_est = estimateCapacitance(omega);
+            return nelderMead(
+                (params) => calcError(params, omega, predictRpC),
+                { R: R_est, C: C_est },
+                { R: R_est * 0.3, C: C_est * 0.5 }
+            );
+        }
+        function predictRpC(params, omega) {
+            const denom = 1 + Math.pow(omega * params.R * params.C, 2);
+            return {
+                real: params.R / denom,
+                imag: -(omega * params.R * params.R * params.C) / denom
+            };
+        }
+
+        // Randles with Warburg: R0 + (R1 || C) + W
+        function fitRRCWModel(omega) {
+            const R0_est = Math.min(...eisData.zReal);
+            const R_total = Math.max(...eisData.zReal);
+            const R1_est = (R_total - R0_est) * 0.5;
+            const C_est = estimateCapacitance(omega);
+            const W_est = (R_total - R0_est) * 0.3;
+
+            return nelderMead(
+                (params) => calcError(params, omega, predictRRCW),
+                { R0: R0_est, R1: R1_est, C: C_est, W: W_est },
+                { R0: R0_est * 0.3, R1: R1_est * 0.3, C: C_est * 0.5, W: W_est * 0.5 }
+            );
+        }
+        function predictRRCW(params, omega) {
+            // R0 + parallel(R1, C) + Warburg
+            const denom = 1 + Math.pow(omega * params.R1 * params.C, 2);
+            const parReal = params.R1 / denom;
+            const parImag = -(omega * params.R1 * params.R1 * params.C) / denom;
+            // Warburg: Z_w = W/sqrt(omega) * (1 - j)
+            const warburgFactor = params.W / Math.sqrt(omega);
+            return {
+                real: params.R0 + parReal + warburgFactor,
+                imag: parImag - warburgFactor
+            };
+        }
+
+        // Three RC model: R0 + (R1||C1) + (R2||C2) + (R3||C3)
+        function fitRRCRCModel(omega) {
+            const R0_est = Math.min(...eisData.zReal);
+            const R_total = Math.max(...eisData.zReal);
+            const R1_est = (R_total - R0_est) * 0.4;
+            const R2_est = (R_total - R0_est) * 0.35;
+            const R3_est = (R_total - R0_est) * 0.25;
+            const C_est = estimateCapacitance(omega);
+
+            return nelderMead(
+                (params) => calcError(params, omega, predictRRCRC),
+                { R0: R0_est, R1: R1_est, C1: C_est * 0.1, R2: R2_est, C2: C_est, R3: R3_est, C3: C_est * 10 },
+                { R0: R0_est * 0.3, R1: R1_est * 0.3, C1: C_est * 0.1, R2: R2_est * 0.3, C2: C_est * 0.5, R3: R3_est * 0.3, C3: C_est * 3 }
+            );
+        }
+        function predictRRCRC(params, omega) {
+            const par1 = predictParallel(params.R1, params.C1, omega);
+            const par2 = predictParallel(params.R2, params.C2, omega);
+            const par3 = predictParallel(params.R3, params.C3, omega);
+            return {
+                real: params.R0 + par1.real + par2.real + par3.real,
+                imag: par1.imag + par2.imag + par3.imag
+            };
+        }
+
+        // Constant Phase Element model: R0 + (R1 || CPE)
+        function fitCPEModel(omega) {
+            const R0_est = Math.min(...eisData.zReal);
+            const R_total = Math.max(...eisData.zReal);
+            const R1_est = R_total - R0_est;
+            const C_est = estimateCapacitance(omega);
+
+            return nelderMead(
+                (params) => calcError(params, omega, predictCPE),
+                { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85 },
+                { R0: R0_est * 0.3, R1: R1_est * 0.3, Q: C_est * 0.5, n: 0.15 }
+            );
+        }
+        function predictCPE(params, omega) {
+            // CPE impedance: Z_CPE = 1/(Q*(j*omega)^n)
+            // Z_CPE = 1/(Q * omega^n) * (cos(n*pi/2) - j*sin(n*pi/2))
+            const Q = params.Q;
+            const n = Math.min(Math.max(params.n, 0.1), 1); // Clamp n between 0.1 and 1
+            const cpeReal = Math.cos(n * Math.PI / 2) / (Q * Math.pow(omega, n));
+            const cpeImag = -Math.sin(n * Math.PI / 2) / (Q * Math.pow(omega, n));
+
+            // Parallel combination of R1 and CPE: 1/Z_total = 1/R1 + 1/Z_CPE
+            const r1 = params.R1;
+            const denomReal = 1/r1 + cpeReal / (cpeReal*cpeReal + cpeImag*cpeImag);
+            const denomImag = cpeImag / (cpeReal*cpeReal + cpeImag*cpeImag);
+            const denomMag2 = denomReal*denomReal + denomImag*denomImag;
+
+            return {
+                real: params.R0 + denomReal / denomMag2,
+                imag: -denomImag / denomMag2
+            };
         }
 
         function estimateCapacitance(omega) {
@@ -788,21 +960,28 @@
             };
         }
 
-        function displayFitResults(params, chiSquared) {
-            let html = '<div class="results"><h3>Fitted Parameters</h3>';
-            
+        function displayFitResults(params, chiSquared, modelName) {
+            let html = '<div class="results">';
+            if (modelName) {
+                html += `<div style="background: #e8f4fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; color: #0066cc;">📊 Model: ${modelName}</div>`;
+            }
+            html += '<h3>Fitted Parameters</h3>';
+
             for (const [key, value] of Object.entries(params)) {
                 let unit = '';
-                if (key.includes('R')) unit = ' Ω';
+                if (key === 'n') unit = ''; // CPE exponent is dimensionless
+                else if (key === 'W') unit = ' Ω·s⁻⁰·⁵'; // Warburg coefficient
+                else if (key === 'Q') unit = ' S·sⁿ'; // CPE pseudo-capacitance
+                else if (key.includes('R')) unit = ' Ω';
                 else if (key.includes('C')) unit = ' F';
-                
+
                 const displayValue = Math.abs(value) < 0.001 ? value.toExponential(3) : value.toFixed(3);
                 html += `<div class="result-row"><span class="result-label">${key}</span><span class="result-value">${displayValue}${unit}</span></div>`;
             }
-            
+
             html += `<div class="result-row"><span class="result-label">χ²/N</span><span class="result-value">${chiSquared.toExponential(3)}</span></div>`;
             html += '</div>';
-            
+
             document.getElementById('fitResults').innerHTML = html;
             updateStatus('fitStatus', 'Fit completed', 'success');
         }
@@ -891,16 +1070,26 @@
             Plotly.newPlot('nyquistPlot', nyquistData, layout, { responsive: true });
         }
 
+        // True parameters for debug tests
+        const debugTrueParams = {
+            'RRC': { R0: 75, R1: 150, C: 2.5e-6 },
+            'RRCW': { R0: 60, R1: 120, C: 3e-6, W: 50 },
+            'RCRC': { R0: 50, R1: 120, C1: 1.5e-6, R2: 80, C2: 8e-6 },
+            'RRCRC': { R0: 40, R1: 100, C1: 5e-7, R2: 80, C2: 3e-6, R3: 60, C3: 2e-5 },
+            'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 }
+        };
+
         function runDebugTest() {
             const modelType = document.getElementById('debugModel').value;
             const noiseLevel = parseFloat(document.getElementById('noiseLevel').value) / 100;
 
-            // Define true parameters for the test
-            let trueParams;
-            if (modelType === 'RRC') {
-                trueParams = { R0: 75, R1: 150, C: 2.5e-6 };
-            } else if (modelType === 'RCRC') {
-                trueParams = { R0: 50, R1: 120, C1: 1.5e-6, R2: 80, C2: 8e-6 };
+            // Get true parameters for selected model
+            const trueParams = debugTrueParams[modelType];
+            const model = modelRegistry[modelType];
+
+            if (!trueParams || !model) {
+                updateStatus('debugStatus', `Model ${modelType} not configured for testing`, 'error');
+                return;
             }
 
             // Generate frequency range (log scale from 0.01 Hz to 10 kHz)
@@ -909,17 +1098,11 @@
                 frequencies.push(Math.pow(10, exp));
             }
 
-            // Generate ideal impedance data
+            // Generate ideal impedance data using the model's predict function
             const mockData = [];
             for (const freq of frequencies) {
                 const omega = 2 * Math.PI * freq;
-                let z;
-
-                if (modelType === 'RRC') {
-                    z = predictRRC(trueParams, omega);
-                } else if (modelType === 'RCRC') {
-                    z = predictRCRC(trueParams, omega);
-                }
+                const z = model.predict(trueParams, omega);
 
                 // Add noise
                 const noiseFactor = 1 + (Math.random() - 0.5) * 2 * noiseLevel;
@@ -943,24 +1126,13 @@
             // Set the model type to match
             document.getElementById('modelType').value = modelType;
 
-            // Fit the model
+            // Fit the model using the registry
             const omega = eisData.frequency.map(f => 2 * Math.PI * f);
-            let fitParams, predicted;
-
-            if (modelType === 'RRC') {
-                fitParams = fitRRCModel(omega);
-                predicted = omega.map(w => predictRRC(fitParams, w));
-            } else if (modelType === 'RCRC') {
-                fitParams = fitRCRCModel(omega);
-                predicted = omega.map(w => predictRCRC(fitParams, w));
-            }
+            const fitParams = model.fit(omega);
+            const predicted = omega.map(w => model.predict(fitParams, w));
 
             // Calculate fit quality
-            const residuals = eisData.zReal.map((r, i) => ({
-                real: r - predicted[i].real,
-                imag: eisData.zImag[i] - predicted[i].imag
-            }));
-            const chiSquared = residuals.reduce((sum, r) => sum + r.real*r.real + r.imag*r.imag, 0) / eisData.zReal.length;
+            const chiSquared = calcChiSquared(predicted);
 
             // Calculate parameter recovery accuracy
             const paramErrors = {};
