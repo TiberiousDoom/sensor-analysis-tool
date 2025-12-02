@@ -1971,8 +1971,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RCRC': { R0: 50, R1: 120, C1: 1.5e-6, R2: 80, C2: 8e-6 },
             'RRCRC': { R0: 40, R1: 100, C1: 5e-7, R2: 80, C2: 3e-6, R3: 60, C3: 2e-5 },
             'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 },
-            'CPECPE': { R0: 50, R1: 120, Q1: 2e-6, n1: 0.85, R2: 80, Q2: 1e-5, n2: 0.78 },
-            'CPEpCPE': { R0: 45, R1: 200, Q1: 1.5e-6, n1: 0.82, R2: 150, Q2: 8e-6, n2: 0.75 }
+            'CPECPE': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 100, Q2: 1e-4, n2: 0.78 },
+            'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 }
         };
 
         function runDebugTest() {
@@ -2208,7 +2208,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     }
 
                     // Restore fit results
-                    if (session.fitResults) {
+                    if (session.fitResults && session.fitResults.predicted && session.fitResults.predicted.length > 0) {
                         lastFitResults = session.fitResults;
                         displayFitResults(
                             session.fitResults.params,
