@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Convert Excel spreadsheets to SQLite databases for sensor data analysis and QC testing workflows">
     <title>Excel Database Builder</title>
 
     <!-- SQL.js for SQLite database creation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js" integrity="sha512-8yoHkqcbLnCTZ5N+Npq3SQCppmq4SrnIg9pY5U3eMG5nH5JYzpCvOlbl0nljVhLz7HOMXAImNc0C/yXRjSsCRA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- SheetJS for Excel file parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <style>
         :root {
@@ -320,6 +321,38 @@
             display: none !important;
         }
 
+        /* Accessibility: Focus styles */
+        .btn:focus,
+        input:focus,
+        .upload-area:focus {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .upload-area:focus-within {
+            border-color: var(--accent);
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .remove-btn:focus {
+            outline: 2px solid var(--danger);
+            outline-offset: 2px;
+            opacity: 1;
+        }
+
+        /* Screen reader only */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
         /* Sheet Selection */
         .sheet-selector {
             margin-top: 0.5rem;
@@ -349,14 +382,14 @@
 
         <div id="alertBox" class="alert"></div>
 
-        <div class="card">
-            <div class="card-title">📤 Add Excel Files</div>
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📁</div>
+        <div class="card" role="region" aria-labelledby="upload-section-title">
+            <div class="card-title" id="upload-section-title">📤 Add Excel Files</div>
+            <div class="upload-area" id="uploadArea" role="button" tabindex="0" aria-label="Upload Excel files by dropping or clicking">
+                <div class="upload-icon" aria-hidden="true">📁</div>
                 <div>Drop Excel files here or click to browse</div>
                 <div class="upload-text">Supports .xlsx and .xls files • Select multiple files</div>
             </div>
-            <input type="file" id="fileInput" accept=".xlsx,.xls" multiple hidden>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" multiple hidden aria-label="Excel file input">
 
             <div id="fileList" class="file-list"></div>
 
@@ -580,11 +613,11 @@
             fileList.innerHTML = builderFiles.map((file, idx) => `
                 <div class="file-item">
                     <div class="file-info">
-                        <span>📊</span>
+                        <span aria-hidden="true">📊</span>
                         <span class="file-name" title="${file.name}">${file.name}</span>
                         <span class="file-meta">${file.sheets.length} sheet(s) • ${file.totalRows} rows</span>
                     </div>
-                    <button class="remove-btn" onclick="removeFile(${idx})" title="Remove">✕</button>
+                    <button class="remove-btn" onclick="removeFile(${idx})" title="Remove file" aria-label="Remove ${file.name}">✕</button>
                 </div>
             `).join('');
 
@@ -719,6 +752,14 @@
 
         // Event listeners
         uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Keyboard accessibility for upload area
+        uploadArea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInput.click();
+            }
+        });
 
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();

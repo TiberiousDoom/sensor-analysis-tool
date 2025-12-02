@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Statistical analysis tool for sensor response data with KPI calculations, time series visualization, correlation analysis, and regression modeling">
     <title>Sensor Statistical Analysis</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-L8p2EZHLCzTmMm5FoGoc5OjIvVJIVYS5ydT3pYgSsBJ1YmWpqpQdC3/aafRVVHxuD8TPMJ89wL9ILy+4uUQhDw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Plotly.js for charts -->
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js" integrity="sha512-oexyNp8PhRCvSbkTNLLLWjBhXjTRPthRZGkQ1bfpcDVyXlZ7qGdEIxPE2FWLA5N6VfuKOOY2fmDjsgZJPBJoHg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -596,6 +597,14 @@
             }
         }
 
+        @media (max-width: 992px) {
+            .regression-results {
+                grid-template-columns: 1fr;
+            }
+            .chart-plot { height: 320px; }
+            .chart-plot.tall { height: 400px; }
+        }
+
         @media (max-width: 768px) {
             .drop-zones {
                 grid-template-columns: 1fr;
@@ -606,31 +615,93 @@
             h1 {
                 font-size: 1.75rem;
             }
+            .tabs {
+                flex-wrap: wrap;
+            }
+            .tab {
+                flex: 1 0 45%;
+                text-align: center;
+            }
+        }
+
+        /* Accessibility: Focus styles */
+        .drop-zone:focus,
+        .tab:focus,
+        button:focus,
+        select:focus,
+        input:focus {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 2px;
+        }
+
+        .tooltip-icon:focus {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 1px;
+        }
+
+        /* Screen reader only class */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Export button styles */
+        .export-btn {
+            background: var(--accent-violet);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-left: 1rem;
+        }
+
+        .export-btn:hover {
+            background: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" role="main">
         <header>
             <h1>⚡ Sensor Statistical Analysis</h1>
             <p class="subtitle">Drop your data files to begin analysis</p>
         </header>
 
         <!-- Drop Zones -->
-        <div class="drop-zones">
-            <div class="drop-zone" id="buildDataZone">
-                <div class="drop-zone-icon">📋</div>
+        <div class="drop-zones" role="region" aria-label="File upload area">
+            <div class="drop-zone" id="buildDataZone" role="button" tabindex="0" aria-label="Upload build data file with design parameters">
+                <div class="drop-zone-icon" aria-hidden="true">📋</div>
                 <div class="drop-zone-title">Build Data</div>
                 <div class="drop-zone-subtitle">Design parameters (CSV, XLSX, TXT)</div>
-                <div class="drop-zone-status" id="buildDataStatus"></div>
-                <input type="file" id="buildDataFile" accept=".csv,.xlsx,.xls,.txt">
+                <div class="drop-zone-status" id="buildDataStatus" role="status" aria-live="polite"></div>
+                <input type="file" id="buildDataFile" accept=".csv,.xlsx,.xls,.txt" aria-label="Build data file input">
             </div>
-            <div class="drop-zone" id="sensorDataZone">
-                <div class="drop-zone-icon">📈</div>
+            <div class="drop-zone" id="sensorDataZone" role="button" tabindex="0" aria-label="Upload sensor response time series data">
+                <div class="drop-zone-icon" aria-hidden="true">📈</div>
                 <div class="drop-zone-title">Sensor Response Data</div>
                 <div class="drop-zone-subtitle">Time series (Time in col A, sensors in B+)</div>
-                <div class="drop-zone-status" id="sensorDataStatus"></div>
-                <input type="file" id="sensorDataFile" accept=".csv,.xlsx,.xls,.txt">
+                <div class="drop-zone-status" id="sensorDataStatus" role="status" aria-live="polite"></div>
+                <input type="file" id="sensorDataFile" accept=".csv,.xlsx,.xls,.txt" aria-label="Sensor data file input">
             </div>
         </div>
         
@@ -666,41 +737,41 @@
             <div class="settings-title">⚙️ Analysis Settings</div>
             <div class="settings-grid">
                 <div class="setting-item">
-                    <label>
+                    <label for="baselinePoints">
                         Baseline Points
                         <span class="tooltip-container">
-                            <span class="tooltip-icon">?</span>
-                            <span class="tooltip-text">Number of initial time points used to calculate baseline mean and standard deviation. These points should be before any stimulus is applied.</span>
+                            <span class="tooltip-icon" tabindex="0" role="button" aria-label="Help: Baseline Points">?</span>
+                            <span class="tooltip-text" role="tooltip">Number of initial time points used to calculate baseline mean and standard deviation. These points should be before any stimulus is applied.</span>
                         </span>
                     </label>
                     <input type="number" id="baselinePoints" value="10" min="3" max="50">
                 </div>
                 <div class="setting-item">
-                    <label>
+                    <label for="peakWindow">
                         Peak Window (seconds)
                         <span class="tooltip-container">
-                            <span class="tooltip-icon">?</span>
-                            <span class="tooltip-text">Duration after the peak to measure signal stability (Peak StdDev). A 5-second window captures the plateau region around maximum response.</span>
+                            <span class="tooltip-icon" tabindex="0" role="button" aria-label="Help: Peak Window">?</span>
+                            <span class="tooltip-text" role="tooltip">Duration after the peak to measure signal stability (Peak StdDev). A 5-second window captures the plateau region around maximum response.</span>
                         </span>
                     </label>
                     <input type="number" id="peakWindow" value="5" min="1" max="20">
                 </div>
                 <div class="setting-item">
-                    <label>
+                    <label for="finalAvgPoints">
                         Final Avg Points
                         <span class="tooltip-container">
-                            <span class="tooltip-icon">?</span>
-                            <span class="tooltip-text">Number of data points at the end of recording to average for the "final value" used in recovery calculations.</span>
+                            <span class="tooltip-icon" tabindex="0" role="button" aria-label="Help: Final Average Points">?</span>
+                            <span class="tooltip-text" role="tooltip">Number of data points at the end of recording to average for the "final value" used in recovery calculations.</span>
                         </span>
                     </label>
                     <input type="number" id="finalAvgPoints" value="5" min="1" max="20">
                 </div>
                 <div class="setting-item">
-                    <label>
+                    <label for="responseThreshold">
                         Response Threshold (σ)
                         <span class="tooltip-container">
-                            <span class="tooltip-icon">?</span>
-                            <span class="tooltip-text">Minimum peak height as multiples of baseline standard deviation. Signals below baseline + (threshold × σ) are marked as non-responsive. Use higher values to filter noise.</span>
+                            <span class="tooltip-icon" tabindex="0" role="button" aria-label="Help: Response Threshold">?</span>
+                            <span class="tooltip-text" role="tooltip">Minimum peak height as multiples of baseline standard deviation. Signals below baseline + (threshold × σ) are marked as non-responsive. Use higher values to filter noise.</span>
                         </span>
                     </label>
                     <input type="number" id="responseThreshold" value="3" min="1" max="100" step="0.5">
@@ -721,7 +792,10 @@
         <!-- Overview Tab -->
         <div id="overviewTab" class="tab-content">
             <div class="kpi-section" id="kpiSection">
-                <h2 class="section-title">Summary Statistics</h2>
+                <div class="section-header">
+                    <h2 class="section-title">Summary Statistics</h2>
+                    <button type="button" class="export-btn" onclick="exportKPIsToCSV()" aria-label="Export KPI data to CSV file">📥 Export KPIs (CSV)</button>
+                </div>
                 <div class="kpi-grid" id="kpiGrid"></div>
             </div>
 
@@ -2487,15 +2561,142 @@
             document.getElementById(id).addEventListener('change', updateRegressionAnalysis);
         });
 
-        // Settings change listener
+        // Settings change listener with localStorage persistence
         ['baselinePoints', 'peakWindow', 'finalAvgPoints', 'responseThreshold'].forEach(id => {
             document.getElementById(id).addEventListener('change', () => {
+                saveSettingsToLocalStorage();
                 if (sensorData && buildData) calculateKPIs();
             });
         });
 
+        // LocalStorage functions for settings persistence
+        function saveSettingsToLocalStorage() {
+            const settings = {
+                baselinePoints: document.getElementById('baselinePoints').value,
+                peakWindow: document.getElementById('peakWindow').value,
+                finalAvgPoints: document.getElementById('finalAvgPoints').value,
+                responseThreshold: document.getElementById('responseThreshold').value
+            };
+            try {
+                localStorage.setItem('sensorAnalysisSettings', JSON.stringify(settings));
+            } catch (e) {
+                console.warn('Could not save settings to localStorage:', e);
+            }
+        }
+
+        function loadSettingsFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem('sensorAnalysisSettings');
+                if (saved) {
+                    const settings = JSON.parse(saved);
+                    if (settings.baselinePoints) document.getElementById('baselinePoints').value = settings.baselinePoints;
+                    if (settings.peakWindow) document.getElementById('peakWindow').value = settings.peakWindow;
+                    if (settings.finalAvgPoints) document.getElementById('finalAvgPoints').value = settings.finalAvgPoints;
+                    if (settings.responseThreshold) document.getElementById('responseThreshold').value = settings.responseThreshold;
+                }
+            } catch (e) {
+                console.warn('Could not load settings from localStorage:', e);
+            }
+        }
+
+        // Export functions
+        function exportKPIsToCSV() {
+            if (!kpiData || Object.keys(kpiData).length === 0) {
+                alert('No KPI data to export. Please load data first.');
+                return;
+            }
+
+            const sensors = Object.keys(kpiData);
+            const headers = ['Sensor', 'Baseline Mean', 'Baseline Std', 'Peak Value', 'Peak Time',
+                           'Response Magnitude', '% Response', 'T50 Rise', 'T90 Rise', 'Rise Rate',
+                           '% Recovery', 'SNR', 'Is Significant'];
+
+            let csv = headers.join(',') + '\n';
+
+            sensors.forEach(sensor => {
+                const k = kpiData[sensor];
+                const row = [
+                    sensor,
+                    k.baselineMean.toFixed(6),
+                    k.baselineStd.toFixed(6),
+                    k.peakValue.toFixed(6),
+                    k.peakTime.toFixed(2),
+                    k.responseMag.toFixed(6),
+                    k.percentResponse.toFixed(2),
+                    k.t50Rise.toFixed(2),
+                    k.t90Rise.toFixed(2),
+                    k.riseRate.toFixed(6),
+                    k.percentRecovery.toFixed(2),
+                    k.snr.toFixed(2),
+                    k.isSignificant ? 'Yes' : 'No'
+                ];
+                csv += row.join(',') + '\n';
+            });
+
+            downloadFile(csv, 'sensor_kpi_export.csv', 'text/csv');
+        }
+
+        function exportChartAsPNG(chartId, filename) {
+            if (typeof Plotly === 'undefined') {
+                alert('Plotly library not available for export.');
+                return;
+            }
+            const chartEl = document.getElementById(chartId);
+            if (!chartEl || !chartEl.data) {
+                alert('Chart not ready for export.');
+                return;
+            }
+            Plotly.downloadImage(chartEl, {
+                format: 'png',
+                width: 1200,
+                height: 800,
+                filename: filename || chartId
+            });
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Add keyboard support for drop zones
+        function addKeyboardSupport() {
+            const dropZones = document.querySelectorAll('.drop-zone');
+            dropZones.forEach(zone => {
+                zone.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        const input = zone.querySelector('input[type="file"]');
+                        if (input) input.click();
+                    }
+                });
+            });
+
+            // Tooltip keyboard support
+            const tooltipIcons = document.querySelectorAll('.tooltip-icon');
+            tooltipIcons.forEach(icon => {
+                icon.addEventListener('focus', () => {
+                    const tooltip = icon.nextElementSibling;
+                    if (tooltip) tooltip.style.visibility = 'visible';
+                });
+                icon.addEventListener('blur', () => {
+                    const tooltip = icon.nextElementSibling;
+                    if (tooltip) tooltip.style.visibility = 'hidden';
+                });
+            });
+        }
+
         // Initialize
         initDropZones();
+        loadSettingsFromLocalStorage();
+        addKeyboardSupport();
         
         // ============================================
         // TEST DATA GENERATION AND DIAGNOSTICS
