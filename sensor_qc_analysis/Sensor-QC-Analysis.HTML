@@ -293,12 +293,21 @@
             border: none;
             cursor: pointer;
             outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding-right: 20px;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 4px center;
+            background-size: 16px;
         }
         .status-select option { color: black; background: white; }
-        select.status-PASS { background: var(--success); }
-        select.status-FL, select.status-FH { background: var(--danger); }
-        select.status-FT- { background: var(--danger); }
-        select.status-TT, select.status-OT\+ { background: var(--warning); }
+        select.status-PASS { background-color: var(--success) !important; }
+        select.status-FL, select.status-FH { background-color: var(--danger) !important; }
+        select.status-FT- { background-color: var(--danger) !important; }
+        select.status-TT { background-color: #eab308 !important; }
+        select.status-OT\+ { background-color: #fb923c !important; }
 
         .filter-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
         
