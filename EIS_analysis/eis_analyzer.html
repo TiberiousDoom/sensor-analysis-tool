@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Electrochemical Impedance Spectroscopy (EIS) data analysis tool with circuit model fitting, Nyquist plots, and Bode plots">
-    <title>EIS Analyzer - Circuit Model Fitting</title>
+    <title>EIS Analyzer v1.0 - Circuit Model Fitting</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
@@ -362,14 +362,23 @@
     </style>
 </head>
 <body>
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:#667eea;color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The EIS Analyzer requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
     <div class="container">
         <header>
             <a href="../index.html" class="home-btn">← Home</a>
             <h1>⚡ EIS Analyzer</h1>
             <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
+            <span style="font-size: 0.75em; opacity: 0.7;">v1.0</span>
         </header>
 
-        <main class="content" role="main">
+        <main id="main-content" class="content" role="main">
             <!-- Input Panel -->
             <div class="panel" role="region" aria-labelledby="data-input-heading">
                 <h2 id="data-input-heading">📊 Data Input</h2>
@@ -378,6 +387,7 @@
                 <div class="file-upload-area" id="fileDropZone" role="button" tabindex="0" aria-label="Upload CSV or TXT file with EIS data">
                     <div>📁 Drop file here or click to upload</div>
                     <div style="font-size: 0.85em; color: #666; margin-top: 5px;">Supports CSV, TXT (tab/space separated)</div>
+                    <div style="font-size: 0.75em; color: #999; margin-top: 3px;">Recommended: files under 5MB for best performance</div>
                     <input type="file" id="fileInput" accept=".csv,.txt,.tsv" aria-label="File upload input">
                     <div id="fileStatus" style="margin-top: 10px; color: #28a745;"></div>
                 </div>
@@ -514,6 +524,16 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
     </div>
 
     <script>
+        // Global error handler for unhandled errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('Unhandled error:', message, 'at', source, lineno);
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:1rem;border-radius:8px;z-index:10000;max-width:90%;';
+            errorDiv.innerHTML = '<strong>An error occurred:</strong> ' + message + '<br><button onclick="this.parentElement.remove()" style="margin-top:0.5rem;padding:4px 8px;cursor:pointer;">Dismiss</button>';
+            document.body.appendChild(errorDiv);
+            return false;
+        };
+
         // Global data storage
         let eisData = {
             frequency: [],
