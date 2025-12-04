@@ -284,7 +284,24 @@
         .status-FT- { background: var(--danger); }
         .status-TT, .status-OT\+ { background: var(--warning); }
         .status-DM { background: var(--info); }
-        
+
+        .status-select {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+            border: none;
+            cursor: pointer;
+            outline: none;
+        }
+        .status-select option { color: black; background: white; }
+        select.status-PASS { background: var(--success); }
+        select.status-FL, select.status-FH { background: var(--danger); }
+        select.status-FT- { background: var(--danger); }
+        select.status-TT, select.status-OT\+ { background: var(--warning); }
+        select.status-DM { background: var(--info); }
+
         .filter-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
         
         .filter-pill {
@@ -2142,11 +2159,6 @@ else if (typeof exports === 'object'){
                 <div class="metric-value">${failRate}%</div>
                 <div class="metric-delta">${failed} failed</div>
             </div>
-            <div class="metric info">
-                <div class="metric-label">Data Missing</div>
-                <div class="metric-value">${dm}</div>
-                <div class="metric-delta">Not counted</div>
-            </div>
             <div class="metric">
                 <div class="metric-label">Threshold</div>
                 <div class="metric-value" style="font-size: 1rem;">${thresholdSet}</div>
@@ -2222,11 +2234,20 @@ else if (typeof exports === 'object'){
             else if (status === 'PASS') rowClass = 'row-pass';
             else if (['TT', 'OT+'].includes(status)) rowClass = 'row-warning';
             else if (status === 'DM') rowClass = 'row-dm';
-            
+
+            // Find the index of this row in the original analysisResults
+            const originalIndex = analysisResults.findIndex(r => r['Serial Number'] === row['Serial Number']);
+
+            // Create editable status dropdown with only existing status codes
+            const statusOptions = Object.keys(STATUS_PRIORITY).map(s =>
+                `<option value="${s}" ${s === status ? 'selected' : ''}>${s}</option>`
+            ).join('');
+            const statusDropdown = `<select class="status-select status-${status}" onchange="updateSensorStatus(${originalIndex}, this.value)" title="Click to change status">${statusOptions}</select>`;
+
             const cells = [
                 row['Serial Number'],
                 row['Channel'],
-                `<span class="status-pill status-${status}">${status}</span>`,
+                statusDropdown,
                 row['120s(St.Dev.)'].toFixed(4)
             ];
             
@@ -2245,7 +2266,24 @@ else if (typeof exports === 'object'){
             return `<tr class="${rowClass}">${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
         }).join('');
     }
-    
+
+    function updateSensorStatus(index, newStatus) {
+        if (index < 0 || index >= analysisResults.length) return;
+
+        // Update the status in analysisResults
+        analysisResults[index]['Pass/Fail'] = newStatus;
+
+        // Re-render the table to update row styling and dropdown appearance
+        renderTable();
+
+        // Update metrics to reflect changes
+        const thresholdSet = document.getElementById('thresholdSet').value;
+        renderMetrics(analysisResults, thresholdSet);
+
+        // Update status filters to reflect any count changes
+        renderStatusFilters(analysisResults);
+    }
+
     function toggleCollapsible(contentId, toggleId) {
         const content = document.getElementById(contentId);
         const toggle = document.getElementById(toggleId);
@@ -2689,7 +2727,7 @@ else if (typeof exports === 'object'){
             </body></html>
         `;
 
-        const printWindow = window.open('', '_blank');
+        const printWindow = window.open('', '', 'width=900,height=700');
         printWindow.document.write(reportHTML);
         printWindow.document.close();
         printWindow.focus();
@@ -2766,8 +2804,10 @@ else if (typeof exports === 'object'){
                 sensorGroups[serial].push(row);
             });
 
-            let passed = 0;
-            let failed = 0;
+            let totalSensors = 0;
+            let totalFailed = 0;
+            let t1Failed = 0, t2Failed = 0, t3Failed = 0;
+            let t1Total = 0, t2Total = 0, t3Total = 0;
 
             // Evaluate each unique sensor using the same logic as determinePassFail
             for (const [serial, sensorRows] of Object.entries(sensorGroups)) {
@@ -2777,76 +2817,81 @@ else if (typeof exports === 'object'){
 
                 if (readings120.length === 0) continue; // Skip sensors with no valid data
 
+                totalSensors++;
                 const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
-                const allFailureCodes = [];
+                let hasCriticalFailure = false;
 
-                // Check each test for this sensor
-                sensorRows.forEach(row => {
-                    const v0 = row['0'];
-                    const v90 = row['90'];
+                // Check each test for this sensor and track per-test failures
+                sensorRows.forEach((row, testIdx) => {
                     const v120 = row['120'];
                     const pctChange = row.pct_change_90_120;
+                    let testFailed = false;
 
                     if (v120 === null || v120 === undefined || isNaN(v120)) {
-                        allFailureCodes.push('DM');
+                        // DM - not counted as critical failure
                     } else {
-                        if (v120 < thresholds.min_120s) allFailureCodes.push('FL');
-                        if (v120 > thresholds.max_120s) allFailureCodes.push('FH');
+                        if (v120 < thresholds.min_120s || v120 > thresholds.max_120s) {
+                            testFailed = true;
+                            hasCriticalFailure = true;
+                        }
                     }
 
                     if (pctChange !== null && !isNaN(pctChange)) {
-                        if (pctChange < thresholds.min_pct_change) allFailureCodes.push('FT-');
-                        if (pctChange > thresholds.max_pct_change) allFailureCodes.push('OT+');
+                        if (pctChange < thresholds.min_pct_change) {
+                            testFailed = true;
+                            hasCriticalFailure = true;
+                        }
+                    }
+
+                    // Track per-test failures (testIdx 0 = T1, 1 = T2, 2 = T3)
+                    if (testIdx === 0) {
+                        t1Total++;
+                        if (testFailed) t1Failed++;
+                    } else if (testIdx === 1) {
+                        t2Total++;
+                        if (testFailed) t2Failed++;
+                    } else if (testIdx === 2) {
+                        t3Total++;
+                        if (testFailed) t3Failed++;
                     }
                 });
 
-                // Check standard deviation threshold
-                if (stdDev120 > thresholds.max_std_dev) {
-                    allFailureCodes.push('TT');
-                }
-
-                // Determine sensor pass/fail - critical failures (FL, FH, FT-) mean fail
-                const hasCriticalFailure = allFailureCodes.some(code =>
-                    code === 'FL' || code === 'FH' || code === 'FT-'
-                );
-
                 if (hasCriticalFailure) {
-                    failed++;
-                } else {
-                    passed++;
+                    totalFailed++;
                 }
             }
 
-            const totalSensors = passed + failed;
-            const passedPct = totalSensors > 0 ? (passed / totalSensors * 100) : 0;
-            const failedPct = totalSensors > 0 ? (failed / totalSensors * 100) : 0;
+            const t1FailPct = t1Total > 0 ? (t1Failed / t1Total * 100) : 0;
+            const t2FailPct = t2Total > 0 ? (t2Failed / t2Total * 100) : 0;
+            const t3FailPct = t3Total > 0 ? (t3Failed / t3Total * 100) : 0;
+            const totalFailPct = totalSensors > 0 ? (totalFailed / totalSensors * 100) : 0;
 
             return {
                 jobNumber: wholeJobNum,
                 totalSensors: totalSensors,
-                passedQty: passed,
-                passedPct: passedPct,
-                failedQty: failed,
-                failedPct: failedPct
+                t1FailPct: t1FailPct,
+                t2FailPct: t2FailPct,
+                t3FailPct: t3FailPct,
+                totalFailPct: totalFailPct
             };
         });
 
-        // Calculate cumulative values
+        // Calculate cumulative averages for fail percentages
         const totalSensorsSum = jobsToShow.reduce((sum, j) => sum + j.totalSensors, 0);
-        const passedQtySum = jobsToShow.reduce((sum, j) => sum + j.passedQty, 0);
-        const failedQtySum = jobsToShow.reduce((sum, j) => sum + j.failedQty, 0);
-        const cumulativePassedPct = (passedQtySum + failedQtySum) > 0 ? (passedQtySum / (passedQtySum + failedQtySum) * 100) : 0;
-        const cumulativeFailedPct = (passedQtySum + failedQtySum) > 0 ? (failedQtySum / (passedQtySum + failedQtySum) * 100) : 0;
+        const avgT1FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t1FailPct, 0) / jobsToShow.length : 0;
+        const avgT2FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t2FailPct, 0) / jobsToShow.length : 0;
+        const avgT3FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t3FailPct, 0) / jobsToShow.length : 0;
+        const avgTotalFailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.totalFailPct, 0) / jobsToShow.length : 0;
 
         // Generate table rows for each job
         const jobRows = jobsToShow.map(job => `
             <tr>
                 <td>${job.jobNumber}</td>
                 <td>${job.totalSensors}</td>
-                <td>${job.passedQty}</td>
-                <td>${job.passedPct.toFixed(2)}%</td>
-                <td>${job.failedQty}</td>
-                <td>${job.failedPct.toFixed(2)}%</td>
+                <td>${job.t1FailPct.toFixed(2)}%</td>
+                <td>${job.t2FailPct.toFixed(2)}%</td>
+                <td>${job.t3FailPct.toFixed(2)}%</td>
+                <td>${job.totalFailPct.toFixed(2)}%</td>
             </tr>
         `).join('');
 
@@ -2867,21 +2912,21 @@ else if (typeof exports === 'object'){
             <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
             <table>
                 <tr>
-                    <th>Job Number</th>
-                    <th>Total Sensors</th>
-                    <th>Passed Qty</th>
-                    <th>Passed %</th>
-                    <th>Failed Qty</th>
-                    <th>Failed %</th>
+                    <th>Job #</th>
+                    <th>Total #</th>
+                    <th>T1 Fail %</th>
+                    <th>T2 Fail %</th>
+                    <th>T3 Fail %</th>
+                    <th>Total Fail %</th>
                 </tr>
                 ${jobRows}
                 <tr class="cumulative-row">
-                    <td>Cumulative:</td>
+                    <td>Average:</td>
                     <td>${totalSensorsSum}</td>
-                    <td>${passedQtySum}</td>
-                    <td>${cumulativePassedPct.toFixed(2)}%</td>
-                    <td>${failedQtySum}</td>
-                    <td>${cumulativeFailedPct.toFixed(2)}%</td>
+                    <td>${avgT1FailPct.toFixed(2)}%</td>
+                    <td>${avgT2FailPct.toFixed(2)}%</td>
+                    <td>${avgT3FailPct.toFixed(2)}%</td>
+                    <td>${avgTotalFailPct.toFixed(2)}%</td>
                 </tr>
             </table>
             </body></html>
