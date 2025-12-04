@@ -4,15 +4,61 @@ A collection of browser-based analysis tools for sensor data evaluation, quality
 
 ## Overview
 
-This repository contains three specialized analysis modules for sensor data:
+This repository contains four specialized analysis modules for sensor data:
 
 | Module | Status | Description |
 |--------|--------|-------------|
-| [Sensor QC Analysis](./sensor_qc_analysis/) | **Available** | Pass/fail quality control analysis for sensor voltage readings |
-| [EIS Analysis](./EIS_analysis/) | *Coming Soon* | Electrochemical Impedance Spectroscopy analysis |
-| [Sensor Statistical Analysis](./sensor_statistical_analysis/) | *Coming Soon* | Advanced statistical analysis and trend detection |
+| [EIS Analyzer](./EIS_analysis/) | **Available** | Electrochemical Impedance Spectroscopy analysis with circuit fitting |
+| [Statistical Analysis](./sensor_statistical_analysis/) | **Available** | KPI dashboard, regression modeling, and correlation analysis |
+| [QC Analysis Dashboard](./sensor_qc_analysis/) | **Available** | Pass/fail quality control analysis for sensor voltage readings |
+| [Excel Database Builder](./sensor_qc_analysis/) | **Available** | Convert Excel files to SQLite databases |
 
-## Sensor QC Analysis
+## EIS Analyzer
+
+**Status: Available**
+
+A browser-based Electrochemical Impedance Spectroscopy analysis tool with circuit model fitting and visualization.
+
+### Key Features
+- Multiple circuit models (Randles, CPE, Warburg, multi-RC)
+- Auto-fit to select best model automatically
+- Nyquist and Bode plot visualization
+- Frequency range filtering
+- Export to JSON/CSV, session save/load
+
+### Quick Start
+1. Open `EIS_analysis/eis_analyzer.html` in a web browser
+2. Upload or paste your EIS data (Frequency, Z', Z")
+3. Select a circuit model or use Auto-fit
+4. Click "Fit Model" to analyze
+
+[View full documentation](./EIS_analysis/README.md)
+
+---
+
+## Statistical Analysis
+
+**Status: Available**
+
+Advanced statistical analysis tool for sensor response data with KPI calculations and regression modeling.
+
+### Key Features
+- KPI dashboard with real-time metrics
+- Time series visualization
+- Correlation analysis
+- Multiple regression models with interpretation
+- Support for CSV and Excel files
+
+### Quick Start
+1. Open `sensor_statistical_analysis/sensor_statistical_analysis.html` in a web browser
+2. Upload Build Data (design parameters) and Sensor Response Data (time series)
+3. Explore KPI dashboard, charts, and regression analysis
+
+[View full documentation](./sensor_statistical_analysis/README.md)
+
+---
+
+## QC Analysis Dashboard
 
 **Status: Available**
 
@@ -35,36 +81,16 @@ A standalone, browser-based tool for evaluating sensor quality with pass/fail cr
 
 ---
 
-## EIS Analysis
+## Excel Database Builder
 
-**Status: Coming Soon**
+**Status: Available**
 
-Tools for analyzing Electrochemical Impedance Spectroscopy data.
+Utility tool for converting multiple Excel spreadsheets into a SQLite database for use with the QC Analysis tool.
 
-### Planned Features
-- EIS data import and parsing
-- Impedance analysis and fitting
-- Nyquist and Bode plot visualization
-- Equivalent circuit modeling
-
-[View documentation](./EIS_analysis/README.md)
-
----
-
-## Sensor Statistical Analysis
-
-**Status: Coming Soon**
-
-Advanced statistical analysis tools for sensor data.
-
-### Planned Features
-- Trend analysis and forecasting
-- Batch comparison statistics
-- Distribution and normality testing
-- Outlier detection algorithms
-- Correlation analysis
-
-[View documentation](./sensor_statistical_analysis/README.md)
+### Quick Start
+1. Open `sensor_qc_analysis/Excel_Database_Builder.HTML` in a web browser
+2. Upload Excel files with sensor data
+3. Export as SQLite database
 
 ---
 
@@ -78,13 +104,16 @@ Advanced statistical analysis tools for sensor data.
 
 ```
 sensor-analysis-tool/
-├── sensor_qc_analysis/          # QC pass/fail analysis (available)
+├── index.html                   # Landing page with links to all tools
+├── EIS_analysis/                # EIS analysis tool
+│   ├── eis_analyzer.html
+│   └── README.md
+├── sensor_statistical_analysis/ # Statistical analysis tool
+│   ├── sensor_statistical_analysis.html
+│   └── README.md
+├── sensor_qc_analysis/          # QC analysis tools
 │   ├── Sensor-QC-Analysis.HTML
 │   ├── Excel_Database_Builder.HTML
-│   └── README.md
-├── EIS_analysis/                # EIS analysis (coming soon)
-│   └── README.md
-├── sensor_statistical_analysis/ # Statistical analysis (coming soon)
 │   └── README.md
 └── archive/                     # Legacy Python/Streamlit version
 ```
