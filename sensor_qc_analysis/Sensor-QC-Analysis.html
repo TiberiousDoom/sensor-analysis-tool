@@ -412,6 +412,7 @@
             justify-content: space-between;
             align-items: center;
             font-weight: 600;
+            user-select: none;
         }
         
         .collapsible-header:hover { background: rgba(102, 126, 234, 0.05); }
@@ -579,13 +580,6 @@
         .anomaly-medium { background: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning); }
 
         /* Collapsible sections */
-        .collapsible-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            user-select: none;
-        }
         .collapsible-header .card-title { margin-bottom: 0; }
         .collapsible-toggle {
             font-size: 0.85rem;
@@ -718,6 +712,14 @@
     </style>
 </head>
 <body>
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:var(--primary);color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The QC Analysis Dashboard requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay hidden">
         <div class="loading-box">
@@ -763,6 +765,7 @@
                             <div class="upload-area" id="csvUploadArea" role="button" tabindex="0" aria-label="Upload CSV file with sensor data">
                                 <div class="upload-icon" aria-hidden="true">📤</div>
                                 <div>Drop CSV or click to browse</div>
+                                <div style="font-size: 0.75em; color: var(--info); margin-top: 5px;">Large files may take longer to process</div>
                                 <input type="file" id="csvFileInput" accept=".csv" aria-label="CSV file input">
                             </div>
                         </div>
@@ -770,6 +773,7 @@
                             <div class="upload-area" id="dbUploadArea" role="button" tabindex="0" aria-label="Upload database file">
                                 <div class="upload-icon" aria-hidden="true">💾</div>
                                 <div>Drop .db file or click to browse</div>
+                                <div style="font-size: 0.75em; color: var(--info); margin-top: 5px;">Database persists in browser storage</div>
                                 <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3" aria-label="Database file input">
                             </div>
                         </div>
@@ -781,7 +785,12 @@
                 <h3>⚙️ Analysis Settings</h3>
                 <div class="form-group">
                     <label for="jobNumber">Job Number</label>
-                    <input type="text" id="jobNumber" placeholder="Enter job number...">
+                    <input type="text" id="jobNumber" placeholder="Enter job number..."
+                           pattern="[0-9]+(\.[0-9]+)?"
+                           title="Enter a numeric job number (e.g., 258 or 258.1)"
+                           autocomplete="off"
+                           aria-describedby="jobNumberHint">
+                    <div id="jobNumberHint" style="font-size: 0.75em; color: var(--info); margin-top: 4px;">Supports decimal sub-jobs (e.g., 258.1)</div>
                 </div>
                 <div class="form-group">
                     <label for="thresholdSet">Threshold Set</label>
@@ -808,7 +817,7 @@
         </aside>
         
         <!-- Main Content -->
-        <main class="main-content">
+        <main id="main-content" class="main-content">
             <header class="main-header">
                 <h1>🔬 Sensor Analysis Dashboard</h1>
                 <p>Advanced sensor data analysis</p>
@@ -1538,6 +1547,19 @@ else if (typeof exports === 'object'){
 }
     </script>
     <script>
+    // Global error handler for unhandled errors
+    window.onerror = function(message, source, lineno, colno, error) {
+        console.error('Unhandled error:', message, 'at', source, lineno);
+        if (typeof showAlert === 'function') {
+            showAlert('An unexpected error occurred: ' + message, 'danger');
+        } else {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:1rem;border-radius:8px;z-index:10000;max-width:90%;';
+            errorDiv.innerHTML = '<strong>An error occurred:</strong> ' + message + '<br><button onclick="this.parentElement.remove()" style="margin-top:0.5rem;padding:4px 8px;cursor:pointer;">Dismiss</button>';
+            document.body.appendChild(errorDiv);
+        }
+        return false;
+    };
 
     // ============================================================
     // CONFIGURATION
@@ -2593,14 +2615,23 @@ else if (typeof exports === 'object'){
     // ============================================================
     
     function runAnalysis() {
-        const jobNumber = document.getElementById('jobNumber').value.trim();
+        const jobInput = document.getElementById('jobNumber');
+        const jobNumber = jobInput.value.trim();
         const thresholdSet = document.getElementById('thresholdSet').value;
-        
+
         if (!jobNumber) {
             showAlert('⚠️ Please enter a job number', 'warning');
+            jobInput.focus();
             return;
         }
-        
+
+        // Validate job number format (numbers with optional decimal)
+        if (!/^[0-9]+(\.[0-9]+)?$/.test(jobNumber)) {
+            showAlert('⚠️ Invalid job number format. Use numbers only (e.g., 258 or 258.1)', 'warning');
+            jobInput.focus();
+            return;
+        }
+
         if (rawData.length === 0) {
             showAlert('⚠️ Please load data first', 'warning');
             return;

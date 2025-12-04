@@ -73,7 +73,7 @@ A standalone, browser-based tool for evaluating sensor quality with pass/fail cr
 - Works entirely offline
 
 ### Quick Start
-1. Open `sensor_qc_analysis/Sensor-QC-Analysis.HTML` in a web browser
+1. Open `sensor_qc_analysis/Sensor-QC-Analysis.html` in a web browser
 2. Upload your sensor data (CSV or SQLite database)
 3. Enter a job number and click "Analyze"
 
@@ -88,7 +88,7 @@ A standalone, browser-based tool for evaluating sensor quality with pass/fail cr
 Utility tool for converting multiple Excel spreadsheets into a SQLite database for use with the QC Analysis tool.
 
 ### Quick Start
-1. Open `sensor_qc_analysis/Excel_Database_Builder.HTML` in a web browser
+1. Open `sensor_qc_analysis/Excel_Database_Builder.html` in a web browser
 2. Upload Excel files with sensor data
 3. Export as SQLite database
 
@@ -112,8 +112,8 @@ sensor-analysis-tool/
 │   ├── sensor_statistical_analysis.html
 │   └── README.md
 ├── sensor_qc_analysis/          # QC analysis tools
-│   ├── Sensor-QC-Analysis.HTML
-│   ├── Excel_Database_Builder.HTML
+│   ├── Sensor-QC-Analysis.html
+│   ├── Excel_Database_Builder.html
 │   └── README.md
 └── archive/                     # Legacy Python/Streamlit version
 ```
