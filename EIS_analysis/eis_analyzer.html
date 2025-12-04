@@ -422,12 +422,6 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label for="initialFreq">Initial Frequency (Hz)</label>
-                    <input type="number" id="initialFreq" value="1000" min="0.001" step="any" aria-describedby="freq-help">
-                    <small id="freq-help" style="color: #666; font-size: 0.8em;">Starting frequency for optimization (Hz)</small>
-                </div>
-
-                <div class="form-group">
                     <label>Frequency Range (optional)</label>
                     <div class="freq-range">
                         <input type="number" id="freqMin" placeholder="Min Hz" min="0" step="any">
@@ -444,7 +438,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
                 <!-- Model Comparison Results -->
                 <div id="comparisonPanel" style="display: none; margin-top: 15px;">
-                    <h3 style="font-size: 1em; color: #333; margin-bottom: 10px;">Model Comparison</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="font-size: 1em; color: #333; margin: 0;">Model Comparison</h3>
+                        <button type="button" onclick="hideComparison()" style="padding: 4px 10px; font-size: 0.8em; background: #6c757d;">Hide</button>
+                    </div>
                     <div id="comparisonResults"></div>
                 </div>
 
@@ -1796,6 +1793,28 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const predMag = predicted.map(p => Math.sqrt(p.real * p.real + p.imag * p.imag));
             const predPhase = predicted.map(p => Math.atan2(-p.imag, p.real) * 180 / Math.PI);
 
+            // Calculate R² for magnitude (using log scale for better representation)
+            const logMagData = eisData.zMag.map(m => Math.log10(m));
+            const logMagPred = predMag.map(m => Math.log10(m));
+            const meanLogMag = logMagData.reduce((a, b) => a + b, 0) / logMagData.length;
+            let ssTotMag = 0, ssResMag = 0;
+            for (let i = 0; i < logMagData.length; i++) {
+                ssTotMag += Math.pow(logMagData[i] - meanLogMag, 2);
+                ssResMag += Math.pow(logMagData[i] - logMagPred[i], 2);
+            }
+            const rSquaredMag = Math.max(0, 1 - ssResMag / ssTotMag);
+            const rSquaredMagPct = (rSquaredMag * 100).toFixed(1);
+
+            // Calculate R² for phase
+            const meanPhase = eisData.zPhase.reduce((a, b) => a + b, 0) / eisData.zPhase.length;
+            let ssTotPhase = 0, ssResPhase = 0;
+            for (let i = 0; i < eisData.zPhase.length; i++) {
+                ssTotPhase += Math.pow(eisData.zPhase[i] - meanPhase, 2);
+                ssResPhase += Math.pow(eisData.zPhase[i] - predPhase[i], 2);
+            }
+            const rSquaredPhase = Math.max(0, 1 - ssResPhase / ssTotPhase);
+            const rSquaredPhasePct = (rSquaredPhase * 100).toFixed(1);
+
             // Experimental data traces
             const magDataTrace = {
                 x: eisData.frequency,
@@ -1809,7 +1828,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 x: eisData.frequency,
                 y: predMag,
                 mode: 'lines',
-                name: 'Fit',
+                name: `Fit (R²=${rSquaredMagPct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
             };
 
@@ -1825,7 +1844,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 x: eisData.frequency,
                 y: predPhase,
                 mode: 'lines',
-                name: 'Fit',
+                name: `Fit (R²=${rSquaredPhasePct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
             };
 
@@ -2386,6 +2405,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             // Store comparison results
             window.comparisonResults = results;
+        }
+
+        function hideComparison() {
+            document.getElementById('comparisonPanel').style.display = 'none';
         }
 
         function selectComparedModel(modelType) {
