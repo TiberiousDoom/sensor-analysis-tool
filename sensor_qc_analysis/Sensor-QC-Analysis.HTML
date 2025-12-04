@@ -2147,6 +2147,10 @@ else if (typeof exports === 'object'){
         
         document.getElementById('metricsGrid').innerHTML = `
             <div class="metric">
+                <div class="metric-label">Job Number</div>
+                <div class="metric-value">${currentJob || '—'}</div>
+            </div>
+            <div class="metric">
                 <div class="metric-label">Total Sensors</div>
                 <div class="metric-value">${total}</div>
             </div>
