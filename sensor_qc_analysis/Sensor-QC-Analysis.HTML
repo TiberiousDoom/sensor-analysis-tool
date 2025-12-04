@@ -2274,8 +2274,13 @@ else if (typeof exports === 'object'){
     function updateSensorStatus(index, newStatus) {
         if (index < 0 || index >= analysisResults.length) return;
 
+        const serialNumber = analysisResults[index]['Serial Number'];
+
         // Update the status in analysisResults
         analysisResults[index]['Pass/Fail'] = newStatus;
+
+        // Save override to localStorage
+        saveStatusOverride(currentJob, serialNumber, newStatus);
 
         // Re-render the table to update row styling and dropdown appearance
         renderTable();
@@ -2286,6 +2291,31 @@ else if (typeof exports === 'object'){
 
         // Update status filters to reflect any count changes
         renderStatusFilters(analysisResults);
+    }
+
+    function saveStatusOverride(jobNumber, serialNumber, status) {
+        if (!jobNumber) return;
+        const key = `statusOverrides_${jobNumber}`;
+        const overrides = JSON.parse(localStorage.getItem(key) || '{}');
+        overrides[serialNumber] = status;
+        localStorage.setItem(key, JSON.stringify(overrides));
+    }
+
+    function loadStatusOverrides(jobNumber) {
+        if (!jobNumber) return {};
+        const key = `statusOverrides_${jobNumber}`;
+        return JSON.parse(localStorage.getItem(key) || '{}');
+    }
+
+    function applyStatusOverrides(results, jobNumber) {
+        const overrides = loadStatusOverrides(jobNumber);
+        results.forEach(row => {
+            const serial = row['Serial Number'];
+            if (overrides[serial]) {
+                row['Pass/Fail'] = overrides[serial];
+            }
+        });
+        return results;
     }
 
     function toggleCollapsible(contentId, toggleId) {
@@ -2592,7 +2622,10 @@ else if (typeof exports === 'object'){
                 analysisResults = determinePassFail(dataWithMetrics, thresholdSet);
                 currentJob = jobNumber;
                 currentJobData = jobData;
-                
+
+                // Apply any saved status overrides from previous sessions
+                applyStatusOverrides(analysisResults, jobNumber);
+
                 if (analysisResults.length === 0) {
                     hideLoading();
                     showAlert('❌ No valid sensor readings found', 'danger');
