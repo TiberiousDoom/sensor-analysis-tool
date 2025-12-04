@@ -283,7 +283,6 @@
         .status-FL, .status-FH { background: var(--danger); }
         .status-FT- { background: var(--danger); }
         .status-TT, .status-OT\+ { background: var(--warning); }
-        .status-DM { background: var(--info); }
 
         .status-select {
             padding: 4px 8px;
@@ -300,7 +299,6 @@
         select.status-FL, select.status-FH { background: var(--danger); }
         select.status-FT- { background: var(--danger); }
         select.status-TT, select.status-OT\+ { background: var(--warning); }
-        select.status-DM { background: var(--info); }
 
         .filter-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
         
@@ -322,8 +320,7 @@
         .filter-pill.filter-FT- { background: var(--danger); color: white; }
         .filter-pill.filter-TT { background: #eab308; color: white; }
         .filter-pill.filter-OT\+ { background: #fb923c; color: white; }
-        .filter-pill.filter-DM { background: var(--info); color: white; }
-        
+
         .table-container { overflow-x: auto; margin-top: 1rem; }
         table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
         th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--border-light); }
@@ -909,7 +906,6 @@
                                 <tr><td><span class="status-pill status-FT-">FT-</span></td><td>Failed Tolerance Negative (&lt; min % change)</td><td>FAIL</td></tr>
                                 <tr><td><span class="status-pill status-TT">TT</span></td><td>Test-to-Test Variability (&gt; max std dev)</td><td>PASS*</td></tr>
                                 <tr><td><span class="status-pill status-OT+">OT+</span></td><td>Out of Tolerance Positive (&gt; max % change)</td><td>PASS*</td></tr>
-                                <tr><td><span class="status-pill status-DM">DM</span></td><td>Data Missing (no valid 120s reading)</td><td>N/A</td></tr>
                                 <tr><td><span class="status-pill status-PASS">PASS</span></td><td>All criteria met</td><td>PASS</td></tr>
                             </tbody>
                         </table>
@@ -1558,7 +1554,7 @@ else if (typeof exports === 'object'){
     const TIME_POINTS = ['0', '5', '15', '30', '60', '90', '120'];
     
     const STATUS_PRIORITY = {
-        'FL': 1, 'FH': 2, 'FT-': 3, 'PASS': 4, 'TT': 5, 'OT+': 6, 'DM': 7
+        'FL': 1, 'FH': 2, 'FT-': 3, 'PASS': 4, 'TT': 5, 'OT+': 6
     };
     
     const STATUS_COLORS = {
@@ -1567,8 +1563,7 @@ else if (typeof exports === 'object'){
         'FH': '#dc2626',
         'FT-': '#ef4444',
         'TT': '#eab308',
-        'OT+': '#fb923c',
-        'DM': '#6b7280'
+        'OT+': '#fb923c'
     };
     
     const TEST_COLORS = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -1583,7 +1578,7 @@ else if (typeof exports === 'object'){
     let currentJobData = null;
     let jobHistory = JSON.parse(localStorage.getItem('sensorJobHistory') || '[]');
     let jobStatsHistory = JSON.parse(localStorage.getItem('sensorJobStatsHistory') || '[]');
-    let activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+', 'DM']);
+    let activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+']);
     let charts = {};
     let sqlDb = null;
     let sqlEngine = null;
@@ -1897,7 +1892,7 @@ else if (typeof exports === 'object'){
             
             const serialRow = {
                 'Serial Number': serial,
-                'Channel': group[0]['Channel'] || '',
+                'Channel': (group[2] || group[group.length - 1])['Channel'] || '',
                 'testCount': group.length,
                 'readings120': readings120,
                 'testData': []
@@ -1922,8 +1917,6 @@ else if (typeof exports === 'object'){
                 if (reading120 !== null && !isNaN(reading120)) {
                     if (reading120 < thresholds.min_120s) failureCodes.push('FL');
                     if (reading120 > thresholds.max_120s) failureCodes.push('FH');
-                } else {
-                    failureCodes.push('DM');
                 }
                 
                 if (pctChange !== null && !isNaN(pctChange)) {
@@ -2138,7 +2131,6 @@ else if (typeof exports === 'object'){
         const total = results.length;
         const passed = results.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
         const failed = results.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
-        const dm = results.filter(r => r['Pass/Fail'] === 'DM').length;
         const counted = passed + failed;
         
         const passRate = counted > 0 ? (passed / counted * 100).toFixed(1) : '0.0';
@@ -2233,7 +2225,6 @@ else if (typeof exports === 'object'){
             if (['FL', 'FH', 'FT-'].includes(status)) rowClass = 'row-fail';
             else if (status === 'PASS') rowClass = 'row-pass';
             else if (['TT', 'OT+'].includes(status)) rowClass = 'row-warning';
-            else if (status === 'DM') rowClass = 'row-dm';
 
             // Find the index of this row in the original analysisResults
             const originalIndex = analysisResults.findIndex(r => r['Serial Number'] === row['Serial Number']);
@@ -2438,7 +2429,7 @@ else if (typeof exports === 'object'){
         
         // Count status per test
         const statusByTest = {};
-        const allStatuses = ['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+', 'DM'];
+        const allStatuses = ['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+'];
         
         for (let t = 1; t <= maxTests; t++) {
             statusByTest[t] = {};
@@ -2601,7 +2592,7 @@ else if (typeof exports === 'object'){
                 
                 renderMetrics(analysisResults, thresholdSet);
                 renderStatusFilters(analysisResults);
-                activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+', 'DM']);
+                activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+']);
                 renderTable();
                 renderCharts(analysisResults, jobData, thresholdSet);
                 renderThresholdInfo(thresholdSet);
@@ -2828,7 +2819,7 @@ else if (typeof exports === 'object'){
                     let testFailed = false;
 
                     if (v120 === null || v120 === undefined || isNaN(v120)) {
-                        // DM - not counted as critical failure
+                        // Missing data - skip this test
                     } else {
                         if (v120 < thresholds.min_120s || v120 > thresholds.max_120s) {
                             testFailed = true;
@@ -2921,7 +2912,7 @@ else if (typeof exports === 'object'){
                 </tr>
                 ${jobRows}
                 <tr class="cumulative-row">
-                    <td>Average:</td>
+                    <td>Overall:</td>
                     <td>${totalSensorsSum}</td>
                     <td>${avgT1FailPct.toFixed(2)}%</td>
                     <td>${avgT2FailPct.toFixed(2)}%</td>
