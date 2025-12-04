@@ -2842,8 +2842,8 @@ else if (typeof exports === 'object'){
             });
 
             let totalSensors = 0;
-            let totalFailed = 0;
-            let t1Failed = 0, t2Failed = 0, t3Failed = 0;
+            let totalPassed = 0;
+            let t1Passed = 0, t2Passed = 0, t3Passed = 0;
             let t1Total = 0, t2Total = 0, t3Total = 0;
 
             // Evaluate each unique sensor using the same logic as determinePassFail
@@ -2858,77 +2858,90 @@ else if (typeof exports === 'object'){
                 const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
                 let hasCriticalFailure = false;
 
-                // Check each test for this sensor and track per-test failures
+                // Check each test for this sensor and track per-test passes
                 sensorRows.forEach((row, testIdx) => {
                     const v120 = row['120'];
                     const pctChange = row.pct_change_90_120;
-                    let testFailed = false;
+                    let testPassed = true;
 
                     if (v120 === null || v120 === undefined || isNaN(v120)) {
                         // Missing data - skip this test
+                        testPassed = false;
                     } else {
                         if (v120 < thresholds.min_120s || v120 > thresholds.max_120s) {
-                            testFailed = true;
+                            testPassed = false;
                             hasCriticalFailure = true;
                         }
                     }
 
                     if (pctChange !== null && !isNaN(pctChange)) {
                         if (pctChange < thresholds.min_pct_change) {
-                            testFailed = true;
+                            testPassed = false;
                             hasCriticalFailure = true;
                         }
                     }
 
-                    // Track per-test failures (testIdx 0 = T1, 1 = T2, 2 = T3)
+                    // Track per-test passes (testIdx 0 = T1, 1 = T2, 2 = T3)
                     if (testIdx === 0) {
                         t1Total++;
-                        if (testFailed) t1Failed++;
+                        if (testPassed) t1Passed++;
                     } else if (testIdx === 1) {
                         t2Total++;
-                        if (testFailed) t2Failed++;
+                        if (testPassed) t2Passed++;
                     } else if (testIdx === 2) {
                         t3Total++;
-                        if (testFailed) t3Failed++;
+                        if (testPassed) t3Passed++;
                     }
                 });
 
-                if (hasCriticalFailure) {
-                    totalFailed++;
+                if (!hasCriticalFailure) {
+                    totalPassed++;
                 }
             }
 
-            const t1FailPct = t1Total > 0 ? (t1Failed / t1Total * 100) : 0;
-            const t2FailPct = t2Total > 0 ? (t2Failed / t2Total * 100) : 0;
-            const t3FailPct = t3Total > 0 ? (t3Failed / t3Total * 100) : 0;
-            const totalFailPct = totalSensors > 0 ? (totalFailed / totalSensors * 100) : 0;
+            const t1PassPct = t1Total > 0 ? (t1Passed / t1Total * 100) : 0;
+            const t2PassPct = t2Total > 0 ? (t2Passed / t2Total * 100) : 0;
+            const t3PassPct = t3Total > 0 ? (t3Passed / t3Total * 100) : 0;
+            const totalPassPct = totalSensors > 0 ? (totalPassed / totalSensors * 100) : 0;
 
             return {
                 jobNumber: wholeJobNum,
                 totalSensors: totalSensors,
-                t1FailPct: t1FailPct,
-                t2FailPct: t2FailPct,
-                t3FailPct: t3FailPct,
-                totalFailPct: totalFailPct
+                t1PassPct: t1PassPct,
+                t1Passed: t1Passed,
+                t2PassPct: t2PassPct,
+                t2Passed: t2Passed,
+                t3PassPct: t3PassPct,
+                t3Passed: t3Passed,
+                totalPassPct: totalPassPct,
+                totalPassed: totalPassed
             };
         });
 
-        // Calculate cumulative averages for fail percentages
+        // Sort jobs by job number ascending (most recent/largest at bottom)
+        jobsToShow.sort((a, b) => a.jobNumber - b.jobNumber);
+
+        // Calculate cumulative totals for pass percentages
         const totalSensorsSum = jobsToShow.reduce((sum, j) => sum + j.totalSensors, 0);
-        const avgT1FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t1FailPct, 0) / jobsToShow.length : 0;
-        const avgT2FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t2FailPct, 0) / jobsToShow.length : 0;
-        const avgT3FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t3FailPct, 0) / jobsToShow.length : 0;
-        const avgTotalFailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.totalFailPct, 0) / jobsToShow.length : 0;
+        const totalT1Passed = jobsToShow.reduce((sum, j) => sum + j.t1Passed, 0);
+        const totalT1Count = jobsToShow.reduce((sum, j) => sum + (j.t1Passed > 0 || j.t1PassPct < 100 ? 1 : 0), 0);
+        const totalT2Passed = jobsToShow.reduce((sum, j) => sum + j.t2Passed, 0);
+        const totalT3Passed = jobsToShow.reduce((sum, j) => sum + j.t3Passed, 0);
+        const totalOverallPassed = jobsToShow.reduce((sum, j) => sum + j.totalPassed, 0);
+        const avgT1PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t1PassPct, 0) / jobsToShow.length : 0;
+        const avgT2PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t2PassPct, 0) / jobsToShow.length : 0;
+        const avgT3PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t3PassPct, 0) / jobsToShow.length : 0;
+        const avgTotalPassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.totalPassPct, 0) / jobsToShow.length : 0;
 
         // Generate table rows for each job
         const jobRows = jobsToShow.map(job => `
             <tr>
                 <td>${job.jobNumber}</td>
                 <td>${job.totalSensors}</td>
-                <td>${job.t1FailPct.toFixed(2)}%</td>
-                <td>${job.t2FailPct.toFixed(2)}%</td>
-                <td>${job.t3FailPct.toFixed(2)}%</td>
-                <td>${job.totalFailPct.toFixed(2)}%</td>
+                <td>${job.t1PassPct.toFixed(1)}% (${job.t1Passed})</td>
+                <td>${job.t2PassPct.toFixed(1)}% (${job.t2Passed})</td>
+                <td>${job.t3PassPct.toFixed(1)}% (${job.t3Passed})</td>
+                <td>${job.totalPassPct.toFixed(1)}% (${job.totalPassed})</td>
             </tr>
         `).join('');
 
@@ -2951,19 +2964,19 @@ else if (typeof exports === 'object'){
                 <tr>
                     <th>Job #</th>
                     <th>Total #</th>
-                    <th>T1 Fail %</th>
-                    <th>T2 Fail %</th>
-                    <th>T3 Fail %</th>
-                    <th>Total Fail %</th>
+                    <th>T1 Pass %</th>
+                    <th>T2 Pass %</th>
+                    <th>T3 Pass %</th>
+                    <th>Total Pass %</th>
                 </tr>
                 ${jobRows}
                 <tr class="cumulative-row">
                     <td>Overall:</td>
                     <td>${totalSensorsSum}</td>
-                    <td>${avgT1FailPct.toFixed(2)}%</td>
-                    <td>${avgT2FailPct.toFixed(2)}%</td>
-                    <td>${avgT3FailPct.toFixed(2)}%</td>
-                    <td>${avgTotalFailPct.toFixed(2)}%</td>
+                    <td>${avgT1PassPct.toFixed(1)}% (${totalT1Passed})</td>
+                    <td>${avgT2PassPct.toFixed(1)}% (${totalT2Passed})</td>
+                    <td>${avgT3PassPct.toFixed(1)}% (${totalT3Passed})</td>
+                    <td>${avgTotalPassPct.toFixed(1)}% (${totalOverallPassed})</td>
                 </tr>
             </table>
             </body></html>
