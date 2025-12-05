@@ -2190,22 +2190,38 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         function plotResiduals(predicted) {
             const mobile = isMobile();
 
-            // Calculate residuals (percent error)
-            const residualReal = eisData.zReal.map((r, i) => {
-                const err = r - predicted[i].real;
-                return (err / Math.abs(r)) * 100; // Percent error
-            });
+            // Validate predicted array
+            if (!predicted || predicted.length === 0) {
+                console.error('plotResiduals: No predicted data available');
+                return;
+            }
 
-            const residualImag = eisData.zImag.map((im, i) => {
-                const err = im - predicted[i].imag;
-                return (err / Math.abs(im || 1)) * 100; // Percent error
-            });
+            // Use the data source that matches the predicted data length
+            const dataSource = filteredData || eisData;
+            const len = Math.min(dataSource.zReal.length, predicted.length);
+
+            // Calculate residuals (percent error)
+            const residualReal = [];
+            const residualImag = [];
+            const frequencies = [];
+
+            for (let i = 0; i < len; i++) {
+                if (predicted[i] && typeof predicted[i].real !== 'undefined') {
+                    const errReal = dataSource.zReal[i] - predicted[i].real;
+                    residualReal.push((errReal / Math.abs(dataSource.zReal[i] || 1)) * 100);
+
+                    const errImag = dataSource.zImag[i] - predicted[i].imag;
+                    residualImag.push((errImag / Math.abs(dataSource.zImag[i] || 1)) * 100);
+
+                    frequencies.push(dataSource.frequency[i]);
+                }
+            }
 
             // Show residual panel
             document.getElementById('residualPanel').style.display = 'block';
 
             const realTrace = {
-                x: eisData.frequency,
+                x: frequencies,
                 y: residualReal,
                 mode: 'markers+lines',
                 name: "Z' Residual",
@@ -2214,7 +2230,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             };
 
             const imagTrace = {
-                x: eisData.frequency,
+                x: frequencies,
                 y: residualImag,
                 mode: 'markers+lines',
                 name: 'Z" Residual',
@@ -2224,8 +2240,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             const zeroLine = {
                 type: 'line',
-                x0: Math.min(...eisData.frequency),
-                x1: Math.max(...eisData.frequency),
+                x0: frequencies.length > 0 ? Math.min(...frequencies) : 0,
+                x1: frequencies.length > 0 ? Math.max(...frequencies) : 1,
                 y0: 0,
                 y1: 0,
                 line: { color: '#999', width: 1, dash: 'dash' }
