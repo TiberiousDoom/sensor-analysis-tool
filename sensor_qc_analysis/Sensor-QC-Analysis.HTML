@@ -2223,10 +2223,10 @@ else if (typeof exports === 'object'){
         
         const headerRow = document.getElementById('tableHeader');
         const columns = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)'];
-        
+
         const maxTests = Math.max(...analysisResults.map(r => r.testCount || 1));
         for (let i = 1; i <= maxTests; i++) {
-            columns.push(`120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
+            columns.push(`0s(T${i})`, `120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
         }
         
         headerRow.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
@@ -2256,11 +2256,13 @@ else if (typeof exports === 'object'){
             ];
             
             for (let i = 1; i <= maxTests; i++) {
+                const v0 = row[`0s(T${i})`];
                 const v120 = row[`120s(T${i})`];
                 const pctChg = row[`%Chg(T${i})`];
                 const tStatus = row[`Status(T${i})`];
-                
+
                 cells.push(
+                    v0 !== undefined && v0 !== null ? v0.toFixed(2) : '—',
                     v120 !== undefined && v120 !== null ? v120.toFixed(2) : '—',
                     pctChg || '—',
                     tStatus ? `<span class="status-pill status-${tStatus.split(',')[0]}">${tStatus}</span>` : '—'
@@ -2420,44 +2422,69 @@ else if (typeof exports === 'object'){
         });
         
         // ========================================
-        // 2. Distribution Chart (Histogram)
+        // 2. Distribution Chart (Histogram by Test)
         // ========================================
         const distCtx = document.getElementById('distributionChart').getContext('2d');
-        const readings120 = results.flatMap(r => r.readings120 || []);
-        
+
         const bins = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
-        const histogram = new Array(bins.length - 1).fill(0);
-        readings120.forEach(v => {
-            for (let i = 0; i < bins.length - 1; i++) {
-                if (v >= bins[i] && v < bins[i + 1]) {
-                    histogram[i]++;
-                    break;
+        const binLabels = bins.slice(0, -1).map((b, i) => `${b}-${bins[i+1]}V`);
+
+        // Create histograms for each test
+        const histogramsByTest = {};
+        for (let t = 1; t <= maxTests; t++) {
+            histogramsByTest[t] = new Array(bins.length - 1).fill(0);
+        }
+
+        results.forEach(row => {
+            for (let t = 1; t <= row.testCount; t++) {
+                const v120 = row[`120s(T${t})`];
+                if (v120 !== null && v120 !== undefined && !isNaN(v120)) {
+                    for (let i = 0; i < bins.length - 1; i++) {
+                        if (v120 >= bins[i] && v120 < bins[i + 1]) {
+                            histogramsByTest[t][i]++;
+                            break;
+                        }
+                    }
                 }
             }
         });
-        
-        const barColors = bins.slice(0, -1).map((bin, i) => {
-            const midpoint = (bins[i] + bins[i + 1]) / 2;
-            if (midpoint < thresholds.min_120s) return 'rgba(239, 68, 68, 0.7)';
-            if (midpoint > thresholds.max_120s) return 'rgba(239, 68, 68, 0.7)';
-            return 'rgba(16, 185, 129, 0.7)';
-        });
-        
+
+        // Color function based on thresholds
+        const getBarColor = (binIndex, alpha) => {
+            const midpoint = (bins[binIndex] + bins[binIndex + 1]) / 2;
+            if (midpoint < thresholds.min_120s) return `rgba(239, 68, 68, ${alpha})`;
+            if (midpoint > thresholds.max_120s) return `rgba(239, 68, 68, ${alpha})`;
+            return `rgba(16, 185, 129, ${alpha})`;
+        };
+
+        // Create datasets for each test with different shades
+        const testColors = ['0.9', '0.6', '0.35'];
+        const testDatasets = [];
+        for (let t = 1; t <= maxTests; t++) {
+            testDatasets.push({
+                label: `Test ${t}`,
+                data: histogramsByTest[t],
+                backgroundColor: bins.slice(0, -1).map((_, i) => getBarColor(i, testColors[t-1] || '0.5')),
+                borderWidth: 0
+            });
+        }
+
         charts.distribution = new Chart(distCtx, {
             type: 'bar',
             data: {
-                labels: bins.slice(0, -1).map((b, i) => `${b}-${bins[i+1]}V`),
-                datasets: [{
-                    label: 'Count',
-                    data: histogram,
-                    backgroundColor: barColors,
-                    borderWidth: 0
-                }]
+                labels: binLabels,
+                datasets: testDatasets
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { boxWidth: 12, padding: 8 }
+                    }
+                },
                 scales: {
                     y: { title: { display: true, text: 'Count' } },
                     x: { title: { display: true, text: '120s Voltage' } }
@@ -2670,9 +2697,9 @@ else if (typeof exports === 'object'){
         const headers = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)'];
         const maxTests = Math.max(...analysisResults.map(r => r.testCount || 1));
         for (let i = 1; i <= maxTests; i++) {
-            headers.push(`120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
+            headers.push(`0s(T${i})`, `120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
         }
-        
+
         const rows = analysisResults.map(row => {
             const values = [
                 row['Serial Number'],
@@ -2680,15 +2707,16 @@ else if (typeof exports === 'object'){
                 row['Pass/Fail'],
                 row['120s(St.Dev.)'].toFixed(4)
             ];
-            
+
             for (let i = 1; i <= maxTests; i++) {
                 values.push(
+                    row[`0s(T${i})`] ?? '',
                     row[`120s(T${i})`] ?? '',
                     row[`%Chg(T${i})`] ?? '',
                     row[`Status(T${i})`] ?? ''
                 );
             }
-            
+
             return values.map(v => `"${v}"`).join(',');
         });
         
