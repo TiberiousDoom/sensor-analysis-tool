@@ -855,12 +855,24 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     const fitParams = model.fit(omega, dataSource);
                     const predicted = omega.map(w => model.predict(fitParams, w));
 
+                    // Validate predicted array has valid values
+                    if (!predicted || predicted.length === 0 || !predicted[0] || typeof predicted[0].real === 'undefined') {
+                        console.warn(`Model ${modelType} returned invalid predictions`);
+                        continue;
+                    }
+
                     // Calculate AIC (Akaike Information Criterion) for model comparison
                     // AIC = n * ln(RSS/n) + 2k, where k is number of parameters
-                    const rss = dataSource.zReal.reduce((sum, r, i) => {
-                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
-                    }, 0);
-                    const n = dataSource.zReal.length * 2; // Real + Imag points
+                    // Use the minimum length to avoid index out of bounds
+                    const len = Math.min(dataSource.zReal.length, predicted.length);
+                    let rss = 0;
+                    for (let i = 0; i < len; i++) {
+                        if (predicted[i] && typeof predicted[i].real !== 'undefined') {
+                            rss += Math.pow(dataSource.zReal[i] - predicted[i].real, 2) +
+                                   Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
+                        }
+                    }
+                    const n = len * 2; // Real + Imag points
                     const k = model.params;
                     const aic = n * Math.log(rss / n) + 2 * k;
 
@@ -1959,27 +1971,39 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         function plotFit(predicted) {
             const mobile = isMobile();
 
+            // Validate predicted array
+            if (!predicted || predicted.length === 0) {
+                console.error('plotFit: No predicted data available');
+                return;
+            }
+
+            // Use the data source that matches the predicted data length
+            const dataSource = filteredData || eisData;
+
             // Calculate R² (coefficient of determination)
-            const meanReal = eisData.zReal.reduce((a, b) => a + b, 0) / eisData.zReal.length;
-            const meanImag = eisData.zImag.reduce((a, b) => a + b, 0) / eisData.zImag.length;
+            const meanReal = dataSource.zReal.reduce((a, b) => a + b, 0) / dataSource.zReal.length;
+            const meanImag = dataSource.zImag.reduce((a, b) => a + b, 0) / dataSource.zImag.length;
 
             let ssTot = 0, ssRes = 0;
-            for (let i = 0; i < eisData.zReal.length; i++) {
-                ssTot += Math.pow(eisData.zReal[i] - meanReal, 2) + Math.pow(eisData.zImag[i] - meanImag, 2);
-                ssRes += Math.pow(eisData.zReal[i] - predicted[i].real, 2) + Math.pow(eisData.zImag[i] - predicted[i].imag, 2);
+            const len = Math.min(dataSource.zReal.length, predicted.length);
+            for (let i = 0; i < len; i++) {
+                if (predicted[i] && typeof predicted[i].real !== 'undefined') {
+                    ssTot += Math.pow(dataSource.zReal[i] - meanReal, 2) + Math.pow(dataSource.zImag[i] - meanImag, 2);
+                    ssRes += Math.pow(dataSource.zReal[i] - predicted[i].real, 2) + Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
+                }
             }
-            const rSquared = Math.max(0, 1 - ssRes / ssTot);
+            const rSquared = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
             const rSquaredPct = (rSquared * 100).toFixed(1);
 
             const nyquistData = [{
-                x: eisData.zReal,
-                y: eisData.zImag.map(z => -z),
+                x: dataSource.zReal,
+                y: dataSource.zImag.map(z => -z),
                 mode: 'markers',
                 name: 'Experimental',
                 marker: { size: mobile ? 5 : 6, color: '#667eea' }
             }, {
-                x: predicted.map(p => p.real),
-                y: predicted.map(p => -p.imag),
+                x: predicted.filter(p => p && typeof p.real !== 'undefined').map(p => p.real),
+                y: predicted.filter(p => p && typeof p.imag !== 'undefined').map(p => -p.imag),
                 mode: 'lines',
                 name: `Fit (R²=${rSquaredPct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
