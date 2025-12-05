@@ -550,7 +550,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPEW">R-(R||CPE)-W (CPE + Warburg)</option>
                         <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPECPEW">R-(R||CPE)-(R||CPE)-W (Two CPE + Warburg)</option>
                         <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
                     </select>
                     <small id="model-help" style="color: #666; font-size: 0.8em;">Choose a circuit model or use Auto to find the best fit</small>
@@ -646,7 +648,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPEW">R-(R||CPE)-W (CPE + Warburg)</option>
                         <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPECPEW">R-(R||CPE)-(R||CPE)-W (Two CPE + Warburg)</option>
                         <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
                     </select>
                 </div>
@@ -877,7 +881,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RCRC': { name: 'R-(R||C)-(R||C) (Two RC)', fit: fitRCRCModel, predict: predictRCRC, params: 5 },
             'RRCRC': { name: 'R-(R||C)-(R||C)-(R||C) (Three RC)', fit: fitRRCRCModel, predict: predictRRCRC, params: 7 },
             'CPE': { name: 'R-(R||CPE)', fit: fitCPEModel, predict: predictCPE, params: 4 },
+            'CPEW': { name: 'R-(R||CPE)-W (CPE+Warburg)', fit: fitCPEWModel, predict: predictCPEW, params: 5 },
             'CPECPE': { name: 'R-(R||CPE)-(R||CPE) (Two CPE)', fit: fitCPECPEModel, predict: predictCPECPE, params: 7 },
+            'CPECPEW': { name: 'R-(R||CPE)-(R||CPE)-W (Two CPE+Warburg)', fit: fitCPECPEWModel, predict: predictCPECPEW, params: 8 },
             'CPEpCPE': { name: 'R-(R||CPE)||(R||CPE) (Parallel CPE)', fit: fitCPEpCPEModel, predict: predictCPEpCPE, params: 7 }
         };
 
@@ -1369,6 +1375,146 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             return {
                 real: params.R0 + zParReal,
                 imag: zParImag
+            };
+        }
+
+        // CPE with Warburg model: R0 + (R1 || CPE) + W
+        // Uses multi-start optimization
+        function fitCPEWModel(omega) {
+            const R0_est = estimateR0();
+            const R_total = estimateRTotal();
+            const R1_est = Math.max((R_total - R0_est) * 0.5, 10);
+            const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+            const W_est = (R_total - R0_est) * 0.3;
+
+            const startConfigs = [
+                { n: n_est, Q: C_est, R0: R0_est, R1: R1_est, W: W_est },
+                { n: 0.82, Q: 3e-6, R0: R0_est, R1: R1_est, W: W_est * 0.5 },
+                { n: 0.85, Q: 1e-6, R0: R0_est, R1: R1_est, W: W_est * 1.5 },
+                { n: 0.80, Q: 5e-6, R0: R0_est, R1: R1_est * 0.8, W: W_est },
+                { n: 0.78, Q: 1e-5, R0: R0_est, R1: R1_est * 1.2, W: W_est * 0.8 },
+                { n: 0.90, Q: 5e-7, R0: R0_est, R1: R1_est, W: W_est * 2 },
+                { n: 0.75, Q: 2e-5, R0: R0_est * 0.9, R1: R1_est * 0.7, W: W_est * 1.2 },
+                { n: n_est, Q: C_est * 0.5, R0: R0_est * 0.8, R1: R1_est * 1.1, W: W_est * 0.7 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                try {
+                    const params = nelderMeadLogSpace(
+                        (p) => calcError(p, omega, predictCPEW),
+                        config,
+                        ['Q', 'W'],
+                        { R0: Math.max(config.R0 * 0.3, 5), R1: config.R1 * 0.3, Q: config.Q * 0.5, n: 0.1, W: config.W * 0.5 },
+                        1500
+                    );
+                    const error = calcError(params, omega, predictCPEW);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('CPEW fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85, W: W_est };
+        }
+
+        function predictCPEW(params, omega) {
+            // R0 + (R1 || CPE) + Warburg
+            const cpe = predictRCPEParallel(params.R1, params.Q, params.n, omega);
+            // Warburg: Z_w = W/sqrt(omega) * (1 - j)
+            const warburgFactor = params.W / Math.sqrt(omega);
+            return {
+                real: params.R0 + cpe.real + warburgFactor,
+                imag: cpe.imag - warburgFactor
+            };
+        }
+
+        // Two CPE with Warburg model: R0 + (R1 || CPE1) + (R2 || CPE2) + W
+        // Uses multi-start optimization due to 8 parameters
+        function fitCPECPEWModel(omega) {
+            const R0_est = estimateR0();
+            const R_total = estimateRTotal();
+            const R_range = Math.max(R_total - R0_est, 10);
+            const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+            const W_est = R_range * 0.2;
+
+            const charFreqs = estimateCharacteristicFrequencies(omega, 2);
+            const R_avg = R_range / 2;
+            const Q_estimates = charFreqs.map(f => 1 / (2 * Math.PI * f * Math.max(R_avg, 1)));
+
+            const startConfigs = [
+                { n1: n_est, Q1: Q_estimates[0] || C_est * 0.3, R1: R_range * 0.5, n2: n_est * 0.95, Q2: Q_estimates[1] || C_est * 3, R2: R_range * 0.3, W: W_est },
+                { n1: 0.85, Q1: 2e-6, R1: R_range * 0.5, n2: 0.78, Q2: 1e-5, R2: R_range * 0.3, W: W_est * 0.8 },
+                { n1: 0.82, Q1: 1e-6, R1: R_range * 0.45, n2: 0.80, Q2: 5e-6, R2: R_range * 0.35, W: W_est * 1.2 },
+                { n1: 0.88, Q1: 3e-6, R1: R_range * 0.48, n2: 0.75, Q2: 8e-6, R2: R_range * 0.32, W: W_est * 1.5 },
+                { n1: 0.80, Q1: C_est * 0.2, R1: R_range * 0.55, n2: 0.85, Q2: C_est * 2, R2: R_range * 0.25, W: W_est * 0.5 },
+                { n1: 0.85, Q1: 5e-7, R1: R_range * 0.5, n2: 0.78, Q2: 2e-5, R2: R_range * 0.3, W: W_est * 2 },
+                { n1: n_est, Q1: C_est * 0.3, R1: R_range * 0.48, n2: n_est, Q2: C_est * 3, R2: R_range * 0.32, W: W_est },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                const initial = {
+                    R0: R0_est,
+                    R1: config.R1,
+                    Q1: config.Q1,
+                    n1: config.n1,
+                    R2: config.R2,
+                    Q2: config.Q2,
+                    n2: config.n2,
+                    W: config.W
+                };
+
+                const steps = {
+                    R0: Math.max(R0_est * 0.3, 5),
+                    R1: initial.R1 * 0.4,
+                    Q1: initial.Q1 * 0.5,
+                    n1: 0.1,
+                    R2: initial.R2 * 0.4,
+                    Q2: initial.Q2 * 0.5,
+                    n2: 0.1,
+                    W: initial.W * 0.5
+                };
+
+                try {
+                    const params = nelderMeadLogSpace(
+                        (p) => calcError(p, omega, predictCPECPEW),
+                        initial,
+                        ['Q1', 'Q2', 'W'],
+                        steps,
+                        2000
+                    );
+                    const error = calcError(params, omega, predictCPECPEW);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('CPECPEW fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || { R0: R0_est, R1: R_range * 0.5, Q1: C_est, n1: 0.85, R2: R_range * 0.3, Q2: C_est * 3, n2: 0.80, W: W_est };
+        }
+
+        function predictCPECPEW(params, omega) {
+            // R0 + (R1||CPE1) + (R2||CPE2) + Warburg
+            const cpe1 = predictRCPEParallel(params.R1, params.Q1, params.n1, omega);
+            const cpe2 = predictRCPEParallel(params.R2, params.Q2, params.n2, omega);
+            // Warburg: Z_w = W/sqrt(omega) * (1 - j)
+            const warburgFactor = params.W / Math.sqrt(omega);
+            return {
+                real: params.R0 + cpe1.real + cpe2.real + warburgFactor,
+                imag: cpe1.imag + cpe2.imag - warburgFactor
             };
         }
 
@@ -2175,7 +2321,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RRCRC': { R0: 40, R1: 100, C1: 5e-7, R2: 80, C2: 3e-6, R3: 60, C3: 2e-5 },
             'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 },
             'CPECPE': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 100, Q2: 1e-4, n2: 0.78 },
-            'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 }
+            'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 },
+            'CPEW': { R0: 60, R1: 180, Q: 2e-6, n: 0.80, W: 45 },
+            'CPECPEW': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 120, Q2: 8e-5, n2: 0.78, W: 35 }
         };
 
         function runDebugTest() {
