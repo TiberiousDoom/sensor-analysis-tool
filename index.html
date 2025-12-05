@@ -203,13 +203,21 @@
     </style>
 </head>
 <body>
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:#667eea;color:white;text-decoration:none;font-weight:bold;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>This application requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
     <div class="container">
         <header>
             <h1>Sensor Analysis Tools</h1>
             <p>A collection of web-based tools for electrochemical sensor data analysis, quality control testing, and statistical analysis</p>
         </header>
 
-        <main>
+        <main id="main-content">
             <div class="tools-grid" role="list">
                 <a href="EIS_analysis/eis_analyzer.html" class="tool-card eis" role="listitem">
                     <div class="category-label">Electrochemistry</div>
@@ -235,7 +243,7 @@
                     </div>
                 </a>
 
-                <a href="sensor_qc_analysis/Sensor-QC-Analysis.HTML" class="tool-card qc" role="listitem">
+                <a href="sensor_qc_analysis/Sensor-QC-Analysis.html" class="tool-card qc" role="listitem">
                     <div class="category-label">Quality Control</div>
                     <div class="tool-icon" aria-hidden="true">🔬</div>
                     <h2>QC Analysis Dashboard</h2>
@@ -247,7 +255,7 @@
                     </div>
                 </a>
 
-                <a href="sensor_qc_analysis/Excel_Database_Builder.HTML" class="tool-card db" role="listitem">
+                <a href="sensor_qc_analysis/Excel_Database_Builder.html" class="tool-card db" role="listitem">
                     <div class="category-label">Data Management</div>
                     <div class="tool-icon" aria-hidden="true">📁</div>
                     <h2>Excel Database Builder</h2>

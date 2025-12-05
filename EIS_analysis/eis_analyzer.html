@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Electrochemical Impedance Spectroscopy (EIS) data analysis tool with circuit model fitting, Nyquist plots, and Bode plots">
-    <title>EIS Analyzer - Circuit Model Fitting</title>
+    <title>EIS Analyzer v1.0 - Circuit Model Fitting</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
@@ -26,15 +26,15 @@
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 15px 30px;
             text-align: center;
             position: relative;
         }
-        header h1 { font-size: 2.5em; margin-bottom: 5px; }
-        header p { opacity: 0.9; }
+        header h1 { font-size: 1.8em; margin-bottom: 3px; }
+        header p { opacity: 0.9; font-size: 0.85em; }
         .home-btn {
             position: absolute;
-            top: 20px;
+            top: 12px;
             left: 20px;
             background: rgba(255,255,255,0.2);
             color: white;
@@ -56,24 +56,24 @@
         .content {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            padding: 30px;
+            gap: 15px;
+            padding: 20px;
         }
         .panel {
             background: #f8f9fa;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid #e0e0e0;
         }
         .panel h2 {
             color: #333;
-            margin-bottom: 15px;
-            font-size: 1.2em;
+            margin-bottom: 10px;
+            font-size: 1.1em;
             border-bottom: 2px solid #667eea;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         label {
             display: block;
@@ -141,8 +141,8 @@
         .result-value { color: #333; font-family: monospace; }
         .plot-container {
             width: 100%;
-            height: 400px;
-            min-height: 300px;
+            height: 320px;
+            min-height: 250px;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -259,8 +259,8 @@
         }
         /* Residual plot container */
         .residual-container {
-            height: 250px;
-            min-height: 200px;
+            height: 200px;
+            min-height: 150px;
         }
         /* Export buttons */
         .export-btn-group {
@@ -359,17 +359,151 @@
             font-size: 0.8em;
             padding: 6px 10px;
         }
+        /* Settings Menu */
+        .settings-btn {
+            position: absolute;
+            top: 12px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.4);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .settings-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: rotate(30deg);
+        }
+        .settings-menu {
+            position: absolute;
+            top: 55px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            min-width: 200px;
+            display: none;
+            z-index: 1000;
+            overflow: hidden;
+        }
+        .settings-menu.open {
+            display: block;
+        }
+        .settings-menu-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+            font-size: 0.9em;
+            border-bottom: 1px solid #eee;
+            transition: background 0.15s;
+        }
+        .settings-menu-item:last-child {
+            border-bottom: none;
+        }
+        .settings-menu-item:hover {
+            background: #f5f5f5;
+        }
+        .settings-menu-item .icon {
+            font-size: 1.1em;
+        }
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal-overlay.open {
+            display: flex;
+        }
+        .modal {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 10px 10px 0 0;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .modal-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .modal-body {
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:#667eea;color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The EIS Analyzer requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
     <div class="container">
         <header>
             <a href="../index.html" class="home-btn">← Home</a>
             <h1>⚡ EIS Analyzer</h1>
             <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
+            <span style="font-size: 0.75em; opacity: 0.7;">v1.0</span>
+            <button class="settings-btn" onclick="toggleSettingsMenu()" title="Settings">⚙</button>
+            <div id="settingsMenu" class="settings-menu">
+                <div class="settings-menu-item" onclick="openDebugModal()">
+                    <span class="icon">🧪</span>
+                    <span>Debug Tools</span>
+                </div>
+                <div class="settings-menu-item" onclick="toggleSettingsMenu()">
+                    <span class="icon">❌</span>
+                    <span>Close Menu</span>
+                </div>
+            </div>
         </header>
 
-        <main class="content" role="main">
+        <main id="main-content" class="content" role="main">
             <!-- Input Panel -->
             <div class="panel" role="region" aria-labelledby="data-input-heading">
                 <h2 id="data-input-heading">📊 Data Input</h2>
@@ -378,6 +512,7 @@
                 <div class="file-upload-area" id="fileDropZone" role="button" tabindex="0" aria-label="Upload CSV or TXT file with EIS data">
                     <div>📁 Drop file here or click to upload</div>
                     <div style="font-size: 0.85em; color: #666; margin-top: 5px;">Supports CSV, TXT (tab/space separated)</div>
+                    <div style="font-size: 0.75em; color: #999; margin-top: 3px;">Recommended: files under 5MB for best performance</div>
                     <input type="file" id="fileInput" accept=".csv,.txt,.tsv" aria-label="File upload input">
                     <div id="fileStatus" style="margin-top: 10px; color: #28a745;"></div>
                 </div>
@@ -415,7 +550,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPEW">R-(R||CPE)-W (CPE + Warburg)</option>
+                        <option value="CPEWs">R-(R||CPE)-Ws (CPE + Finite Warburg)</option>
                         <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPECPEW">R-(R||CPE)-(R||CPE)-W (Two CPE + Warburg)</option>
                         <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
                     </select>
                     <small id="model-help" style="color: #666; font-size: 0.8em;">Choose a circuit model or use Auto to find the best fit</small>
@@ -445,28 +583,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     <div id="comparisonResults"></div>
                 </div>
 
-                <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
-                <div class="form-group">
-                    <label for="debugModel">Test Model</label>
-                    <select id="debugModel">
-                        <option value="RRC">R-(R||C) (Randles)</option>
-                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
-                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
-                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
-                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
-                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
-                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="noiseLevel">Noise Level (%)</label>
-                    <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
-                    <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
-                </div>
-                <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
-                <div id="debugStatus" role="status" aria-live="polite"></div>
-
-                <h2 id="session-heading" style="margin-top: 30px;">💾 Session</h2>
+                <h2 id="session-heading" style="margin-top: 15px;">💾 Session</h2>
                 <div class="button-group">
                     <button type="button" class="session-btn" onclick="saveSession()">Save Session</button>
                     <button type="button" class="session-btn" onclick="document.getElementById('loadSessionInput').click()">Load Session</button>
@@ -513,7 +630,56 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         </main>
     </div>
 
+    <!-- Debug Modal -->
+    <div id="debugModal" class="modal-overlay" onclick="closeDebugModalOnOverlay(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>🧪 Debug Tools</h2>
+                <button class="modal-close" onclick="closeDebugModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                    Test the fitting algorithm with synthetic data to verify accuracy.
+                </p>
+                <div class="form-group">
+                    <label for="debugModel">Test Model</label>
+                    <select id="debugModel">
+                        <option value="RRC">R-(R||C) (Randles)</option>
+                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
+                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
+                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
+                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPEW">R-(R||CPE)-W (CPE + Warburg)</option>
+                        <option value="CPEWs">R-(R||CPE)-Ws (CPE + Finite Warburg)</option>
+                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPECPEW">R-(R||CPE)-(R||CPE)-W (Two CPE + Warburg)</option>
+                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="noiseLevel">Noise Level (%)</label>
+                    <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
+                    <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
+                </div>
+                <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                    Run Debug Test
+                </button>
+                <div id="debugStatus" role="status" aria-live="polite" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Global error handler for unhandled errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('Unhandled error:', message, 'at', source, lineno);
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:1rem;border-radius:8px;z-index:10000;max-width:90%;';
+            errorDiv.innerHTML = '<strong>An error occurred:</strong> ' + message + '<br><button onclick="this.parentElement.remove()" style="margin-top:0.5rem;padding:4px 8px;cursor:pointer;">Dismiss</button>';
+            document.body.appendChild(errorDiv);
+            return false;
+        };
+
         // Global data storage
         let eisData = {
             frequency: [],
@@ -717,7 +883,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RCRC': { name: 'R-(R||C)-(R||C) (Two RC)', fit: fitRCRCModel, predict: predictRCRC, params: 5 },
             'RRCRC': { name: 'R-(R||C)-(R||C)-(R||C) (Three RC)', fit: fitRRCRCModel, predict: predictRRCRC, params: 7 },
             'CPE': { name: 'R-(R||CPE)', fit: fitCPEModel, predict: predictCPE, params: 4 },
+            'CPEW': { name: 'R-(R||CPE)-W (CPE+Warburg)', fit: fitCPEWModel, predict: predictCPEW, params: 5 },
+            'CPEWs': { name: 'R-(R||CPE)-Ws (CPE+Finite Warburg)', fit: fitCPEWsModel, predict: predictCPEWs, params: 6 },
             'CPECPE': { name: 'R-(R||CPE)-(R||CPE) (Two CPE)', fit: fitCPECPEModel, predict: predictCPECPE, params: 7 },
+            'CPECPEW': { name: 'R-(R||CPE)-(R||CPE)-W (Two CPE+Warburg)', fit: fitCPECPEWModel, predict: predictCPECPEW, params: 8 },
             'CPEpCPE': { name: 'R-(R||CPE)||(R||CPE) (Parallel CPE)', fit: fitCPEpCPEModel, predict: predictCPEpCPE, params: 7 }
         };
 
@@ -1209,6 +1378,238 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             return {
                 real: params.R0 + zParReal,
                 imag: zParImag
+            };
+        }
+
+        // CPE with Warburg model: R0 + (R1 || CPE) + W
+        // Uses multi-start optimization
+        function fitCPEWModel(omega) {
+            const R0_est = estimateR0();
+            const R_total = estimateRTotal();
+            const R1_est = Math.max((R_total - R0_est) * 0.5, 10);
+            const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+            const W_est = (R_total - R0_est) * 0.3;
+
+            const startConfigs = [
+                { n: n_est, Q: C_est, R0: R0_est, R1: R1_est, W: W_est },
+                { n: 0.82, Q: 3e-6, R0: R0_est, R1: R1_est, W: W_est * 0.5 },
+                { n: 0.85, Q: 1e-6, R0: R0_est, R1: R1_est, W: W_est * 1.5 },
+                { n: 0.80, Q: 5e-6, R0: R0_est, R1: R1_est * 0.8, W: W_est },
+                { n: 0.78, Q: 1e-5, R0: R0_est, R1: R1_est * 1.2, W: W_est * 0.8 },
+                { n: 0.90, Q: 5e-7, R0: R0_est, R1: R1_est, W: W_est * 2 },
+                { n: 0.75, Q: 2e-5, R0: R0_est * 0.9, R1: R1_est * 0.7, W: W_est * 1.2 },
+                { n: n_est, Q: C_est * 0.5, R0: R0_est * 0.8, R1: R1_est * 1.1, W: W_est * 0.7 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                try {
+                    const params = nelderMeadLogSpace(
+                        (p) => calcError(p, omega, predictCPEW),
+                        config,
+                        ['Q', 'W'],
+                        { R0: Math.max(config.R0 * 0.3, 5), R1: config.R1 * 0.3, Q: config.Q * 0.5, n: 0.1, W: config.W * 0.5 },
+                        1500
+                    );
+                    const error = calcError(params, omega, predictCPEW);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('CPEW fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || { R0: R0_est, R1: R1_est, Q: C_est, n: 0.85, W: W_est };
+        }
+
+        function predictCPEW(params, omega) {
+            // R0 + (R1 || CPE) + Warburg
+            const cpe = predictRCPEParallel(params.R1, params.Q, params.n, omega);
+            // Warburg: Z_w = W/sqrt(omega) * (1 - j)
+            const warburgFactor = params.W / Math.sqrt(omega);
+            return {
+                real: params.R0 + cpe.real + warburgFactor,
+                imag: cpe.imag - warburgFactor
+            };
+        }
+
+        // CPE + Finite Warburg (Open Warburg) model: R0 + (R1 || CPE) + Wo
+        // Finite Warburg models diffusion in a bounded layer with blocking boundary
+        // Wo = Aw * coth(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+        // At high freq: approaches semi-infinite Warburg (45° line)
+        // At low freq: approaches capacitive behavior (steep rise in -Z'')
+        function fitCPEWsModel(omega) {
+            const R0_est = estimateR0();
+            const R_total = estimateRTotal();
+            const R1_est = Math.max((R_total - R0_est) * 0.3, 10);
+            const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+            const Aw_est = (R_total - R0_est) * 0.5;
+            // B is related to diffusion layer thickness, start with reasonable guess
+            const B_est = 1.0;
+
+            const startConfigs = [
+                { n: n_est, Q: C_est, R0: R0_est, R1: R1_est, Aw: Aw_est, B: B_est },
+                { n: 0.85, Q: 1e-5, R0: R0_est, R1: R1_est * 0.8, Aw: Aw_est * 0.5, B: 0.5 },
+                { n: 0.75, Q: 5e-5, R0: R0_est, R1: R1_est * 0.6, Aw: Aw_est * 0.8, B: 1.5 },
+                { n: 0.80, Q: 1e-4, R0: R0_est, R1: R1_est * 0.5, Aw: Aw_est * 1.2, B: 2.0 },
+                { n: 0.70, Q: 5e-4, R0: R0_est, R1: R1_est * 0.4, Aw: Aw_est, B: 0.8 },
+                { n: 0.65, Q: 1e-3, R0: R0_est, R1: R1_est * 0.3, Aw: Aw_est * 1.5, B: 1.2 },
+                { n: 0.50, Q: 1e-3, R0: R0_est, R1: R1_est * 0.5, Aw: Aw_est * 2, B: 0.3 },
+                { n: n_est, Q: C_est * 2, R0: R0_est * 0.9, R1: R1_est * 0.7, Aw: Aw_est * 0.7, B: 1.8 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                try {
+                    const params = nelderMeadLogSpace(
+                        (p) => calcError(p, omega, predictCPEWs),
+                        config,
+                        ['Q', 'Aw', 'B'],
+                        { R0: Math.max(config.R0 * 0.3, 5), R1: config.R1 * 0.3, Q: config.Q * 0.5, n: 0.1, Aw: config.Aw * 0.3, B: config.B * 0.3 },
+                        2000
+                    );
+
+                    const error = calcError(params, omega, predictCPEWs);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+
+            return bestParams || startConfigs[0];
+        }
+
+        function predictCPEWs(params, omega) {
+            // R0 + (R1 || CPE) + Finite Warburg (Open Warburg, Wo)
+            const cpe = predictRCPEParallel(params.R1, params.Q, params.n, omega);
+
+            // Open Warburg (blocking boundary): Zwo = Aw * coth(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+            // This gives capacitive behavior at low frequencies (steep rise in -Z'')
+            // sqrt(j*omega) = sqrt(omega) * (1+j)/sqrt(2)
+            const sqrtOmega = Math.sqrt(omega);
+            const x = params.B * sqrtOmega / Math.SQRT2; // Real and imag parts of B*sqrt(j*omega)
+
+            // coth(x + jx) = (sinh(2x) - j*sin(2x)) / (cosh(2x) - cos(2x))
+            // Note: coth has MINUS signs compared to tanh
+            const sinh2x = Math.sinh(2 * x);
+            const cosh2x = Math.cosh(2 * x);
+            const sin2x = Math.sin(2 * x);
+            const cos2x = Math.cos(2 * x);
+            const denom = cosh2x - cos2x; // MINUS for coth
+
+            const cothReal = sinh2x / denom;
+            const cothImag = -sin2x / denom; // MINUS for coth
+
+            // 1 / (B*sqrt(j*omega)) = 1/(B*sqrt(omega)) * sqrt(2)/(1+j) = sqrt(2)/(B*sqrt(omega)) * (1-j)/2
+            const invFactor = Math.SQRT2 / (2 * params.B * sqrtOmega);
+            const invReal = invFactor;
+            const invImag = -invFactor;
+
+            // Multiply coth by 1/(B*sqrt(j*omega)): (cothReal + j*cothImag) * (invReal + j*invImag)
+            const wsReal = cothReal * invReal - cothImag * invImag;
+            const wsImag = cothReal * invImag + cothImag * invReal;
+
+            // Multiply by Aw
+            const ZwsReal = params.Aw * wsReal;
+            const ZwsImag = params.Aw * wsImag;
+
+            return {
+                real: params.R0 + cpe.real + ZwsReal,
+                imag: cpe.imag + ZwsImag
+            };
+        }
+
+        // Two CPE with Warburg model: R0 + (R1 || CPE1) + (R2 || CPE2) + W
+        // Uses multi-start optimization due to 8 parameters
+        function fitCPECPEWModel(omega) {
+            const R0_est = estimateR0();
+            const R_total = estimateRTotal();
+            const R_range = Math.max(R_total - R0_est, 10);
+            const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+            const W_est = R_range * 0.2;
+
+            const charFreqs = estimateCharacteristicFrequencies(omega, 2);
+            const R_avg = R_range / 2;
+            const Q_estimates = charFreqs.map(f => 1 / (2 * Math.PI * f * Math.max(R_avg, 1)));
+
+            const startConfigs = [
+                { n1: n_est, Q1: Q_estimates[0] || C_est * 0.3, R1: R_range * 0.5, n2: n_est * 0.95, Q2: Q_estimates[1] || C_est * 3, R2: R_range * 0.3, W: W_est },
+                { n1: 0.85, Q1: 2e-6, R1: R_range * 0.5, n2: 0.78, Q2: 1e-5, R2: R_range * 0.3, W: W_est * 0.8 },
+                { n1: 0.82, Q1: 1e-6, R1: R_range * 0.45, n2: 0.80, Q2: 5e-6, R2: R_range * 0.35, W: W_est * 1.2 },
+                { n1: 0.88, Q1: 3e-6, R1: R_range * 0.48, n2: 0.75, Q2: 8e-6, R2: R_range * 0.32, W: W_est * 1.5 },
+                { n1: 0.80, Q1: C_est * 0.2, R1: R_range * 0.55, n2: 0.85, Q2: C_est * 2, R2: R_range * 0.25, W: W_est * 0.5 },
+                { n1: 0.85, Q1: 5e-7, R1: R_range * 0.5, n2: 0.78, Q2: 2e-5, R2: R_range * 0.3, W: W_est * 2 },
+                { n1: n_est, Q1: C_est * 0.3, R1: R_range * 0.48, n2: n_est, Q2: C_est * 3, R2: R_range * 0.32, W: W_est },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                const initial = {
+                    R0: R0_est,
+                    R1: config.R1,
+                    Q1: config.Q1,
+                    n1: config.n1,
+                    R2: config.R2,
+                    Q2: config.Q2,
+                    n2: config.n2,
+                    W: config.W
+                };
+
+                const steps = {
+                    R0: Math.max(R0_est * 0.3, 5),
+                    R1: initial.R1 * 0.4,
+                    Q1: initial.Q1 * 0.5,
+                    n1: 0.1,
+                    R2: initial.R2 * 0.4,
+                    Q2: initial.Q2 * 0.5,
+                    n2: 0.1,
+                    W: initial.W * 0.5
+                };
+
+                try {
+                    const params = nelderMeadLogSpace(
+                        (p) => calcError(p, omega, predictCPECPEW),
+                        initial,
+                        ['Q1', 'Q2', 'W'],
+                        steps,
+                        2000
+                    );
+                    const error = calcError(params, omega, predictCPECPEW);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    console.warn('CPECPEW fit attempt failed:', e);
+                }
+            }
+
+            return bestParams || { R0: R0_est, R1: R_range * 0.5, Q1: C_est, n1: 0.85, R2: R_range * 0.3, Q2: C_est * 3, n2: 0.80, W: W_est };
+        }
+
+        function predictCPECPEW(params, omega) {
+            // R0 + (R1||CPE1) + (R2||CPE2) + Warburg
+            const cpe1 = predictRCPEParallel(params.R1, params.Q1, params.n1, omega);
+            const cpe2 = predictRCPEParallel(params.R2, params.Q2, params.n2, omega);
+            // Warburg: Z_w = W/sqrt(omega) * (1 - j)
+            const warburgFactor = params.W / Math.sqrt(omega);
+            return {
+                real: params.R0 + cpe1.real + cpe2.real + warburgFactor,
+                imag: cpe1.imag + cpe2.imag - warburgFactor
             };
         }
 
@@ -1864,16 +2265,16 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
                 yaxis: { title: '|Z| (Ω)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'x unified',
-                margin: { t: 10, b: mobile ? 70 : 50, l: 55, r: 10 },
-                legend: { orientation: 'h', y: mobile ? -0.25 : -0.15, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
+                margin: { t: 10, b: mobile ? 90 : 70, l: 55, r: 10 },
+                legend: { orientation: 'h', y: mobile ? -0.35 : -0.22, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
             };
 
             const phaseLayout = {
                 xaxis: { title: 'Frequency (Hz)', type: 'log', tickfont: { size: mobile ? 10 : 12 } },
                 yaxis: { title: 'Phase (°)', tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'x unified',
-                margin: { t: 10, b: mobile ? 70 : 50, l: 55, r: 10 },
-                legend: { orientation: 'h', y: mobile ? -0.25 : -0.15, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
+                margin: { t: 10, b: mobile ? 90 : 70, l: 55, r: 10 },
+                legend: { orientation: 'h', y: mobile ? -0.35 : -0.22, x: 0.5, xanchor: 'center', font: { size: mobile ? 10 : 11 } }
             };
 
             const config = { responsive: true, displayModeBar: !mobile };
@@ -2009,10 +2410,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 xaxis: { title: "Z' (Ω)", tickfont: { size: mobile ? 10 : 12 } },
                 yaxis: { title: "-Z\" (Ω)", tickfont: { size: mobile ? 10 : 12 } },
                 hovermode: 'closest',
-                margin: { t: 10, b: mobile ? 80 : 50, l: 55, r: 10 },
+                margin: { t: 10, b: mobile ? 90 : 70, l: 55, r: 10 },
                 legend: {
                     orientation: 'h',
-                    y: mobile ? -0.25 : -0.15,
+                    y: mobile ? -0.35 : -0.22,
                     x: 0.5,
                     xanchor: 'center',
                     font: { size: mobile ? 11 : 12 }
@@ -2031,7 +2432,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RRCRC': { R0: 40, R1: 100, C1: 5e-7, R2: 80, C2: 3e-6, R3: 60, C3: 2e-5 },
             'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 },
             'CPECPE': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 100, Q2: 1e-4, n2: 0.78 },
-            'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 }
+            'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 },
+            'CPEW': { R0: 60, R1: 180, Q: 2e-6, n: 0.80, W: 45 },
+            'CPEWs': { R0: 55, R1: 80, Q: 5e-4, n: 0.75, Aw: 120, B: 1.2 },
+            'CPECPEW': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 120, Q2: 8e-5, n2: 0.78, W: 35 }
         };
 
         function runDebugTest() {
@@ -2221,6 +2625,49 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             URL.revokeObjectURL(url);
         }
 
+        // Settings menu functions
+        function toggleSettingsMenu() {
+            const menu = document.getElementById('settingsMenu');
+            menu.classList.toggle('open');
+        }
+
+        // Close settings menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('settingsMenu');
+            const settingsBtn = document.querySelector('.settings-btn');
+            if (menu && menu.classList.contains('open') &&
+                !menu.contains(event.target) &&
+                !settingsBtn.contains(event.target)) {
+                menu.classList.remove('open');
+            }
+        });
+
+        // Debug modal functions
+        function openDebugModal() {
+            document.getElementById('settingsMenu').classList.remove('open');
+            document.getElementById('debugModal').classList.add('open');
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }
+
+        function closeDebugModal() {
+            document.getElementById('debugModal').classList.remove('open');
+            document.body.style.overflow = ''; // Restore scrolling
+        }
+
+        function closeDebugModalOnOverlay(event) {
+            if (event.target === document.getElementById('debugModal')) {
+                closeDebugModal();
+            }
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeDebugModal();
+                document.getElementById('settingsMenu').classList.remove('open');
+            }
+        });
+
         // Session save/load functions
         function saveSession() {
             const session = {
@@ -2366,7 +2813,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const results = [];
 
                 // Try all models
-                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPECPE', 'CPEpCPE'];
+                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPEW', 'CPEWs', 'CPECPE', 'CPECPEW', 'CPEpCPE'];
 
                 for (const modelType of modelsToTry) {
                     try {
