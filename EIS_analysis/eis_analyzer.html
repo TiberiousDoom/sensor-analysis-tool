@@ -26,15 +26,15 @@
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 15px 30px;
             text-align: center;
             position: relative;
         }
-        header h1 { font-size: 2.5em; margin-bottom: 5px; }
-        header p { opacity: 0.9; }
+        header h1 { font-size: 1.8em; margin-bottom: 3px; }
+        header p { opacity: 0.9; font-size: 0.85em; }
         .home-btn {
             position: absolute;
-            top: 20px;
+            top: 12px;
             left: 20px;
             background: rgba(255,255,255,0.2);
             color: white;
@@ -56,24 +56,24 @@
         .content {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            padding: 30px;
+            gap: 15px;
+            padding: 20px;
         }
         .panel {
             background: #f8f9fa;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid #e0e0e0;
         }
         .panel h2 {
             color: #333;
-            margin-bottom: 15px;
-            font-size: 1.2em;
+            margin-bottom: 10px;
+            font-size: 1.1em;
             border-bottom: 2px solid #667eea;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         label {
             display: block;
@@ -141,8 +141,8 @@
         .result-value { color: #333; font-family: monospace; }
         .plot-container {
             width: 100%;
-            height: 400px;
-            min-height: 300px;
+            height: 320px;
+            min-height: 250px;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -259,8 +259,8 @@
         }
         /* Residual plot container */
         .residual-container {
-            height: 250px;
-            min-height: 200px;
+            height: 200px;
+            min-height: 150px;
         }
         /* Export buttons */
         .export-btn-group {
@@ -359,6 +359,120 @@
             font-size: 0.8em;
             padding: 6px 10px;
         }
+        /* Settings Menu */
+        .settings-btn {
+            position: absolute;
+            top: 12px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.4);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .settings-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: rotate(30deg);
+        }
+        .settings-menu {
+            position: absolute;
+            top: 55px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            min-width: 200px;
+            display: none;
+            z-index: 1000;
+            overflow: hidden;
+        }
+        .settings-menu.open {
+            display: block;
+        }
+        .settings-menu-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+            font-size: 0.9em;
+            border-bottom: 1px solid #eee;
+            transition: background 0.15s;
+        }
+        .settings-menu-item:last-child {
+            border-bottom: none;
+        }
+        .settings-menu-item:hover {
+            background: #f5f5f5;
+        }
+        .settings-menu-item .icon {
+            font-size: 1.1em;
+        }
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal-overlay.open {
+            display: flex;
+        }
+        .modal {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 10px 10px 0 0;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .modal-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .modal-body {
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -376,6 +490,17 @@
             <h1>⚡ EIS Analyzer</h1>
             <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
             <span style="font-size: 0.75em; opacity: 0.7;">v1.0</span>
+            <button class="settings-btn" onclick="toggleSettingsMenu()" title="Settings">⚙</button>
+            <div id="settingsMenu" class="settings-menu">
+                <div class="settings-menu-item" onclick="openDebugModal()">
+                    <span class="icon">🧪</span>
+                    <span>Debug Tools</span>
+                </div>
+                <div class="settings-menu-item" onclick="toggleSettingsMenu()">
+                    <span class="icon">❌</span>
+                    <span>Close Menu</span>
+                </div>
+            </div>
         </header>
 
         <main id="main-content" class="content" role="main">
@@ -455,28 +580,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     <div id="comparisonResults"></div>
                 </div>
 
-                <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
-                <div class="form-group">
-                    <label for="debugModel">Test Model</label>
-                    <select id="debugModel">
-                        <option value="RRC">R-(R||C) (Randles)</option>
-                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
-                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
-                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
-                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
-                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
-                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="noiseLevel">Noise Level (%)</label>
-                    <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
-                    <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
-                </div>
-                <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
-                <div id="debugStatus" role="status" aria-live="polite"></div>
-
-                <h2 id="session-heading" style="margin-top: 30px;">💾 Session</h2>
+                <h2 id="session-heading" style="margin-top: 15px;">💾 Session</h2>
                 <div class="button-group">
                     <button type="button" class="session-btn" onclick="saveSession()">Save Session</button>
                     <button type="button" class="session-btn" onclick="document.getElementById('loadSessionInput').click()">Load Session</button>
@@ -521,6 +625,42 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Debug Modal -->
+    <div id="debugModal" class="modal-overlay" onclick="closeDebugModalOnOverlay(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>🧪 Debug Tools</h2>
+                <button class="modal-close" onclick="closeDebugModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                    Test the fitting algorithm with synthetic data to verify accuracy.
+                </p>
+                <div class="form-group">
+                    <label for="debugModel">Test Model</label>
+                    <select id="debugModel">
+                        <option value="RRC">R-(R||C) (Randles)</option>
+                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
+                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
+                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
+                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="noiseLevel">Noise Level (%)</label>
+                    <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
+                    <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
+                </div>
+                <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                    Run Debug Test
+                </button>
+                <div id="debugStatus" role="status" aria-live="polite" style="margin-top: 15px;"></div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -2224,6 +2364,49 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+
+        // Settings menu functions
+        function toggleSettingsMenu() {
+            const menu = document.getElementById('settingsMenu');
+            menu.classList.toggle('open');
+        }
+
+        // Close settings menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('settingsMenu');
+            const settingsBtn = document.querySelector('.settings-btn');
+            if (menu && menu.classList.contains('open') &&
+                !menu.contains(event.target) &&
+                !settingsBtn.contains(event.target)) {
+                menu.classList.remove('open');
+            }
+        });
+
+        // Debug modal functions
+        function openDebugModal() {
+            document.getElementById('settingsMenu').classList.remove('open');
+            document.getElementById('debugModal').classList.add('open');
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }
+
+        function closeDebugModal() {
+            document.getElementById('debugModal').classList.remove('open');
+            document.body.style.overflow = ''; // Restore scrolling
+        }
+
+        function closeDebugModalOnOverlay(event) {
+            if (event.target === document.getElementById('debugModal')) {
+                closeDebugModal();
+            }
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeDebugModal();
+                document.getElementById('settingsMenu').classList.remove('open');
+            }
+        });
 
         // Session save/load functions
         function saveSession() {
