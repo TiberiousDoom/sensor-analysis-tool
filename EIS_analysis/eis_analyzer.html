@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Electrochemical Impedance Spectroscopy (EIS) data analysis tool with circuit model fitting, Nyquist plots, and Bode plots">
-    <title>EIS Analyzer - Circuit Model Fitting</title>
+    <title>EIS Analyzer v1.0 - Circuit Model Fitting</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
@@ -476,11 +476,20 @@
     </style>
 </head>
 <body>
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:#667eea;color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The EIS Analyzer requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
     <div class="container">
         <header>
             <a href="../index.html" class="home-btn">← Home</a>
             <h1>⚡ EIS Analyzer</h1>
             <p>Electrochemical Impedance Spectroscopy Data Analysis & Circuit Model Fitting</p>
+            <span style="font-size: 0.75em; opacity: 0.7;">v1.0</span>
             <button class="settings-btn" onclick="toggleSettingsMenu()" title="Settings">⚙</button>
             <div id="settingsMenu" class="settings-menu">
                 <div class="settings-menu-item" onclick="openDebugModal()">
@@ -494,7 +503,7 @@
             </div>
         </header>
 
-        <main class="content" role="main">
+        <main id="main-content" class="content" role="main">
             <!-- Input Panel -->
             <div class="panel" role="region" aria-labelledby="data-input-heading">
                 <h2 id="data-input-heading">📊 Data Input</h2>
@@ -503,6 +512,7 @@
                 <div class="file-upload-area" id="fileDropZone" role="button" tabindex="0" aria-label="Upload CSV or TXT file with EIS data">
                     <div>📁 Drop file here or click to upload</div>
                     <div style="font-size: 0.85em; color: #666; margin-top: 5px;">Supports CSV, TXT (tab/space separated)</div>
+                    <div style="font-size: 0.75em; color: #999; margin-top: 3px;">Recommended: files under 5MB for best performance</div>
                     <input type="file" id="fileInput" accept=".csv,.txt,.tsv" aria-label="File upload input">
                     <div id="fileStatus" style="margin-top: 10px; color: #28a745;"></div>
                 </div>
@@ -547,12 +557,6 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label for="initialFreq">Initial Frequency (Hz)</label>
-                    <input type="number" id="initialFreq" value="1000" min="0.001" step="any" aria-describedby="freq-help">
-                    <small id="freq-help" style="color: #666; font-size: 0.8em;">Starting frequency for optimization (Hz)</small>
-                </div>
-
-                <div class="form-group">
                     <label>Frequency Range (optional)</label>
                     <div class="freq-range">
                         <input type="number" id="freqMin" placeholder="Min Hz" min="0" step="any">
@@ -569,7 +573,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
                 <!-- Model Comparison Results -->
                 <div id="comparisonPanel" style="display: none; margin-top: 15px;">
-                    <h3 style="font-size: 1em; color: #333; margin-bottom: 10px;">Model Comparison</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="font-size: 1em; color: #333; margin: 0;">Model Comparison</h3>
+                        <button type="button" onclick="hideComparison()" style="padding: 4px 10px; font-size: 0.8em; background: #6c757d;">Hide</button>
+                    </div>
                     <div id="comparisonResults"></div>
                 </div>
 
@@ -657,6 +664,16 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
     </div>
 
     <script>
+        // Global error handler for unhandled errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('Unhandled error:', message, 'at', source, lineno);
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:1rem;border-radius:8px;z-index:10000;max-width:90%;';
+            errorDiv.innerHTML = '<strong>An error occurred:</strong> ' + message + '<br><button onclick="this.parentElement.remove()" style="margin-top:0.5rem;padding:4px 8px;cursor:pointer;">Dismiss</button>';
+            document.body.appendChild(errorDiv);
+            return false;
+        };
+
         // Global data storage
         let eisData = {
             frequency: [],
@@ -798,15 +815,22 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const col2Max = Math.max(...col2Values);
 
                 // Heuristics to distinguish formats:
-                // 1. Phase angles: typically -90 to 0 degrees, all values bounded by ±90
+                // 1. Phase angles: typically -90 to 0 degrees for capacitive, bounded by ±90
                 // 2. For |Z|/Phase: |Z| >> |Phase| (impedance magnitude much larger than phase angle)
-                // 3. For Z'/Z": Z' and Z" are similar magnitude (both in ohms)
+                // 3. For Z'/Z": Z' and Z" are similar magnitude (both in ohms), Z" typically all same sign
                 const col3InPhaseRange = col3Max <= 90;
                 const magnitudeRatio = col2Avg / Math.max(col3Max, 0.1);
 
-                // If col3 is in phase range AND col2 is much larger than col3, it's likely |Z|/Phase
-                // If col3 values are similar magnitude to col2, it's likely Z'/Z"
-                const looksLikePhase = col3InPhaseRange && magnitudeRatio > 3;
+                // Additional heuristics for better detection:
+                // - For Z"/ohms data: values are typically ALL negative (capacitive) or rarely all positive
+                // - For Phase/degrees: values vary but stay within -90 to 0 for capacitive elements
+                // - Check if col3 values are predominantly negative (suggests Z" in ohms)
+                const negativeCount = col3Values.filter(v => v < 0).length;
+                const mostlyNegative = negativeCount > col3Values.length * 0.7;
+
+                // If col3 is in phase range AND col2 is much larger than col3 AND not mostly negative, it's likely |Z|/Phase
+                // If col3 values are mostly negative OR similar magnitude to col2, it's likely Z'/Z"
+                const looksLikePhase = col3InPhaseRange && magnitudeRatio > 3 && !mostlyNegative;
                 const format = looksLikePhase ? 'freq_zmag_phase' : 'zreal_zimag';
 
                 // Parse data according to detected format
@@ -971,12 +995,24 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     const fitParams = model.fit(omega, dataSource);
                     const predicted = omega.map(w => model.predict(fitParams, w));
 
+                    // Validate predicted array has valid values
+                    if (!predicted || predicted.length === 0 || !predicted[0] || typeof predicted[0].real === 'undefined') {
+                        console.warn(`Model ${modelType} returned invalid predictions`);
+                        continue;
+                    }
+
                     // Calculate AIC (Akaike Information Criterion) for model comparison
                     // AIC = n * ln(RSS/n) + 2k, where k is number of parameters
-                    const rss = dataSource.zReal.reduce((sum, r, i) => {
-                        return sum + Math.pow(r - predicted[i].real, 2) + Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
-                    }, 0);
-                    const n = dataSource.zReal.length * 2; // Real + Imag points
+                    // Use the minimum length to avoid index out of bounds
+                    const len = Math.min(dataSource.zReal.length, predicted.length);
+                    let rss = 0;
+                    for (let i = 0; i < len; i++) {
+                        if (predicted[i] && typeof predicted[i].real !== 'undefined') {
+                            rss += Math.pow(dataSource.zReal[i] - predicted[i].real, 2) +
+                                   Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
+                        }
+                    }
+                    const n = len * 2; // Real + Imag points
                     const k = model.params;
                     const aic = n * Math.log(rss / n) + 2 * k;
 
@@ -1653,8 +1689,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 return costFn(linearParams);
             };
 
-            // Run optimization
-            const logResult = nelderMead(logCostFn, logInitial, logSteps, maxIter, tol);
+            // Run optimization without Math.abs (log values can be negative)
+            const logResult = nelderMeadCore(logCostFn, logInitial, logSteps, maxIter, tol, false);
 
             // Convert back to linear space
             const result = {...logResult};
@@ -1664,8 +1700,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             return result;
         }
 
-        // Nelder-Mead simplex optimization
-        function nelderMead(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8) {
+        // Core Nelder-Mead simplex optimization
+        // ensurePositive: if true, uses Math.abs to keep values positive (for linear-space params)
+        function nelderMeadCore(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8, ensurePositive = true) {
             const keys = Object.keys(initial);
             const n = keys.length;
 
@@ -1673,7 +1710,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const toArray = (obj) => keys.map(k => obj[k]);
             const toObj = (arr) => {
                 const obj = {};
-                keys.forEach((k, i) => obj[k] = Math.abs(arr[i])); // Ensure positive
+                keys.forEach((k, i) => obj[k] = ensurePositive ? Math.abs(arr[i]) : arr[i]);
                 return obj;
             };
 
@@ -1753,6 +1790,11 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             // Return best
             const bestIdx = values.indexOf(Math.min(...values));
             return toObj(simplex[bestIdx]);
+        }
+
+        // Wrapper for backwards compatibility - ensures positive values by default
+        function nelderMead(costFn, initial, stepSizes, maxIter = 500, tol = 1e-8) {
+            return nelderMeadCore(costFn, initial, stepSizes, maxIter, tol, true);
         }
 
         function predictRC(params, omega) {
@@ -1923,6 +1965,28 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             const predMag = predicted.map(p => Math.sqrt(p.real * p.real + p.imag * p.imag));
             const predPhase = predicted.map(p => Math.atan2(-p.imag, p.real) * 180 / Math.PI);
 
+            // Calculate R² for magnitude (using log scale for better representation)
+            const logMagData = eisData.zMag.map(m => Math.log10(m));
+            const logMagPred = predMag.map(m => Math.log10(m));
+            const meanLogMag = logMagData.reduce((a, b) => a + b, 0) / logMagData.length;
+            let ssTotMag = 0, ssResMag = 0;
+            for (let i = 0; i < logMagData.length; i++) {
+                ssTotMag += Math.pow(logMagData[i] - meanLogMag, 2);
+                ssResMag += Math.pow(logMagData[i] - logMagPred[i], 2);
+            }
+            const rSquaredMag = Math.max(0, 1 - ssResMag / ssTotMag);
+            const rSquaredMagPct = (rSquaredMag * 100).toFixed(1);
+
+            // Calculate R² for phase
+            const meanPhase = eisData.zPhase.reduce((a, b) => a + b, 0) / eisData.zPhase.length;
+            let ssTotPhase = 0, ssResPhase = 0;
+            for (let i = 0; i < eisData.zPhase.length; i++) {
+                ssTotPhase += Math.pow(eisData.zPhase[i] - meanPhase, 2);
+                ssResPhase += Math.pow(eisData.zPhase[i] - predPhase[i], 2);
+            }
+            const rSquaredPhase = Math.max(0, 1 - ssResPhase / ssTotPhase);
+            const rSquaredPhasePct = (rSquaredPhase * 100).toFixed(1);
+
             // Experimental data traces
             const magDataTrace = {
                 x: eisData.frequency,
@@ -1936,7 +2000,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 x: eisData.frequency,
                 y: predMag,
                 mode: 'lines',
-                name: 'Fit',
+                name: `Fit (R²=${rSquaredMagPct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
             };
 
@@ -1952,7 +2016,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 x: eisData.frequency,
                 y: predPhase,
                 mode: 'lines',
-                name: 'Fit',
+                name: `Fit (R²=${rSquaredPhasePct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
             };
 
@@ -2047,27 +2111,39 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         function plotFit(predicted) {
             const mobile = isMobile();
 
+            // Validate predicted array
+            if (!predicted || predicted.length === 0) {
+                console.error('plotFit: No predicted data available');
+                return;
+            }
+
+            // Use the data source that matches the predicted data length
+            const dataSource = filteredData || eisData;
+
             // Calculate R² (coefficient of determination)
-            const meanReal = eisData.zReal.reduce((a, b) => a + b, 0) / eisData.zReal.length;
-            const meanImag = eisData.zImag.reduce((a, b) => a + b, 0) / eisData.zImag.length;
+            const meanReal = dataSource.zReal.reduce((a, b) => a + b, 0) / dataSource.zReal.length;
+            const meanImag = dataSource.zImag.reduce((a, b) => a + b, 0) / dataSource.zImag.length;
 
             let ssTot = 0, ssRes = 0;
-            for (let i = 0; i < eisData.zReal.length; i++) {
-                ssTot += Math.pow(eisData.zReal[i] - meanReal, 2) + Math.pow(eisData.zImag[i] - meanImag, 2);
-                ssRes += Math.pow(eisData.zReal[i] - predicted[i].real, 2) + Math.pow(eisData.zImag[i] - predicted[i].imag, 2);
+            const len = Math.min(dataSource.zReal.length, predicted.length);
+            for (let i = 0; i < len; i++) {
+                if (predicted[i] && typeof predicted[i].real !== 'undefined') {
+                    ssTot += Math.pow(dataSource.zReal[i] - meanReal, 2) + Math.pow(dataSource.zImag[i] - meanImag, 2);
+                    ssRes += Math.pow(dataSource.zReal[i] - predicted[i].real, 2) + Math.pow(dataSource.zImag[i] - predicted[i].imag, 2);
+                }
             }
-            const rSquared = Math.max(0, 1 - ssRes / ssTot);
+            const rSquared = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
             const rSquaredPct = (rSquared * 100).toFixed(1);
 
             const nyquistData = [{
-                x: eisData.zReal,
-                y: eisData.zImag.map(z => -z),
+                x: dataSource.zReal,
+                y: dataSource.zImag.map(z => -z),
                 mode: 'markers',
                 name: 'Experimental',
                 marker: { size: mobile ? 5 : 6, color: '#667eea' }
             }, {
-                x: predicted.map(p => p.real),
-                y: predicted.map(p => -p.imag),
+                x: predicted.filter(p => p && typeof p.real !== 'undefined').map(p => p.real),
+                y: predicted.filter(p => p && typeof p.imag !== 'undefined').map(p => -p.imag),
                 mode: 'lines',
                 name: `Fit (R²=${rSquaredPct}%)`,
                 line: { color: '#ff6b6b', width: 2, dash: 'dash' }
@@ -2098,8 +2174,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RCRC': { R0: 50, R1: 120, C1: 1.5e-6, R2: 80, C2: 8e-6 },
             'RRCRC': { R0: 40, R1: 100, C1: 5e-7, R2: 80, C2: 3e-6, R3: 60, C3: 2e-5 },
             'CPE': { R0: 70, R1: 180, Q: 3e-6, n: 0.82 },
-            'CPECPE': { R0: 50, R1: 120, Q1: 2e-6, n1: 0.85, R2: 80, Q2: 1e-5, n2: 0.78 },
-            'CPEpCPE': { R0: 45, R1: 200, Q1: 1.5e-6, n1: 0.82, R2: 150, Q2: 8e-6, n2: 0.75 }
+            'CPECPE': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 100, Q2: 1e-4, n2: 0.78 },
+            'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 }
         };
 
         function runDebugTest() {
@@ -2115,9 +2191,9 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 return;
             }
 
-            // Generate frequency range (log scale from 0.01 Hz to 10 kHz)
+            // Generate frequency range (log scale from 100 kHz to 0.0001 Hz)
             const frequencies = [];
-            for (let exp = -2; exp <= 4; exp += 0.25) {
+            for (let exp = 5; exp >= -4; exp -= 0.25) {
                 frequencies.push(Math.pow(10, exp));
             }
 
@@ -2378,7 +2454,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     }
 
                     // Restore fit results
-                    if (session.fitResults) {
+                    if (session.fitResults && session.fitResults.predicted && session.fitResults.predicted.length > 0) {
                         lastFitResults = session.fitResults;
                         displayFitResults(
                             session.fitResults.params,
@@ -2556,6 +2632,10 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             // Store comparison results
             window.comparisonResults = results;
+        }
+
+        function hideComparison() {
+            document.getElementById('comparisonPanel').style.display = 'none';
         }
 
         function selectComparedModel(modelType) {

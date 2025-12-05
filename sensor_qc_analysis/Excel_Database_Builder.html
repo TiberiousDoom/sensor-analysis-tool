@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Convert Excel spreadsheets to SQLite databases for sensor data analysis and QC testing workflows">
-    <title>Excel Database Builder</title>
+    <title>Excel Database Builder v1.0</title>
 
     <!-- SQL.js for SQLite database creation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -395,10 +395,19 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:var(--accent);color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The Excel Database Builder requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
+    <div id="main-content" class="container">
         <a href="../index.html" class="home-btn">← Home</a>
         <h1>📊 Excel Database Builder</h1>
         <p class="subtitle">Compile multiple Excel spreadsheets into a SQLite database</p>
+        <span style="font-size: 0.75em; opacity: 0.5; display: block; margin-bottom: 1rem;">v1.0</span>
 
         <div id="alertBox" class="alert"></div>
 
@@ -408,6 +417,7 @@
                 <div class="upload-icon" aria-hidden="true">📁</div>
                 <div>Drop Excel files here or click to browse</div>
                 <div class="upload-text">Supports .xlsx and .xls files • Select multiple files</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 5px;">Large files may take longer to process</div>
             </div>
             <input type="file" id="fileInput" accept=".xlsx,.xls" multiple hidden aria-label="Excel file input">
 
@@ -463,6 +473,18 @@
     </div>
 
     <script>
+        // Global error handler for unhandled errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('Unhandled error:', message, 'at', source, lineno);
+            const alertBox = document.getElementById('alertBox');
+            if (alertBox) {
+                alertBox.className = 'alert error';
+                alertBox.innerHTML = '<strong>An error occurred:</strong> ' + message;
+                alertBox.style.display = 'block';
+            }
+            return false;
+        };
+
         // State
         const builderFiles = [];
         let sqlEngine = null;
