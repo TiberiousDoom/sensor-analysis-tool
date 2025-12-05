@@ -1438,11 +1438,11 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             };
         }
 
-        // CPE + Finite Warburg (Short Warburg) model: R0 + (R1 || CPE) + Ws
-        // Finite Warburg models diffusion in a bounded layer (e.g., porous electrode)
-        // Ws = Aw * tanh(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+        // CPE + Finite Warburg (Open Warburg) model: R0 + (R1 || CPE) + Wo
+        // Finite Warburg models diffusion in a bounded layer with blocking boundary
+        // Wo = Aw * coth(B*sqrt(j*omega)) / (B*sqrt(j*omega))
         // At high freq: approaches semi-infinite Warburg (45° line)
-        // At low freq: approaches capacitive behavior (steep rise)
+        // At low freq: approaches capacitive behavior (steep rise in -Z'')
         function fitCPEWsModel(omega) {
             const R0_est = estimateR0();
             const R_total = estimateRTotal();
@@ -1491,32 +1491,34 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         }
 
         function predictCPEWs(params, omega) {
-            // R0 + (R1 || CPE) + Finite Warburg (Ws)
+            // R0 + (R1 || CPE) + Finite Warburg (Open Warburg, Wo)
             const cpe = predictRCPEParallel(params.R1, params.Q, params.n, omega);
 
-            // Finite Warburg: Zws = Aw * tanh(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+            // Open Warburg (blocking boundary): Zwo = Aw * coth(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+            // This gives capacitive behavior at low frequencies (steep rise in -Z'')
             // sqrt(j*omega) = sqrt(omega) * (1+j)/sqrt(2)
             const sqrtOmega = Math.sqrt(omega);
             const x = params.B * sqrtOmega / Math.SQRT2; // Real and imag parts of B*sqrt(j*omega)
 
-            // tanh(x + jx) = (sinh(2x) + j*sin(2x)) / (cosh(2x) + cos(2x))
+            // coth(x + jx) = (sinh(2x) - j*sin(2x)) / (cosh(2x) - cos(2x))
+            // Note: coth has MINUS signs compared to tanh
             const sinh2x = Math.sinh(2 * x);
             const cosh2x = Math.cosh(2 * x);
             const sin2x = Math.sin(2 * x);
             const cos2x = Math.cos(2 * x);
-            const denom = cosh2x + cos2x;
+            const denom = cosh2x - cos2x; // MINUS for coth
 
-            const tanhReal = sinh2x / denom;
-            const tanhImag = sin2x / denom;
+            const cothReal = sinh2x / denom;
+            const cothImag = -sin2x / denom; // MINUS for coth
 
             // 1 / (B*sqrt(j*omega)) = 1/(B*sqrt(omega)) * sqrt(2)/(1+j) = sqrt(2)/(B*sqrt(omega)) * (1-j)/2
             const invFactor = Math.SQRT2 / (2 * params.B * sqrtOmega);
-            const invReal = invFactor;  // Real part of (1-j)/2 * sqrt(2) = sqrt(2)/2
-            const invImag = -invFactor; // Imag part
+            const invReal = invFactor;
+            const invImag = -invFactor;
 
-            // Multiply tanh by 1/(B*sqrt(j*omega)): (tanhReal + j*tanhImag) * (invReal + j*invImag)
-            const wsReal = tanhReal * invReal - tanhImag * invImag;
-            const wsImag = tanhReal * invImag + tanhImag * invReal;
+            // Multiply coth by 1/(B*sqrt(j*omega)): (cothReal + j*cothImag) * (invReal + j*invImag)
+            const wsReal = cothReal * invReal - cothImag * invImag;
+            const wsImag = cothReal * invImag + cothImag * invReal;
 
             // Multiply by Aw
             const ZwsReal = params.Aw * wsReal;
@@ -2432,6 +2434,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'CPECPE': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 100, Q2: 1e-4, n2: 0.78 },
             'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 },
             'CPEW': { R0: 60, R1: 180, Q: 2e-6, n: 0.80, W: 45 },
+            'CPEWs': { R0: 55, R1: 80, Q: 5e-4, n: 0.75, Aw: 120, B: 1.2 },
             'CPECPEW': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 120, Q2: 8e-5, n2: 0.78, W: 35 }
         };
 
@@ -2810,7 +2813,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const results = [];
 
                 // Try all models
-                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPECPE', 'CPEpCPE'];
+                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPEW', 'CPEWs', 'CPECPE', 'CPECPEW', 'CPEpCPE'];
 
                 for (const modelType of modelsToTry) {
                     try {
