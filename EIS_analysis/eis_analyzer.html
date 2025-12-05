@@ -1892,13 +1892,24 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
         function plotResiduals(predicted) {
             const mobile = isMobile();
 
+            // Use filtered data if available, otherwise use eisData
+            const dataSource = filteredData || eisData;
+
+            // Validate that predicted array matches data length
+            if (!predicted || predicted.length === 0 || predicted.length !== dataSource.zReal.length) {
+                console.warn('Residuals: predicted array length mismatch or empty');
+                return;
+            }
+
             // Calculate residuals (percent error)
-            const residualReal = eisData.zReal.map((r, i) => {
+            const residualReal = dataSource.zReal.map((r, i) => {
+                if (!predicted[i] || typeof predicted[i].real === 'undefined') return 0;
                 const err = r - predicted[i].real;
                 return (err / Math.abs(r)) * 100; // Percent error
             });
 
-            const residualImag = eisData.zImag.map((im, i) => {
+            const residualImag = dataSource.zImag.map((im, i) => {
+                if (!predicted[i] || typeof predicted[i].imag === 'undefined') return 0;
                 const err = im - predicted[i].imag;
                 return (err / Math.abs(im || 1)) * 100; // Percent error
             });
@@ -1907,7 +1918,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             document.getElementById('residualPanel').style.display = 'block';
 
             const realTrace = {
-                x: eisData.frequency,
+                x: dataSource.frequency,
                 y: residualReal,
                 mode: 'markers+lines',
                 name: "Z' Residual",
@@ -1916,7 +1927,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             };
 
             const imagTrace = {
-                x: eisData.frequency,
+                x: dataSource.frequency,
                 y: residualImag,
                 mode: 'markers+lines',
                 name: 'Z" Residual',
@@ -1926,8 +1937,8 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
 
             const zeroLine = {
                 type: 'line',
-                x0: Math.min(...eisData.frequency),
-                x1: Math.max(...eisData.frequency),
+                x0: Math.min(...dataSource.frequency),
+                x1: Math.max(...dataSource.frequency),
                 y0: 0,
                 y1: 0,
                 line: { color: '#999', width: 1, dash: 'dash' }
