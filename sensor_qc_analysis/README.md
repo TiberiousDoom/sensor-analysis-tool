@@ -17,7 +17,7 @@ A standalone, browser-based sensor data analysis tool for evaluating sensor qual
 
 ## How to Use
 
-1. Open `Sensor-QC-Analysis.HTML` in any modern web browser
+1. Open `Sensor-QC-Analysis.html` in any modern web browser
 2. Load your data:
    - **CSV**: Upload a CSV file with sensor readings
    - **Database**: Upload a SQLite database file (auto-saved for next session)
@@ -93,8 +93,8 @@ The Summary Report feature generates a comparison table for:
 
 ## Files
 
-- `Sensor-QC-Analysis.HTML` - Main application (single-file, self-contained)
-- `Excel_Database_Builder.HTML` - Utility for building SQLite databases from Excel data
+- `Sensor-QC-Analysis.html` - Main application (single-file, self-contained)
+- `Excel_Database_Builder.html` - Utility for building SQLite databases from Excel data
 
 ## Author
 

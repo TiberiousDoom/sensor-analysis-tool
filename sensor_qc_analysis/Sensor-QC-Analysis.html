@@ -293,12 +293,21 @@
             border: none;
             cursor: pointer;
             outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding-right: 20px;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 4px center;
+            background-size: 16px;
         }
         .status-select option { color: black; background: white; }
-        select.status-PASS { background: var(--success); }
-        select.status-FL, select.status-FH { background: var(--danger); }
-        select.status-FT- { background: var(--danger); }
-        select.status-TT, select.status-OT\+ { background: var(--warning); }
+        select.status-PASS { background-color: var(--success) !important; }
+        select.status-FL, select.status-FH { background-color: var(--danger) !important; }
+        select.status-FT- { background-color: var(--danger) !important; }
+        select.status-TT { background-color: #eab308 !important; }
+        select.status-OT\+ { background-color: #fb923c !important; }
 
         .filter-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
         
@@ -402,6 +411,7 @@
             justify-content: space-between;
             align-items: center;
             font-weight: 600;
+            user-select: none;
         }
         
         .collapsible-header:hover { background: rgba(102, 126, 234, 0.05); }
@@ -569,13 +579,6 @@
         .anomaly-medium { background: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning); }
 
         /* Collapsible sections */
-        .collapsible-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            user-select: none;
-        }
         .collapsible-header .card-title { margin-bottom: 0; }
         .collapsible-toggle {
             font-size: 0.85rem;
@@ -708,6 +711,14 @@
     </style>
 </head>
 <body>
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:var(--primary);color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The QC Analysis Dashboard requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay hidden">
         <div class="loading-box">
@@ -753,6 +764,7 @@
                             <div class="upload-area" id="csvUploadArea" role="button" tabindex="0" aria-label="Upload CSV file with sensor data">
                                 <div class="upload-icon" aria-hidden="true">📤</div>
                                 <div>Drop CSV or click to browse</div>
+                                <div style="font-size: 0.75em; color: var(--info); margin-top: 5px;">Large files may take longer to process</div>
                                 <input type="file" id="csvFileInput" accept=".csv" aria-label="CSV file input">
                             </div>
                         </div>
@@ -760,6 +772,7 @@
                             <div class="upload-area" id="dbUploadArea" role="button" tabindex="0" aria-label="Upload database file">
                                 <div class="upload-icon" aria-hidden="true">💾</div>
                                 <div>Drop .db file or click to browse</div>
+                                <div style="font-size: 0.75em; color: var(--info); margin-top: 5px;">Database persists in browser storage</div>
                                 <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3" aria-label="Database file input">
                             </div>
                         </div>
@@ -771,7 +784,12 @@
                 <h3>⚙️ Analysis Settings</h3>
                 <div class="form-group">
                     <label for="jobNumber">Job Number</label>
-                    <input type="text" id="jobNumber" placeholder="Enter job number...">
+                    <input type="text" id="jobNumber" placeholder="Enter job number..."
+                           pattern="[0-9]+(\.[0-9]+)?"
+                           title="Enter a numeric job number (e.g., 258 or 258.1)"
+                           autocomplete="off"
+                           aria-describedby="jobNumberHint">
+                    <div id="jobNumberHint" style="font-size: 0.75em; color: var(--info); margin-top: 4px;">Supports decimal sub-jobs (e.g., 258.1)</div>
                 </div>
                 <div class="form-group">
                     <label for="thresholdSet">Threshold Set</label>
@@ -798,7 +816,7 @@
         </aside>
         
         <!-- Main Content -->
-        <main class="main-content">
+        <main id="main-content" class="main-content">
             <header class="main-header">
                 <h1>🔬 Sensor Analysis Dashboard</h1>
                 <p>Advanced sensor data analysis</p>
@@ -1528,6 +1546,19 @@ else if (typeof exports === 'object'){
 }
     </script>
     <script>
+    // Global error handler for unhandled errors
+    window.onerror = function(message, source, lineno, colno, error) {
+        console.error('Unhandled error:', message, 'at', source, lineno);
+        if (typeof showAlert === 'function') {
+            showAlert('An unexpected error occurred: ' + message, 'danger');
+        } else {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:1rem;border-radius:8px;z-index:10000;max-width:90%;';
+            errorDiv.innerHTML = '<strong>An error occurred:</strong> ' + message + '<br><button onclick="this.parentElement.remove()" style="margin-top:0.5rem;padding:4px 8px;cursor:pointer;">Dismiss</button>';
+            document.body.appendChild(errorDiv);
+        }
+        return false;
+    };
 
     // ============================================================
     // CONFIGURATION
@@ -1891,7 +1922,7 @@ else if (typeof exports === 'object'){
             
             const serialRow = {
                 'Serial Number': serial,
-                'Channel': (group.length >= 3 ? group[2]['Channel'] : group[0]['Channel']) || '',
+                'Channel': (group[2] || group[group.length - 1])['Channel'] || '',
                 'testCount': group.length,
                 'readings120': readings120,
                 'testData': []
@@ -2137,6 +2168,10 @@ else if (typeof exports === 'object'){
         
         document.getElementById('metricsGrid').innerHTML = `
             <div class="metric">
+                <div class="metric-label">Job Number</div>
+                <div class="metric-value">${currentJob || '—'}</div>
+            </div>
+            <div class="metric">
                 <div class="metric-label">Total Sensors</div>
                 <div class="metric-value">${total}</div>
             </div>
@@ -2260,8 +2295,13 @@ else if (typeof exports === 'object'){
     function updateSensorStatus(index, newStatus) {
         if (index < 0 || index >= analysisResults.length) return;
 
+        const serialNumber = analysisResults[index]['Serial Number'];
+
         // Update the status in analysisResults
         analysisResults[index]['Pass/Fail'] = newStatus;
+
+        // Save override to localStorage
+        saveStatusOverride(currentJob, serialNumber, newStatus);
 
         // Re-render the table to update row styling and dropdown appearance
         renderTable();
@@ -2272,6 +2312,31 @@ else if (typeof exports === 'object'){
 
         // Update status filters to reflect any count changes
         renderStatusFilters(analysisResults);
+    }
+
+    function saveStatusOverride(jobNumber, serialNumber, status) {
+        if (!jobNumber) return;
+        const key = `statusOverrides_${jobNumber}`;
+        const overrides = JSON.parse(localStorage.getItem(key) || '{}');
+        overrides[serialNumber] = status;
+        localStorage.setItem(key, JSON.stringify(overrides));
+    }
+
+    function loadStatusOverrides(jobNumber) {
+        if (!jobNumber) return {};
+        const key = `statusOverrides_${jobNumber}`;
+        return JSON.parse(localStorage.getItem(key) || '{}');
+    }
+
+    function applyStatusOverrides(results, jobNumber) {
+        const overrides = loadStatusOverrides(jobNumber);
+        results.forEach(row => {
+            const serial = row['Serial Number'];
+            if (overrides[serial]) {
+                row['Pass/Fail'] = overrides[serial];
+            }
+        });
+        return results;
     }
 
     function toggleCollapsible(contentId, toggleId) {
@@ -2549,14 +2614,23 @@ else if (typeof exports === 'object'){
     // ============================================================
     
     function runAnalysis() {
-        const jobNumber = document.getElementById('jobNumber').value.trim();
+        const jobInput = document.getElementById('jobNumber');
+        const jobNumber = jobInput.value.trim();
         const thresholdSet = document.getElementById('thresholdSet').value;
-        
+
         if (!jobNumber) {
             showAlert('⚠️ Please enter a job number', 'warning');
+            jobInput.focus();
             return;
         }
-        
+
+        // Validate job number format (numbers with optional decimal)
+        if (!/^[0-9]+(\.[0-9]+)?$/.test(jobNumber)) {
+            showAlert('⚠️ Invalid job number format. Use numbers only (e.g., 258 or 258.1)', 'warning');
+            jobInput.focus();
+            return;
+        }
+
         if (rawData.length === 0) {
             showAlert('⚠️ Please load data first', 'warning');
             return;
@@ -2578,7 +2652,10 @@ else if (typeof exports === 'object'){
                 analysisResults = determinePassFail(dataWithMetrics, thresholdSet);
                 currentJob = jobNumber;
                 currentJobData = jobData;
-                
+
+                // Apply any saved status overrides from previous sessions
+                applyStatusOverrides(analysisResults, jobNumber);
+
                 if (analysisResults.length === 0) {
                     hideLoading();
                     showAlert('❌ No valid sensor readings found', 'danger');
@@ -2795,8 +2872,8 @@ else if (typeof exports === 'object'){
             });
 
             let totalSensors = 0;
-            let totalFailed = 0;
-            let t1Failed = 0, t2Failed = 0, t3Failed = 0;
+            let totalPassed = 0;
+            let t1Passed = 0, t2Passed = 0, t3Passed = 0;
             let t1Total = 0, t2Total = 0, t3Total = 0;
 
             // Evaluate each unique sensor using the same logic as determinePassFail
@@ -2811,77 +2888,90 @@ else if (typeof exports === 'object'){
                 const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
                 let hasCriticalFailure = false;
 
-                // Check each test for this sensor and track per-test failures
+                // Check each test for this sensor and track per-test passes
                 sensorRows.forEach((row, testIdx) => {
                     const v120 = row['120'];
                     const pctChange = row.pct_change_90_120;
-                    let testFailed = false;
+                    let testPassed = true;
 
                     if (v120 === null || v120 === undefined || isNaN(v120)) {
-                        // Missing data - not counted as critical failure
+                        // Missing data - skip this test
+                        testPassed = false;
                     } else {
                         if (v120 < thresholds.min_120s || v120 > thresholds.max_120s) {
-                            testFailed = true;
+                            testPassed = false;
                             hasCriticalFailure = true;
                         }
                     }
 
                     if (pctChange !== null && !isNaN(pctChange)) {
                         if (pctChange < thresholds.min_pct_change) {
-                            testFailed = true;
+                            testPassed = false;
                             hasCriticalFailure = true;
                         }
                     }
 
-                    // Track per-test failures (testIdx 0 = T1, 1 = T2, 2 = T3)
+                    // Track per-test passes (testIdx 0 = T1, 1 = T2, 2 = T3)
                     if (testIdx === 0) {
                         t1Total++;
-                        if (testFailed) t1Failed++;
+                        if (testPassed) t1Passed++;
                     } else if (testIdx === 1) {
                         t2Total++;
-                        if (testFailed) t2Failed++;
+                        if (testPassed) t2Passed++;
                     } else if (testIdx === 2) {
                         t3Total++;
-                        if (testFailed) t3Failed++;
+                        if (testPassed) t3Passed++;
                     }
                 });
 
-                if (hasCriticalFailure) {
-                    totalFailed++;
+                if (!hasCriticalFailure) {
+                    totalPassed++;
                 }
             }
 
-            const t1FailPct = t1Total > 0 ? (t1Failed / t1Total * 100) : 0;
-            const t2FailPct = t2Total > 0 ? (t2Failed / t2Total * 100) : 0;
-            const t3FailPct = t3Total > 0 ? (t3Failed / t3Total * 100) : 0;
-            const totalFailPct = totalSensors > 0 ? (totalFailed / totalSensors * 100) : 0;
+            const t1PassPct = t1Total > 0 ? (t1Passed / t1Total * 100) : 0;
+            const t2PassPct = t2Total > 0 ? (t2Passed / t2Total * 100) : 0;
+            const t3PassPct = t3Total > 0 ? (t3Passed / t3Total * 100) : 0;
+            const totalPassPct = totalSensors > 0 ? (totalPassed / totalSensors * 100) : 0;
 
             return {
                 jobNumber: wholeJobNum,
                 totalSensors: totalSensors,
-                t1FailPct: t1FailPct,
-                t2FailPct: t2FailPct,
-                t3FailPct: t3FailPct,
-                totalFailPct: totalFailPct
+                t1PassPct: t1PassPct,
+                t1Passed: t1Passed,
+                t2PassPct: t2PassPct,
+                t2Passed: t2Passed,
+                t3PassPct: t3PassPct,
+                t3Passed: t3Passed,
+                totalPassPct: totalPassPct,
+                totalPassed: totalPassed
             };
         });
 
-        // Calculate cumulative averages for fail percentages
+        // Sort jobs by job number ascending (most recent/largest at bottom)
+        jobsToShow.sort((a, b) => a.jobNumber - b.jobNumber);
+
+        // Calculate cumulative totals for pass percentages
         const totalSensorsSum = jobsToShow.reduce((sum, j) => sum + j.totalSensors, 0);
-        const avgT1FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t1FailPct, 0) / jobsToShow.length : 0;
-        const avgT2FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t2FailPct, 0) / jobsToShow.length : 0;
-        const avgT3FailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t3FailPct, 0) / jobsToShow.length : 0;
-        const avgTotalFailPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.totalFailPct, 0) / jobsToShow.length : 0;
+        const totalT1Passed = jobsToShow.reduce((sum, j) => sum + j.t1Passed, 0);
+        const totalT1Count = jobsToShow.reduce((sum, j) => sum + (j.t1Passed > 0 || j.t1PassPct < 100 ? 1 : 0), 0);
+        const totalT2Passed = jobsToShow.reduce((sum, j) => sum + j.t2Passed, 0);
+        const totalT3Passed = jobsToShow.reduce((sum, j) => sum + j.t3Passed, 0);
+        const totalOverallPassed = jobsToShow.reduce((sum, j) => sum + j.totalPassed, 0);
+        const avgT1PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t1PassPct, 0) / jobsToShow.length : 0;
+        const avgT2PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t2PassPct, 0) / jobsToShow.length : 0;
+        const avgT3PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t3PassPct, 0) / jobsToShow.length : 0;
+        const avgTotalPassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.totalPassPct, 0) / jobsToShow.length : 0;
 
         // Generate table rows for each job
         const jobRows = jobsToShow.map(job => `
             <tr>
                 <td>${job.jobNumber}</td>
                 <td>${job.totalSensors}</td>
-                <td>${job.t1FailPct.toFixed(2)}%</td>
-                <td>${job.t2FailPct.toFixed(2)}%</td>
-                <td>${job.t3FailPct.toFixed(2)}%</td>
-                <td>${job.totalFailPct.toFixed(2)}%</td>
+                <td>${job.t1PassPct.toFixed(1)}% (${job.t1Passed})</td>
+                <td>${job.t2PassPct.toFixed(1)}% (${job.t2Passed})</td>
+                <td>${job.t3PassPct.toFixed(1)}% (${job.t3Passed})</td>
+                <td>${job.totalPassPct.toFixed(1)}% (${job.totalPassed})</td>
             </tr>
         `).join('');
 
@@ -2904,19 +2994,19 @@ else if (typeof exports === 'object'){
                 <tr>
                     <th>Job #</th>
                     <th>Total #</th>
-                    <th>T1 Fail %</th>
-                    <th>T2 Fail %</th>
-                    <th>T3 Fail %</th>
-                    <th>Total Fail %</th>
+                    <th>T1 Pass %</th>
+                    <th>T2 Pass %</th>
+                    <th>T3 Pass %</th>
+                    <th>Total Pass %</th>
                 </tr>
                 ${jobRows}
                 <tr class="cumulative-row">
                     <td>Overall:</td>
                     <td>${totalSensorsSum}</td>
-                    <td>${avgT1FailPct.toFixed(2)}%</td>
-                    <td>${avgT2FailPct.toFixed(2)}%</td>
-                    <td>${avgT3FailPct.toFixed(2)}%</td>
-                    <td>${avgTotalFailPct.toFixed(2)}%</td>
+                    <td>${avgT1PassPct.toFixed(1)}% (${totalT1Passed})</td>
+                    <td>${avgT2PassPct.toFixed(1)}% (${totalT2Passed})</td>
+                    <td>${avgT3PassPct.toFixed(1)}% (${totalT3Passed})</td>
+                    <td>${avgTotalPassPct.toFixed(1)}% (${totalOverallPassed})</td>
                 </tr>
             </table>
             </body></html>

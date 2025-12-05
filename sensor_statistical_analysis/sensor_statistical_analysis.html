@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Statistical analysis tool for sensor response data with KPI calculations, time series visualization, correlation analysis, and regression modeling">
-    <title>Sensor Statistical Analysis</title>
+    <title>Sensor Statistical Analysis v1.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Plotly.js for charts -->
@@ -754,11 +754,20 @@
     </style>
 </head>
 <body>
-    <div class="container" role="main">
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:1rem;background:var(--accent-cyan);color:white;text-decoration:none;font-weight:bold;border-radius:4px;">Skip to main content</a>
+    <style>.skip-link:focus{position:fixed;left:50%;transform:translateX(-50%);top:10px;width:auto;height:auto;overflow:visible;}</style>
+    <noscript>
+        <div style="padding: 2rem; text-align: center; background: #fee2e2; color: #991b1b; font-family: sans-serif;">
+            <h2>JavaScript Required</h2>
+            <p>The Statistical Analysis tool requires JavaScript to be enabled. Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+    </noscript>
+    <div id="main-content" class="container" role="main">
         <header>
             <a href="../index.html" class="home-btn">← Home</a>
             <h1>⚡ Sensor Statistical Analysis</h1>
             <p class="subtitle">Drop your data files to begin analysis</p>
+            <span style="font-size: 0.75em; opacity: 0.5;">v1.0</span>
         </header>
 
         <!-- Drop Zones -->
@@ -767,6 +776,7 @@
                 <div class="drop-zone-icon" aria-hidden="true">📋</div>
                 <div class="drop-zone-title">Build Data</div>
                 <div class="drop-zone-subtitle">Design parameters (CSV, XLSX, TXT)</div>
+                <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;">Recommended: under 10MB</div>
                 <div class="drop-zone-status" id="buildDataStatus" role="status" aria-live="polite"></div>
                 <input type="file" id="buildDataFile" accept=".csv,.xlsx,.xls,.txt" aria-label="Build data file input">
             </div>
@@ -774,6 +784,7 @@
                 <div class="drop-zone-icon" aria-hidden="true">📈</div>
                 <div class="drop-zone-title">Sensor Response Data</div>
                 <div class="drop-zone-subtitle">Time series (Time in col A, sensors in B+)</div>
+                <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;">Recommended: under 10MB</div>
                 <div class="drop-zone-status" id="sensorDataStatus" role="status" aria-live="polite"></div>
                 <input type="file" id="sensorDataFile" accept=".csv,.xlsx,.xls,.txt" aria-label="Sensor data file input">
             </div>
@@ -1141,6 +1152,24 @@
     </div>
 
     <script>
+        // Global error handler for unhandled errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error('Unhandled error:', message, 'at', source, lineno);
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:var(--bg-tertiary);border:2px solid var(--accent-rose);color:var(--accent-rose);padding:1rem;border-radius:8px;z-index:10000;max-width:90%;font-family:inherit;';
+            errorDiv.innerHTML = '<strong>An error occurred:</strong> ' + message + '<br><button onclick="this.parentElement.remove()" style="margin-top:0.5rem;padding:4px 12px;cursor:pointer;background:var(--accent-rose);color:white;border:none;border-radius:4px;">Dismiss</button>';
+            document.body.appendChild(errorDiv);
+            return false;
+        };
+
+        // Debug mode flag - set to true to enable debug console output
+        const DEBUG = false;
+
+        // Debug logging function - only outputs when DEBUG is true
+        function debugLog(...args) {
+            if (DEBUG) console.log(...args);
+        }
+
         // Check if libraries loaded
         const loadErrors = [];
         if (typeof Papa === 'undefined') loadErrors.push('PapaParse');
@@ -1274,8 +1303,8 @@
             try {
                 const rawData = await parseFile(file);
                 
-                console.log('Build data raw rows:', rawData.length);
-                console.log('First row:', rawData[0]);
+                debugLog('Build data raw rows:', rawData.length);
+                debugLog('First row:', rawData[0]);
                 
                 // Find header row (contains "Cell" or "ID")
                 let headerRow = 0;
@@ -1289,15 +1318,15 @@
                     }
                 }
                 
-                console.log('Build data header row:', headerRow);
-                console.log('Header row contents:', rawData[headerRow]);
+                debugLog('Build data header row:', headerRow);
+                debugLog('Header row contents:', rawData[headerRow]);
                 
                 const headers = rawData[headerRow].map(h => String(h).trim());
                 const rows = rawData.slice(headerRow + 1).filter(row => row.length > 0 && row[0]);
                 
-                console.log('Build data rows:', rows.length);
-                console.log('First data row:', rows[0]);
-                console.log('Raw trace values (first 5 rows):', rows.slice(0, 5).map(r => ({ raw: r[1], type: typeof r[1] })));
+                debugLog('Build data rows:', rows.length);
+                debugLog('First data row:', rows[0]);
+                debugLog('Raw trace values (first 5 rows):', rows.slice(0, 5).map(r => ({ raw: r[1], type: typeof r[1] })));
                 
                 buildData = {
                     headers,
@@ -1332,9 +1361,9 @@
                     referenceSA: rows.map(r => parseFloat(r[5]) || 0)
                 };
                 
-                console.log('Parsed build sensors:', buildData.sensors.slice(0, 5));
-                console.log('Parsed trace types:', buildData.traceTypes.slice(0, 15));
-                console.log('Unique trace types:', [...new Set(buildData.traceTypes)]);
+                debugLog('Parsed build sensors:', buildData.sensors.slice(0, 5));
+                debugLog('Parsed trace types:', buildData.traceTypes.slice(0, 15));
+                debugLog('Unique trace types:', [...new Set(buildData.traceTypes)]);
                 
                 // Calculate ratios
                 buildData.wcRatio = buildData.workingSA.map((w, i) => 
@@ -1383,8 +1412,8 @@
                     }
                 }
                 
-                console.log('Sensor data header row:', headerRow);
-                console.log('Header row contents:', rawData[headerRow]?.slice(0, 5));
+                debugLog('Sensor data header row:', headerRow);
+                debugLog('Header row contents:', rawData[headerRow]?.slice(0, 5));
                 
                 const headers = rawData[headerRow].map(h => String(h).trim());
                 const rows = rawData.slice(headerRow + 1).filter(row => {
@@ -1406,7 +1435,7 @@
                     }
                 }
                 
-                console.log('Parsed sensor names:', Object.keys(sensorData.sensors).slice(0, 5));
+                debugLog('Parsed sensor names:', Object.keys(sensorData.sensors).slice(0, 5));
                 
                 status.textContent = `✓ ${Object.keys(sensorData.sensors).length} sensors, ${rows.length} time points`;
                 dropZone.classList.add('loaded');
@@ -1423,9 +1452,9 @@
         function checkDataReady() {
             if (buildData && sensorData) {
                 // Debug: Log sensor names to help diagnose matching issues
-                console.log('=== SENSOR MATCHING DEBUG ===');
-                console.log('Build Data sensors (first 5):', buildData.sensors.slice(0, 5));
-                console.log('Sensor Data keys (first 5):', Object.keys(sensorData.sensors).slice(0, 5));
+                debugLog('=== SENSOR MATCHING DEBUG ===');
+                debugLog('Build Data sensors (first 5):', buildData.sensors.slice(0, 5));
+                debugLog('Sensor Data keys (first 5):', Object.keys(sensorData.sensors).slice(0, 5));
                 
                 // Normalize function
                 const normalize = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1439,8 +1468,8 @@
                 const matchedFromBuild = buildNormalized.filter(s => kpiSet.has(s)).length;
                 const matchedFromKpi = kpiNormalized.filter(s => buildSet.has(s)).length;
                 
-                console.log(`Build sensors matched: ${matchedFromBuild}/${buildData.sensors.length}`);
-                console.log(`KPI sensors matched: ${matchedFromKpi}/${Object.keys(sensorData.sensors).length}`);
+                debugLog(`Build sensors matched: ${matchedFromBuild}/${buildData.sensors.length}`);
+                debugLog(`KPI sensors matched: ${matchedFromKpi}/${Object.keys(sensorData.sensors).length}`);
                 
                 // Show in UI
                 const statusDiv = document.getElementById('matchingStatus');
@@ -2065,7 +2094,7 @@
                 Object.keys(kpiData).forEach(s => {
                     const norm = normalize(s);
                     kpiLookup[norm] = kpiData[s];
-                    console.log(`KPI lookup: "${s}" -> "${norm}"`);
+                    debugLog(`KPI lookup: "${s}" -> "${norm}"`);
                 });
                 
                 // Match build data sensors to KPI data
@@ -2076,17 +2105,17 @@
                     if (kpi) {
                         matchedIndices.push({ idx, sensor, kpi });
                     } else {
-                        console.log(`No match for build sensor: "${sensor}" -> "${norm}"`);
+                        debugLog(`No match for build sensor: "${sensor}" -> "${norm}"`);
                     }
                 });
                 
-                console.log('Distribution charts - matched sensors:', matchedIndices.length);
+                debugLog('Distribution charts - matched sensors:', matchedIndices.length);
                 
                 if (matchedIndices.length === 0) {
                     console.warn('No sensors matched for distribution charts!');
                     // Show available keys for debugging
-                    console.log('KPI lookup keys:', Object.keys(kpiLookup).slice(0, 5));
-                    console.log('Build normalized:', buildData.sensors.slice(0, 5).map(normalize));
+                    debugLog('KPI lookup keys:', Object.keys(kpiLookup).slice(0, 5));
+                    debugLog('Build normalized:', buildData.sensors.slice(0, 5).map(normalize));
                     return;
                 }
                 
@@ -2204,7 +2233,7 @@
                     combinedGroups[groupName].push(kpi.responseMag);
                 });
                 
-                console.log('Combined groups:', Object.entries(combinedGroups).map(([k, v]) => `${k}: ${v.length}`));;
+                debugLog('Combined groups:', Object.entries(combinedGroups).map(([k, v]) => `${k}: ${v.length}`));
                 
                 const combinedColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
                 const combinedTraces = groupOrder
@@ -2302,12 +2331,12 @@
                 }
             });
             
-            console.log('Correlation matched sensors:', matchedData.length);
+            debugLog('Correlation matched sensors:', matchedData.length);
             
             if (matchedData.length === 0) {
                 console.warn('No sensors matched for correlations!');
-                console.log('Build sensors sample:', buildData.sensors.slice(0, 3));
-                console.log('KPI sensors sample:', Object.keys(kpiData).slice(0, 3));
+                debugLog('Build sensors sample:', buildData.sensors.slice(0, 3));
+                debugLog('KPI sensors sample:', Object.keys(kpiData).slice(0, 3));
                 return;
             }
             
@@ -2332,7 +2361,7 @@
                 corrMatrix.push(row);
             });
 
-            console.log('Correlation matrix computed:', corrMatrix.length, 'x', corrMatrix[0]?.length);
+            debugLog('Correlation matrix computed:', corrMatrix.length, 'x', corrMatrix[0]?.length);
 
             // Find strongest correlations for interpretation
             let strongestCorr = { r: 0, kpi: '', param: '' };
@@ -3096,7 +3125,7 @@
         // ============================================
         
         function generateTestData() {
-            console.log('Generating test data...');
+            debugLog('Generating test data...');
             
             // Create 12 test sensors with known properties
             const testSensors = [];
@@ -3358,7 +3387,7 @@
                 reportEl.style.display = 'block';
                 reportEl.scrollTop = 0;
             } else {
-                console.log(report.join('\n'));  // Fallback to console
+                debugLog(report.join('\n'));  // Fallback to console
             }
         }
         
