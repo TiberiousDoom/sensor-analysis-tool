@@ -551,6 +551,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
                         <option value="CPEW">R-(R||CPE)-W (CPE + Warburg)</option>
+                        <option value="CPEWs">R-(R||CPE)-Ws (CPE + Finite Warburg)</option>
                         <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
                         <option value="CPECPEW">R-(R||CPE)-(R||CPE)-W (Two CPE + Warburg)</option>
                         <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
@@ -649,6 +650,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                         <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
                         <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
                         <option value="CPEW">R-(R||CPE)-W (CPE + Warburg)</option>
+                        <option value="CPEWs">R-(R||CPE)-Ws (CPE + Finite Warburg)</option>
                         <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
                         <option value="CPECPEW">R-(R||CPE)-(R||CPE)-W (Two CPE + Warburg)</option>
                         <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
@@ -882,6 +884,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'RRCRC': { name: 'R-(R||C)-(R||C)-(R||C) (Three RC)', fit: fitRRCRCModel, predict: predictRRCRC, params: 7 },
             'CPE': { name: 'R-(R||CPE)', fit: fitCPEModel, predict: predictCPE, params: 4 },
             'CPEW': { name: 'R-(R||CPE)-W (CPE+Warburg)', fit: fitCPEWModel, predict: predictCPEW, params: 5 },
+            'CPEWs': { name: 'R-(R||CPE)-Ws (CPE+Finite Warburg)', fit: fitCPEWsModel, predict: predictCPEWs, params: 6 },
             'CPECPE': { name: 'R-(R||CPE)-(R||CPE) (Two CPE)', fit: fitCPECPEModel, predict: predictCPECPE, params: 7 },
             'CPECPEW': { name: 'R-(R||CPE)-(R||CPE)-W (Two CPE+Warburg)', fit: fitCPECPEWModel, predict: predictCPECPEW, params: 8 },
             'CPEpCPE': { name: 'R-(R||CPE)||(R||CPE) (Parallel CPE)', fit: fitCPEpCPEModel, predict: predictCPEpCPE, params: 7 }
@@ -1432,6 +1435,96 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             return {
                 real: params.R0 + cpe.real + warburgFactor,
                 imag: cpe.imag - warburgFactor
+            };
+        }
+
+        // CPE + Finite Warburg (Short Warburg) model: R0 + (R1 || CPE) + Ws
+        // Finite Warburg models diffusion in a bounded layer (e.g., porous electrode)
+        // Ws = Aw * tanh(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+        // At high freq: approaches semi-infinite Warburg (45° line)
+        // At low freq: approaches capacitive behavior (steep rise)
+        function fitCPEWsModel(omega) {
+            const R0_est = estimateR0();
+            const R_total = estimateRTotal();
+            const R1_est = Math.max((R_total - R0_est) * 0.3, 10);
+            const C_est = estimateCapacitance(omega);
+            const n_est = estimateCPEExponent();
+            const Aw_est = (R_total - R0_est) * 0.5;
+            // B is related to diffusion layer thickness, start with reasonable guess
+            const B_est = 1.0;
+
+            const startConfigs = [
+                { n: n_est, Q: C_est, R0: R0_est, R1: R1_est, Aw: Aw_est, B: B_est },
+                { n: 0.85, Q: 1e-5, R0: R0_est, R1: R1_est * 0.8, Aw: Aw_est * 0.5, B: 0.5 },
+                { n: 0.75, Q: 5e-5, R0: R0_est, R1: R1_est * 0.6, Aw: Aw_est * 0.8, B: 1.5 },
+                { n: 0.80, Q: 1e-4, R0: R0_est, R1: R1_est * 0.5, Aw: Aw_est * 1.2, B: 2.0 },
+                { n: 0.70, Q: 5e-4, R0: R0_est, R1: R1_est * 0.4, Aw: Aw_est, B: 0.8 },
+                { n: 0.65, Q: 1e-3, R0: R0_est, R1: R1_est * 0.3, Aw: Aw_est * 1.5, B: 1.2 },
+                { n: 0.50, Q: 1e-3, R0: R0_est, R1: R1_est * 0.5, Aw: Aw_est * 2, B: 0.3 },
+                { n: n_est, Q: C_est * 2, R0: R0_est * 0.9, R1: R1_est * 0.7, Aw: Aw_est * 0.7, B: 1.8 },
+            ];
+
+            let bestParams = null;
+            let bestError = Infinity;
+
+            for (const config of startConfigs) {
+                try {
+                    const params = nelderMeadLogSpace(
+                        (p) => calcError(p, omega, predictCPEWs),
+                        config,
+                        ['Q', 'Aw', 'B'],
+                        { R0: Math.max(config.R0 * 0.3, 5), R1: config.R1 * 0.3, Q: config.Q * 0.5, n: 0.1, Aw: config.Aw * 0.3, B: config.B * 0.3 },
+                        2000
+                    );
+
+                    const error = calcError(params, omega, predictCPEWs);
+                    if (error < bestError) {
+                        bestError = error;
+                        bestParams = params;
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+
+            return bestParams || startConfigs[0];
+        }
+
+        function predictCPEWs(params, omega) {
+            // R0 + (R1 || CPE) + Finite Warburg (Ws)
+            const cpe = predictRCPEParallel(params.R1, params.Q, params.n, omega);
+
+            // Finite Warburg: Zws = Aw * tanh(B*sqrt(j*omega)) / (B*sqrt(j*omega))
+            // sqrt(j*omega) = sqrt(omega) * (1+j)/sqrt(2)
+            const sqrtOmega = Math.sqrt(omega);
+            const x = params.B * sqrtOmega / Math.SQRT2; // Real and imag parts of B*sqrt(j*omega)
+
+            // tanh(x + jx) = (sinh(2x) + j*sin(2x)) / (cosh(2x) + cos(2x))
+            const sinh2x = Math.sinh(2 * x);
+            const cosh2x = Math.cosh(2 * x);
+            const sin2x = Math.sin(2 * x);
+            const cos2x = Math.cos(2 * x);
+            const denom = cosh2x + cos2x;
+
+            const tanhReal = sinh2x / denom;
+            const tanhImag = sin2x / denom;
+
+            // 1 / (B*sqrt(j*omega)) = 1/(B*sqrt(omega)) * sqrt(2)/(1+j) = sqrt(2)/(B*sqrt(omega)) * (1-j)/2
+            const invFactor = Math.SQRT2 / (2 * params.B * sqrtOmega);
+            const invReal = invFactor;  // Real part of (1-j)/2 * sqrt(2) = sqrt(2)/2
+            const invImag = -invFactor; // Imag part
+
+            // Multiply tanh by 1/(B*sqrt(j*omega)): (tanhReal + j*tanhImag) * (invReal + j*invImag)
+            const wsReal = tanhReal * invReal - tanhImag * invImag;
+            const wsImag = tanhReal * invImag + tanhImag * invReal;
+
+            // Multiply by Aw
+            const ZwsReal = params.Aw * wsReal;
+            const ZwsImag = params.Aw * wsImag;
+
+            return {
+                real: params.R0 + cpe.real + ZwsReal,
+                imag: cpe.imag + ZwsImag
             };
         }
 
