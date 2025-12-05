@@ -2432,6 +2432,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             'CPECPE': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 100, Q2: 1e-4, n2: 0.78 },
             'CPEpCPE': { R0: 45, R1: 200, Q1: 5e-7, n1: 0.82, R2: 150, Q2: 5e-5, n2: 0.75 },
             'CPEW': { R0: 60, R1: 180, Q: 2e-6, n: 0.80, W: 45 },
+            'CPEWs': { R0: 55, R1: 80, Q: 5e-4, n: 0.75, Aw: 120, B: 1.2 },
             'CPECPEW': { R0: 50, R1: 150, Q1: 1e-6, n1: 0.85, R2: 120, Q2: 8e-5, n2: 0.78, W: 35 }
         };
 
@@ -2810,7 +2811,7 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                 const results = [];
 
                 // Try all models
-                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPECPE', 'CPEpCPE'];
+                const modelsToTry = ['R', 'RC', 'RpC', 'RRC', 'RRCW', 'RCRC', 'RRCRC', 'CPE', 'CPEW', 'CPEWs', 'CPECPE', 'CPECPEW', 'CPEpCPE'];
 
                 for (const modelType of modelsToTry) {
                     try {
