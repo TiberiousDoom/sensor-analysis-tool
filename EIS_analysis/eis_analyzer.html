@@ -26,15 +26,15 @@
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 15px 30px;
             text-align: center;
             position: relative;
         }
-        header h1 { font-size: 2.5em; margin-bottom: 5px; }
-        header p { opacity: 0.9; }
+        header h1 { font-size: 1.8em; margin-bottom: 3px; }
+        header p { opacity: 0.9; font-size: 0.85em; }
         .home-btn {
             position: absolute;
-            top: 20px;
+            top: 12px;
             left: 20px;
             background: rgba(255,255,255,0.2);
             color: white;
@@ -56,24 +56,24 @@
         .content {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            padding: 30px;
+            gap: 15px;
+            padding: 20px;
         }
         .panel {
             background: #f8f9fa;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid #e0e0e0;
         }
         .panel h2 {
             color: #333;
-            margin-bottom: 15px;
-            font-size: 1.2em;
+            margin-bottom: 10px;
+            font-size: 1.1em;
             border-bottom: 2px solid #667eea;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         label {
             display: block;
@@ -141,8 +141,8 @@
         .result-value { color: #333; font-family: monospace; }
         .plot-container {
             width: 100%;
-            height: 400px;
-            min-height: 300px;
+            height: 320px;
+            min-height: 250px;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -259,8 +259,8 @@
         }
         /* Residual plot container */
         .residual-container {
-            height: 250px;
-            min-height: 200px;
+            height: 200px;
+            min-height: 150px;
         }
         /* Export buttons */
         .export-btn-group {
@@ -448,28 +448,34 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
                     <div id="comparisonResults"></div>
                 </div>
 
-                <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
-                <div class="form-group">
-                    <label for="debugModel">Test Model</label>
-                    <select id="debugModel">
-                        <option value="RRC">R-(R||C) (Randles)</option>
-                        <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
-                        <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
-                        <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
-                        <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
-                        <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
-                        <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
-                    </select>
+                <!-- Debug Section (hidden by default) -->
+                <div id="debugSection" style="display: none;">
+                    <h2 id="debug-heading" style="margin-top: 30px;">🧪 Debug Test</h2>
+                    <div class="form-group">
+                        <label for="debugModel">Test Model</label>
+                        <select id="debugModel">
+                            <option value="RRC">R-(R||C) (Randles)</option>
+                            <option value="RRCW">R-(R||C)-W (Randles + Warburg)</option>
+                            <option value="RCRC">R-(R||C)-(R||C) (Two RC)</option>
+                            <option value="RRCRC">R-(R||C)-(R||C)-(R||C) (Three RC)</option>
+                            <option value="CPE">R-(R||CPE) (Constant Phase Element)</option>
+                            <option value="CPECPE">R-(R||CPE)-(R||CPE) (Two CPE)</option>
+                            <option value="CPEpCPE">R-(R||CPE)||(R||CPE) (Parallel CPE)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="noiseLevel">Noise Level (%)</label>
+                        <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
+                        <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
+                    </div>
+                    <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
+                    <div id="debugStatus" role="status" aria-live="polite"></div>
                 </div>
-                <div class="form-group">
-                    <label for="noiseLevel">Noise Level (%)</label>
-                    <input type="number" id="noiseLevel" value="2" min="0" max="20" step="0.5">
-                    <small style="color: #666; font-size: 0.8em;">Add random noise to simulate real measurement conditions</small>
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="#" onclick="toggleDebug(); return false;" style="font-size: 0.75em; color: #999;">Show/Hide Debug Tools</a>
                 </div>
-                <button type="button" onclick="runDebugTest()" style="width: 100%; background: #6c757d;">Run Debug Test</button>
-                <div id="debugStatus" role="status" aria-live="polite"></div>
 
-                <h2 id="session-heading" style="margin-top: 30px;">💾 Session</h2>
+                <h2 id="session-heading" style="margin-top: 15px;">💾 Session</h2>
                 <div class="button-group">
                     <button type="button" class="session-btn" onclick="saveSession()">Save Session</button>
                     <button type="button" class="session-btn" onclick="document.getElementById('loadSessionInput').click()">Load Session</button>
@@ -2147,6 +2153,16 @@ Format auto-detected: Z'/Z&quot; or |Z|/Phase"></textarea>
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+
+        // Toggle debug section visibility
+        function toggleDebug() {
+            const debugSection = document.getElementById('debugSection');
+            if (debugSection.style.display === 'none') {
+                debugSection.style.display = 'block';
+            } else {
+                debugSection.style.display = 'none';
+            }
         }
 
         // Session save/load functions
