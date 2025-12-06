@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IrB Sensor Data Correlation Analysis</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #475569;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 20px;
+            background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.1rem;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: var(--bg-card);
+            padding: 8px;
+            border-radius: 10px;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            margin-bottom: 8px;
+            color: var(--primary-light);
+        }
+
+        .card h3 {
+            font-size: 1.1rem;
+            margin: 20px 0 12px;
+            color: var(--text-primary);
+        }
+
+        .card-description {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .data-input-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .input-card {
+            background: var(--bg-input);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .input-card h4 {
+            font-size: 1rem;
+            margin-bottom: 4px;
+            color: var(--primary-light);
+        }
+
+        .input-card .description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .drop-zone-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-light);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-badge.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .status-badge.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .data-status {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .correlation-table-container {
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-input);
+            font-weight: 600;
+            color: var(--primary-light);
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .correlation-positive {
+            color: var(--success);
+        }
+
+        .correlation-negative {
+            color: var(--danger);
+        }
+
+        .significant {
+            font-weight: bold;
+        }
+
+        .plot-container {
+            background: var(--bg-input);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        select, input[type="number"] {
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 14px;
+            min-width: 180px;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: var(--bg-input);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--primary-light);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .alert-info {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid var(--primary);
+            color: var(--primary-light);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid var(--warning);
+            color: var(--warning);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .highlight-row {
+            background: rgba(99, 102, 241, 0.2) !important;
+        }
+
+        .expected-columns {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--bg-dark);
+            border-radius: 6px;
+        }
+
+        .expected-columns code {
+            color: var(--primary-light);
+        }
+
+        .summary-table {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+            }
+            .tab {
+                text-align: center;
+            }
+            .controls-row {
+                flex-direction: column;
+            }
+            select, input[type="number"] {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>IrB Sensor Data Correlation Analysis</h1>
+            <p>Investigate correlations between iridium black powder characteristics and electrochemical sensor performance</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="data-input">1. Data Input</button>
+            <button class="tab" data-tab="data-linking">2. Data Linking</button>
+            <button class="tab" data-tab="correlation">3. Correlation Analysis</button>
+            <button class="tab" data-tab="visualization">4. Visualization</button>
+            <button class="tab" data-tab="summary">5. Summary Statistics</button>
+            <button class="tab" data-tab="export">6. Export</button>
+        </div>
+
+        <!-- Tab 1: Data Input -->
+        <div id="data-input" class="tab-content active">
+            <div class="card">
+                <h2>Data Input</h2>
+                <p class="card-description">Upload CSV files or paste data for each table. All tables are required for complete analysis.</p>
+
+                <div class="data-status" id="dataStatus">
+                    <span class="status-badge warning" id="status-impurity">Impurity: No data</span>
+                    <span class="status-badge warning" id="status-physical">Physical: No data</span>
+                    <span class="status-badge warning" id="status-paste">Paste: No data</span>
+                    <span class="status-badge warning" id="status-sensor">Sensor: No data</span>
+                </div>
+
+                <div class="data-input-section">
+                    <!-- Table 1: Elemental Impurity -->
+                    <div class="input-card">
+                        <h4>Table 1: Elemental Impurity Analysis</h4>
+                        <p class="description">ICP-OES/ICP-MS trace element concentrations (ppm)</p>
+                        <div class="drop-zone" data-table="impurity">
+                            <div class="drop-zone-icon">📊</div>
+                            <div class="drop-zone-text">Drop CSV here or click to browse</div>
+                            <input type="file" class="file-input" accept=".csv" data-table="impurity">
+                        </div>
+                        <textarea id="impurity-data" placeholder="Or paste CSV data here...
+Example:
+IrB_Lot_ID,Pt,Ru,Rh,Pd,Au,Fe,Cu,Na,K,Ca,Cl,S
+LOT001,12.5,8.3,2.1,1.5,0.8,45.2,12.1,28.5,15.2,22.1,85.3,42.1
+LOT002,15.2,6.1,1.8,2.2,1.1,52.3,15.8,32.1,18.5,25.8,92.1,38.5"></textarea>
+                        <div class="expected-columns">
+                            <strong>Required:</strong> <code>IrB_Lot_ID</code> |
+                            <strong>Impurity columns (ppm):</strong> <code>Pt, Ru, Rh, Pd, Au, Fe, Cu, Na, K, Ca, Cl, S</code>, etc.
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick="parseTableData('impurity')">Load Data</button>
+                            <button class="btn btn-secondary" onclick="loadSampleData('impurity')">Load Sample</button>
+                        </div>
+                    </div>
+
+                    <!-- Table 2: Physical Characterization -->
+                    <div class="input-card">
+                        <h4>Table 2: Physical Characterization</h4>
+                        <p class="description">BET surface area, particle size distribution, purity</p>
+                        <div class="drop-zone" data-table="physical">
+                            <div class="drop-zone-icon">🔬</div>
+                            <div class="drop-zone-text">Drop CSV here or click to browse</div>
+                            <input type="file" class="file-input" accept=".csv" data-table="physical">
+                        </div>
+                        <textarea id="physical-data" placeholder="Or paste CSV data here...
+Example:
+IrB_Lot_ID,BET_Surface_Area,D10,D50,D90,Purity
+LOT001,28.5,0.8,2.1,5.2,99.2
+LOT002,32.1,0.6,1.8,4.8,99.5"></textarea>
+                        <div class="expected-columns">
+                            <strong>Required:</strong> <code>IrB_Lot_ID</code> |
+                            <strong>Physical:</strong> <code>BET_Surface_Area (m²/g), D10, D50, D90 (µm), Purity (%)</code>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick="parseTableData('physical')">Load Data</button>
+                            <button class="btn btn-secondary" onclick="loadSampleData('physical')">Load Sample</button>
+                        </div>
+                    </div>
+
+                    <!-- Table 3: Ink/Paste Batch -->
+                    <div class="input-card">
+                        <h4>Table 3: Ink/Paste Batch Information</h4>
+                        <p class="description">Paste lot to IrB lot mapping</p>
+                        <div class="drop-zone" data-table="paste">
+                            <div class="drop-zone-icon">🧪</div>
+                            <div class="drop-zone-text">Drop CSV here or click to browse</div>
+                            <input type="file" class="file-input" accept=".csv" data-table="paste">
+                        </div>
+                        <textarea id="paste-data" placeholder="Or paste CSV data here...
+Example:
+Paste_Lot_ID,IrB_Lot_ID,Mixing_Date,Solids_Content
+PASTE001,LOT001,2024-01-15,72.5
+PASTE002,LOT001,2024-01-20,73.1
+PASTE003,LOT002,2024-02-01,71.8"></textarea>
+                        <div class="expected-columns">
+                            <strong>Required:</strong> <code>Paste_Lot_ID, IrB_Lot_ID</code> |
+                            <strong>Optional:</strong> <code>Mixing_Date, Solids_Content (%)</code>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick="parseTableData('paste')">Load Data</button>
+                            <button class="btn btn-secondary" onclick="loadSampleData('paste')">Load Sample</button>
+                        </div>
+                    </div>
+
+                    <!-- Table 4: Sensor Response -->
+                    <div class="input-card">
+                        <h4>Table 4: Sensor Voltage Response</h4>
+                        <p class="description">Sensor test results at 100 ppm test gas</p>
+                        <div class="drop-zone" data-table="sensor">
+                            <div class="drop-zone-icon">⚡</div>
+                            <div class="drop-zone-text">Drop CSV here or click to browse</div>
+                            <input type="file" class="file-input" accept=".csv" data-table="sensor">
+                        </div>
+                        <textarea id="sensor-data" placeholder="Or paste CSV data here...
+Example:
+Sensor_ID,Paste_Lot_ID,Voltage_Response,Test_Time
+SEN001,PASTE001,245.2,2024-01-25
+SEN002,PASTE001,248.5,2024-01-25
+SEN003,PASTE002,242.1,2024-01-28"></textarea>
+                        <div class="expected-columns">
+                            <strong>Required:</strong> <code>Sensor_ID, Paste_Lot_ID, Voltage_Response (mV)</code> |
+                            <strong>Optional:</strong> <code>Test_Time</code>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick="parseTableData('sensor')">Load Data</button>
+                            <button class="btn btn-secondary" onclick="loadSampleData('sensor')">Load Sample</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group" style="margin-top: 30px; justify-content: center;">
+                    <button class="btn btn-success" onclick="loadAllSampleData()">Load All Sample Data</button>
+                    <button class="btn btn-secondary" onclick="clearAllData()">Clear All Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Data Linking -->
+        <div id="data-linking" class="tab-content">
+            <div class="card">
+                <h2>Data Linking</h2>
+                <p class="card-description">Join tables through relational keys: IrB Lot → Paste Lot → Sensor ID</p>
+
+                <div id="linkingStatus" class="alert alert-info">
+                    Load data in all four tables to enable linking.
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="linkData()" id="linkDataBtn" disabled>Link Data</button>
+                </div>
+
+                <div id="linkingResults" style="display: none;">
+                    <h3>Linking Summary</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="linkedSensors">0</div>
+                            <div class="stat-label">Linked Sensors</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="linkedPastes">0</div>
+                            <div class="stat-label">Paste Lots</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="linkedIrB">0</div>
+                            <div class="stat-label">IrB Lots</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="unlinkCount">0</div>
+                            <div class="stat-label">Unlinked Records</div>
+                        </div>
+                    </div>
+
+                    <h3>Unified Dataset Preview</h3>
+                    <div class="correlation-table-container" style="max-height: 400px; overflow: auto;">
+                        <table id="linkedDataTable">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Correlation Analysis -->
+        <div id="correlation" class="tab-content">
+            <div class="card">
+                <h2>Correlation Analysis</h2>
+                <p class="card-description">Calculate Pearson and Spearman correlations between powder properties and sensor response</p>
+
+                <div id="correlationStatus" class="alert alert-info">
+                    Link data first to enable correlation analysis.
+                </div>
+
+                <div class="controls-row">
+                    <div class="control-group">
+                        <label>Significance Level (α)</label>
+                        <select id="alphaLevel">
+                            <option value="0.01">0.01 (99% confidence)</option>
+                            <option value="0.05" selected>0.05 (95% confidence)</option>
+                            <option value="0.10">0.10 (90% confidence)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Response Variable</label>
+                        <select id="responseVariable">
+                            <option value="Voltage_Response">Voltage Response (mV)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="runCorrelationAnalysis()" id="runCorrelationBtn" disabled>Run Analysis</button>
+                </div>
+
+                <div id="correlationResults" style="display: none;">
+                    <h3>Significant Correlations (p &lt; <span id="alphaDisplay">0.05</span>)</h3>
+                    <div id="significantCorrelations"></div>
+
+                    <h3>Full Correlation Matrix</h3>
+                    <div class="correlation-table-container">
+                        <table id="correlationTable">
+                            <thead>
+                                <tr>
+                                    <th>Variable</th>
+                                    <th>Pearson r</th>
+                                    <th>Pearson p-value</th>
+                                    <th>Spearman ρ</th>
+                                    <th>Spearman p-value</th>
+                                    <th>Interpretation</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: Visualization -->
+        <div id="visualization" class="tab-content">
+            <div class="card">
+                <h2>Visualization</h2>
+                <p class="card-description">Explore relationships through interactive plots</p>
+
+                <div id="vizStatus" class="alert alert-info">
+                    Link data first to enable visualizations.
+                </div>
+
+                <div id="vizControls" style="display: none;">
+                    <h3>Scatter Plot with Regression</h3>
+                    <div class="controls-row">
+                        <div class="control-group">
+                            <label>X-Axis Variable</label>
+                            <select id="scatterX"></select>
+                        </div>
+                        <div class="control-group">
+                            <label>Y-Axis Variable</label>
+                            <select id="scatterY">
+                                <option value="Voltage_Response">Voltage Response</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Color By</label>
+                            <select id="scatterColor">
+                                <option value="">None</option>
+                                <option value="IrB_Lot_ID">IrB Lot</option>
+                                <option value="Paste_Lot_ID">Paste Lot</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="updateScatterPlot()">Update Plot</button>
+                    </div>
+                    <div class="plot-container">
+                        <div id="scatterPlot" style="height: 500px;"></div>
+                    </div>
+
+                    <h3>Correlation Heatmap</h3>
+                    <div class="plot-container">
+                        <div id="heatmapPlot" style="height: 600px;"></div>
+                    </div>
+
+                    <h3>Box Plot: Sensor Response by IrB Lot</h3>
+                    <div class="controls-row">
+                        <div class="control-group">
+                            <label>Group By</label>
+                            <select id="boxplotGroup">
+                                <option value="IrB_Lot_ID">IrB Lot</option>
+                                <option value="Paste_Lot_ID">Paste Lot</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="updateBoxPlot()">Update Plot</button>
+                    </div>
+                    <div class="plot-container">
+                        <div id="boxPlot" style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 5: Summary Statistics -->
+        <div id="summary" class="tab-content">
+            <div class="card">
+                <h2>Summary Statistics</h2>
+                <p class="card-description">Descriptive statistics for each variable grouped by lot</p>
+
+                <div id="summaryStatus" class="alert alert-info">
+                    Link data first to view summary statistics.
+                </div>
+
+                <div id="summaryContent" style="display: none;">
+                    <div class="controls-row">
+                        <div class="control-group">
+                            <label>Group By</label>
+                            <select id="summaryGroupBy" onchange="updateSummaryStats()">
+                                <option value="IrB_Lot_ID">IrB Lot</option>
+                                <option value="Paste_Lot_ID">Paste Lot</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <h3>Overall Statistics</h3>
+                    <div class="correlation-table-container summary-table">
+                        <table id="overallStatsTable">
+                            <thead>
+                                <tr>
+                                    <th>Variable</th>
+                                    <th>N</th>
+                                    <th>Mean</th>
+                                    <th>Std Dev</th>
+                                    <th>Min</th>
+                                    <th>Q1</th>
+                                    <th>Median</th>
+                                    <th>Q3</th>
+                                    <th>Max</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <h3>Statistics by Group</h3>
+                    <div class="correlation-table-container summary-table">
+                        <table id="groupStatsTable">
+                            <thead>
+                                <tr>
+                                    <th>Group</th>
+                                    <th>Variable</th>
+                                    <th>N</th>
+                                    <th>Mean</th>
+                                    <th>Std Dev</th>
+                                    <th>Min</th>
+                                    <th>Max</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 6: Export -->
+        <div id="export" class="tab-content">
+            <div class="card">
+                <h2>Export Results</h2>
+                <p class="card-description">Download analysis results and visualizations</p>
+
+                <div id="exportStatus" class="alert alert-info">
+                    Complete analysis to enable exports.
+                </div>
+
+                <div id="exportOptions" style="display: none;">
+                    <h3>Data Exports</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="exportLinkedData()">Export Linked Dataset (CSV)</button>
+                        <button class="btn btn-primary" onclick="exportCorrelations()">Export Correlation Results (CSV)</button>
+                        <button class="btn btn-primary" onclick="exportSummaryStats()">Export Summary Statistics (CSV)</button>
+                    </div>
+
+                    <h3>Plot Exports</h3>
+                    <p class="card-description">Right-click on any plot to save as PNG, or use the camera icon in the plot toolbar.</p>
+
+                    <h3>Full Report</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="exportFullReport()">Generate Full Report (HTML)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ DATA STORAGE ============
+        const data = {
+            impurity: null,
+            physical: null,
+            paste: null,
+            sensor: null,
+            linked: null
+        };
+
+        let correlationResults = null;
+        let numericColumns = [];
+
+        // ============ SAMPLE DATA ============
+        const sampleData = {
+            impurity: `IrB_Lot_ID,Pt,Ru,Rh,Pd,Au,Fe,Cu,Na,K,Ca,Cl,S
+LOT001,12.5,8.3,2.1,1.5,0.8,45.2,12.1,28.5,15.2,22.1,85.3,42.1
+LOT002,15.2,6.1,1.8,2.2,1.1,52.3,15.8,32.1,18.5,25.8,92.1,38.5
+LOT003,10.8,9.5,2.5,1.2,0.6,38.5,10.2,25.2,12.8,18.5,78.2,48.2
+LOT004,18.5,5.2,1.5,2.8,1.5,62.1,18.5,38.5,22.1,32.5,105.2,35.8
+LOT005,14.2,7.8,2.0,1.8,0.9,48.5,14.2,30.5,16.8,24.2,88.5,40.5
+LOT006,11.5,10.2,2.8,1.0,0.5,35.2,9.5,22.8,11.2,16.2,72.5,52.1
+LOT007,16.8,5.8,1.6,2.5,1.3,58.2,16.8,35.2,20.5,30.2,98.5,36.2
+LOT008,13.2,8.8,2.2,1.6,0.7,42.8,11.5,27.5,14.5,20.8,82.1,44.5`,
+            physical: `IrB_Lot_ID,BET_Surface_Area,D10,D50,D90,Purity
+LOT001,28.5,0.8,2.1,5.2,99.2
+LOT002,32.1,0.6,1.8,4.8,99.5
+LOT003,25.2,0.9,2.4,5.8,98.8
+LOT004,35.8,0.5,1.5,4.2,99.6
+LOT005,30.2,0.7,2.0,5.0,99.3
+LOT006,22.5,1.0,2.6,6.2,98.5
+LOT007,34.5,0.55,1.6,4.5,99.55
+LOT008,27.8,0.75,2.2,5.4,99.1`,
+            paste: `Paste_Lot_ID,IrB_Lot_ID,Mixing_Date,Solids_Content
+PASTE001,LOT001,2024-01-15,72.5
+PASTE002,LOT001,2024-01-20,73.1
+PASTE003,LOT002,2024-02-01,71.8
+PASTE004,LOT002,2024-02-05,72.2
+PASTE005,LOT003,2024-02-10,73.5
+PASTE006,LOT003,2024-02-15,72.8
+PASTE007,LOT004,2024-02-20,71.5
+PASTE008,LOT004,2024-02-25,72.0
+PASTE009,LOT005,2024-03-01,72.8
+PASTE010,LOT005,2024-03-05,73.2
+PASTE011,LOT006,2024-03-10,73.8
+PASTE012,LOT006,2024-03-15,72.5
+PASTE013,LOT007,2024-03-20,71.2
+PASTE014,LOT007,2024-03-25,71.8
+PASTE015,LOT008,2024-04-01,72.5
+PASTE016,LOT008,2024-04-05,73.0`,
+            sensor: `Sensor_ID,Paste_Lot_ID,Voltage_Response,Test_Time
+SEN001,PASTE001,245.2,2024-01-25
+SEN002,PASTE001,248.5,2024-01-25
+SEN003,PASTE001,242.1,2024-01-26
+SEN004,PASTE002,250.2,2024-01-28
+SEN005,PASTE002,247.8,2024-01-28
+SEN006,PASTE003,268.5,2024-02-08
+SEN007,PASTE003,272.1,2024-02-08
+SEN008,PASTE003,265.8,2024-02-09
+SEN009,PASTE004,270.5,2024-02-12
+SEN010,PASTE004,275.2,2024-02-12
+SEN011,PASTE005,232.5,2024-02-18
+SEN012,PASTE005,228.8,2024-02-18
+SEN013,PASTE006,235.2,2024-02-22
+SEN014,PASTE006,230.5,2024-02-22
+SEN015,PASTE007,285.5,2024-03-01
+SEN016,PASTE007,290.2,2024-03-01
+SEN017,PASTE007,282.8,2024-03-02
+SEN018,PASTE008,288.5,2024-03-05
+SEN019,PASTE008,292.1,2024-03-05
+SEN020,PASTE009,258.2,2024-03-10
+SEN021,PASTE009,255.5,2024-03-10
+SEN022,PASTE010,260.8,2024-03-15
+SEN023,PASTE010,262.5,2024-03-15
+SEN024,PASTE011,218.5,2024-03-20
+SEN025,PASTE011,222.1,2024-03-20
+SEN026,PASTE012,215.8,2024-03-25
+SEN027,PASTE012,220.5,2024-03-25
+SEN028,PASTE013,280.2,2024-03-30
+SEN029,PASTE013,285.8,2024-03-30
+SEN030,PASTE014,278.5,2024-04-02
+SEN031,PASTE014,282.1,2024-04-02
+SEN032,PASTE015,252.5,2024-04-10
+SEN033,PASTE015,248.8,2024-04-10
+SEN034,PASTE016,255.2,2024-04-15
+SEN035,PASTE016,258.5,2024-04-15`
+        };
+
+        // ============ TAB NAVIGATION ============
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // ============ DRAG AND DROP ============
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            const tableType = zone.dataset.table;
+            const fileInput = zone.querySelector('.file-input');
+
+            zone.addEventListener('click', () => fileInput.click());
+            zone.addEventListener('dragover', e => {
+                e.preventDefault();
+                zone.classList.add('drag-over');
+            });
+            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+            zone.addEventListener('drop', e => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                if (e.dataTransfer.files.length) {
+                    handleFile(e.dataTransfer.files[0], tableType);
+                }
+            });
+
+            fileInput.addEventListener('change', e => {
+                if (e.target.files.length) {
+                    handleFile(e.target.files[0], tableType);
+                }
+            });
+        });
+
+        function handleFile(file, tableType) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById(`${tableType}-data`).value = e.target.result;
+                parseTableData(tableType);
+            };
+            reader.readAsText(file);
+        }
+
+        // ============ CSV PARSING ============
+        function parseCSV(text) {
+            const lines = text.trim().split(/\r?\n/);
+            if (lines.length < 2) return { columns: [], data: [] };
+
+            const columns = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                const values = parseCSVLine(lines[i]);
+                const row = {};
+                columns.forEach((col, idx) => {
+                    let val = values[idx] || '';
+                    // Try to convert to number
+                    const num = parseFloat(val);
+                    row[col] = !isNaN(num) && val.trim() !== '' ? num : val;
+                });
+                data.push(row);
+            }
+
+            return { columns, data };
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (inQuotes) {
+                    if (char === '"' && line[i + 1] === '"') {
+                        current += '"';
+                        i++;
+                    } else if (char === '"') {
+                        inQuotes = false;
+                    } else {
+                        current += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuotes = true;
+                    } else if (char === ',') {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        function parseTableData(tableType) {
+            const textarea = document.getElementById(`${tableType}-data`);
+            const text = textarea.value.trim();
+
+            if (!text) {
+                updateStatus(tableType, 'warning', 'No data');
+                data[tableType] = null;
+                checkAllDataLoaded();
+                return;
+            }
+
+            try {
+                const parsed = parseCSV(text);
+                if (parsed.data.length === 0) {
+                    throw new Error('No data rows found');
+                }
+                data[tableType] = parsed;
+                updateStatus(tableType, 'success', `${parsed.data.length} rows`);
+                checkAllDataLoaded();
+            } catch (err) {
+                updateStatus(tableType, 'error', 'Parse error');
+                data[tableType] = null;
+            }
+        }
+
+        function updateStatus(tableType, status, text) {
+            const badge = document.getElementById(`status-${tableType}`);
+            const labels = { impurity: 'Impurity', physical: 'Physical', paste: 'Paste', sensor: 'Sensor' };
+            badge.className = `status-badge ${status}`;
+            badge.textContent = `${labels[tableType]}: ${text}`;
+        }
+
+        function checkAllDataLoaded() {
+            const allLoaded = data.impurity && data.physical && data.paste && data.sensor;
+            document.getElementById('linkDataBtn').disabled = !allLoaded;
+
+            if (allLoaded) {
+                document.getElementById('linkingStatus').className = 'alert alert-success';
+                document.getElementById('linkingStatus').textContent = 'All data loaded! Click "Link Data" to proceed.';
+            } else {
+                document.getElementById('linkingStatus').className = 'alert alert-info';
+                document.getElementById('linkingStatus').textContent = 'Load data in all four tables to enable linking.';
+            }
+        }
+
+        // ============ SAMPLE DATA ============
+        function loadSampleData(tableType) {
+            document.getElementById(`${tableType}-data`).value = sampleData[tableType];
+            parseTableData(tableType);
+        }
+
+        function loadAllSampleData() {
+            ['impurity', 'physical', 'paste', 'sensor'].forEach(loadSampleData);
+        }
+
+        function clearAllData() {
+            ['impurity', 'physical', 'paste', 'sensor'].forEach(type => {
+                document.getElementById(`${type}-data`).value = '';
+                data[type] = null;
+                updateStatus(type, 'warning', 'No data');
+            });
+            data.linked = null;
+            correlationResults = null;
+            checkAllDataLoaded();
+            hideAnalysisResults();
+        }
+
+        function hideAnalysisResults() {
+            document.getElementById('linkingResults').style.display = 'none';
+            document.getElementById('correlationResults').style.display = 'none';
+            document.getElementById('vizControls').style.display = 'none';
+            document.getElementById('summaryContent').style.display = 'none';
+            document.getElementById('exportOptions').style.display = 'none';
+
+            ['correlationStatus', 'vizStatus', 'summaryStatus', 'exportStatus'].forEach(id => {
+                document.getElementById(id).style.display = 'block';
+            });
+
+            document.getElementById('runCorrelationBtn').disabled = true;
+        }
+
+        // ============ DATA LINKING ============
+        function linkData() {
+            if (!data.impurity || !data.physical || !data.paste || !data.sensor) {
+                alert('Please load all four data tables first.');
+                return;
+            }
+
+            // Create lookup maps
+            const impurityMap = new Map();
+            data.impurity.data.forEach(row => impurityMap.set(row.IrB_Lot_ID, row));
+
+            const physicalMap = new Map();
+            data.physical.data.forEach(row => physicalMap.set(row.IrB_Lot_ID, row));
+
+            const pasteMap = new Map();
+            data.paste.data.forEach(row => pasteMap.set(row.Paste_Lot_ID, row));
+
+            // Link data
+            const linked = [];
+            let unlinked = 0;
+
+            data.sensor.data.forEach(sensor => {
+                const paste = pasteMap.get(sensor.Paste_Lot_ID);
+                if (!paste) {
+                    unlinked++;
+                    return;
+                }
+
+                const impurity = impurityMap.get(paste.IrB_Lot_ID);
+                const physical = physicalMap.get(paste.IrB_Lot_ID);
+
+                if (!impurity || !physical) {
+                    unlinked++;
+                    return;
+                }
+
+                linked.push({
+                    ...sensor,
+                    ...paste,
+                    ...physical,
+                    ...impurity
+                });
+            });
+
+            data.linked = {
+                data: linked,
+                columns: linked.length > 0 ? Object.keys(linked[0]) : []
+            };
+
+            // Update UI
+            const uniquePastes = new Set(linked.map(r => r.Paste_Lot_ID));
+            const uniqueIrB = new Set(linked.map(r => r.IrB_Lot_ID));
+
+            document.getElementById('linkedSensors').textContent = linked.length;
+            document.getElementById('linkedPastes').textContent = uniquePastes.size;
+            document.getElementById('linkedIrB').textContent = uniqueIrB.size;
+            document.getElementById('unlinkCount').textContent = unlinked;
+
+            // Render preview table
+            renderLinkedDataTable();
+
+            document.getElementById('linkingResults').style.display = 'block';
+
+            // Enable next steps
+            document.getElementById('correlationStatus').style.display = 'none';
+            document.getElementById('runCorrelationBtn').disabled = false;
+
+            document.getElementById('vizStatus').style.display = 'none';
+            document.getElementById('vizControls').style.display = 'block';
+            populateVizControls();
+
+            document.getElementById('summaryStatus').style.display = 'none';
+            document.getElementById('summaryContent').style.display = 'block';
+            updateSummaryStats();
+
+            document.getElementById('exportStatus').style.display = 'none';
+            document.getElementById('exportOptions').style.display = 'block';
+        }
+
+        function renderLinkedDataTable() {
+            if (!data.linked || data.linked.data.length === 0) return;
+
+            const table = document.getElementById('linkedDataTable');
+            const displayCols = ['Sensor_ID', 'Paste_Lot_ID', 'IrB_Lot_ID', 'Voltage_Response', 'BET_Surface_Area', 'D50', 'Purity', 'Pt', 'Fe', 'Cl'];
+            const availableCols = displayCols.filter(c => data.linked.columns.includes(c));
+
+            table.querySelector('thead').innerHTML = '<tr>' + availableCols.map(c => `<th>${c}</th>`).join('') + '</tr>';
+            table.querySelector('tbody').innerHTML = data.linked.data.slice(0, 50).map(row =>
+                '<tr>' + availableCols.map(c => `<td>${row[c] ?? ''}</td>`).join('') + '</tr>'
+            ).join('');
+        }
+
+        // ============ STATISTICAL FUNCTIONS ============
+        function mean(arr) {
+            const valid = arr.filter(x => !isNaN(x) && x !== null);
+            return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : NaN;
+        }
+
+        function stdDev(arr) {
+            const valid = arr.filter(x => !isNaN(x) && x !== null);
+            if (valid.length < 2) return NaN;
+            const m = mean(valid);
+            return Math.sqrt(valid.reduce((sum, x) => sum + (x - m) ** 2, 0) / (valid.length - 1));
+        }
+
+        function quantile(arr, q) {
+            const sorted = arr.filter(x => !isNaN(x) && x !== null).sort((a, b) => a - b);
+            if (sorted.length === 0) return NaN;
+            const pos = (sorted.length - 1) * q;
+            const base = Math.floor(pos);
+            const rest = pos - base;
+            return sorted[base + 1] !== undefined
+                ? sorted[base] + rest * (sorted[base + 1] - sorted[base])
+                : sorted[base];
+        }
+
+        function pearsonCorrelation(x, y) {
+            const pairs = x.map((xi, i) => [xi, y[i]]).filter(p => !isNaN(p[0]) && !isNaN(p[1]) && p[0] !== null && p[1] !== null);
+            const n = pairs.length;
+            if (n < 3) return { r: NaN, p: NaN };
+
+            const xVals = pairs.map(p => p[0]);
+            const yVals = pairs.map(p => p[1]);
+            const xMean = mean(xVals);
+            const yMean = mean(yVals);
+
+            let num = 0, denX = 0, denY = 0;
+            for (let i = 0; i < n; i++) {
+                const dx = xVals[i] - xMean;
+                const dy = yVals[i] - yMean;
+                num += dx * dy;
+                denX += dx * dx;
+                denY += dy * dy;
+            }
+
+            const r = num / Math.sqrt(denX * denY);
+            if (isNaN(r)) return { r: NaN, p: NaN };
+
+            // t-test for significance
+            const t = r * Math.sqrt((n - 2) / (1 - r * r));
+            const p = 2 * (1 - tCDF(Math.abs(t), n - 2));
+
+            return { r, p, n };
+        }
+
+        function spearmanCorrelation(x, y) {
+            const pairs = x.map((xi, i) => [xi, y[i]]).filter(p => !isNaN(p[0]) && !isNaN(p[1]) && p[0] !== null && p[1] !== null);
+            const n = pairs.length;
+            if (n < 3) return { rho: NaN, p: NaN };
+
+            // Rank the data
+            const rankX = rank(pairs.map(p => p[0]));
+            const rankY = rank(pairs.map(p => p[1]));
+
+            // Calculate Pearson correlation on ranks
+            const result = pearsonCorrelation(rankX, rankY);
+            return { rho: result.r, p: result.p, n };
+        }
+
+        function rank(arr) {
+            const sorted = arr.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
+            const ranks = new Array(arr.length);
+            let i = 0;
+            while (i < sorted.length) {
+                let j = i;
+                while (j < sorted.length && sorted[j].v === sorted[i].v) j++;
+                const avgRank = (i + j + 1) / 2;
+                for (let k = i; k < j; k++) ranks[sorted[k].i] = avgRank;
+                i = j;
+            }
+            return ranks;
+        }
+
+        // Student's t-distribution CDF approximation
+        function tCDF(t, df) {
+            const x = df / (df + t * t);
+            return 1 - 0.5 * incompleteBeta(x, df / 2, 0.5);
+        }
+
+        function incompleteBeta(x, a, b) {
+            // Simple approximation using continued fraction
+            if (x === 0) return 0;
+            if (x === 1) return 1;
+
+            const bt = Math.exp(
+                lgamma(a + b) - lgamma(a) - lgamma(b) +
+                a * Math.log(x) + b * Math.log(1 - x)
+            );
+
+            if (x < (a + 1) / (a + b + 2)) {
+                return bt * betaCF(x, a, b) / a;
+            } else {
+                return 1 - bt * betaCF(1 - x, b, a) / b;
+            }
+        }
+
+        function betaCF(x, a, b) {
+            const maxIter = 100;
+            const eps = 1e-10;
+            let qab = a + b;
+            let qap = a + 1;
+            let qam = a - 1;
+            let c = 1;
+            let d = 1 - qab * x / qap;
+            if (Math.abs(d) < 1e-30) d = 1e-30;
+            d = 1 / d;
+            let h = d;
+
+            for (let m = 1; m <= maxIter; m++) {
+                let m2 = 2 * m;
+                let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+                d = 1 + aa * d;
+                if (Math.abs(d) < 1e-30) d = 1e-30;
+                c = 1 + aa / c;
+                if (Math.abs(c) < 1e-30) c = 1e-30;
+                d = 1 / d;
+                h *= d * c;
+
+                aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+                d = 1 + aa * d;
+                if (Math.abs(d) < 1e-30) d = 1e-30;
+                c = 1 + aa / c;
+                if (Math.abs(c) < 1e-30) c = 1e-30;
+                d = 1 / d;
+                let del = d * c;
+                h *= del;
+
+                if (Math.abs(del - 1) < eps) break;
+            }
+            return h;
+        }
+
+        function lgamma(x) {
+            const cof = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+                -1.231739572450155, 0.001208650973866179, -0.000005395239384953];
+            let y = x;
+            let tmp = x + 5.5;
+            tmp -= (x + 0.5) * Math.log(tmp);
+            let ser = 1.000000000190015;
+            for (let j = 0; j < 6; j++) ser += cof[j] / ++y;
+            return -tmp + Math.log(2.5066282746310005 * ser / x);
+        }
+
+        function linearRegression(x, y) {
+            const pairs = x.map((xi, i) => [xi, y[i]]).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+            const n = pairs.length;
+            if (n < 2) return { slope: NaN, intercept: NaN, r2: NaN };
+
+            const xVals = pairs.map(p => p[0]);
+            const yVals = pairs.map(p => p[1]);
+            const xMean = mean(xVals);
+            const yMean = mean(yVals);
+
+            let num = 0, den = 0;
+            for (let i = 0; i < n; i++) {
+                num += (xVals[i] - xMean) * (yVals[i] - yMean);
+                den += (xVals[i] - xMean) ** 2;
+            }
+
+            const slope = num / den;
+            const intercept = yMean - slope * xMean;
+
+            // R-squared
+            let ssRes = 0, ssTot = 0;
+            for (let i = 0; i < n; i++) {
+                const pred = slope * xVals[i] + intercept;
+                ssRes += (yVals[i] - pred) ** 2;
+                ssTot += (yVals[i] - yMean) ** 2;
+            }
+            const r2 = 1 - ssRes / ssTot;
+
+            return { slope, intercept, r2 };
+        }
+
+        // ============ CORRELATION ANALYSIS ============
+        function runCorrelationAnalysis() {
+            if (!data.linked || data.linked.data.length === 0) {
+                alert('Please link data first.');
+                return;
+            }
+
+            const alpha = parseFloat(document.getElementById('alphaLevel').value);
+            const responseVar = document.getElementById('responseVariable').value;
+            const responseData = data.linked.data.map(r => r[responseVar]);
+
+            // Find numeric columns (exclude IDs and dates)
+            const excludeCols = ['Sensor_ID', 'Paste_Lot_ID', 'IrB_Lot_ID', 'Mixing_Date', 'Test_Time', responseVar];
+            numericColumns = data.linked.columns.filter(col => {
+                if (excludeCols.includes(col)) return false;
+                const vals = data.linked.data.map(r => r[col]);
+                return vals.some(v => typeof v === 'number' && !isNaN(v));
+            });
+
+            correlationResults = [];
+
+            numericColumns.forEach(col => {
+                const colData = data.linked.data.map(r => r[col]);
+                const pearson = pearsonCorrelation(colData, responseData);
+                const spearman = spearmanCorrelation(colData, responseData);
+
+                correlationResults.push({
+                    variable: col,
+                    pearsonR: pearson.r,
+                    pearsonP: pearson.p,
+                    spearmanRho: spearman.rho,
+                    spearmanP: spearman.p,
+                    n: pearson.n,
+                    significant: pearson.p < alpha || spearman.p < alpha
+                });
+            });
+
+            // Sort by absolute Pearson correlation
+            correlationResults.sort((a, b) => Math.abs(b.pearsonR) - Math.abs(a.pearsonR));
+
+            renderCorrelationResults(alpha);
+            document.getElementById('correlationResults').style.display = 'block';
+
+            // Generate heatmap
+            generateHeatmap();
+        }
+
+        function renderCorrelationResults(alpha) {
+            document.getElementById('alphaDisplay').textContent = alpha;
+
+            // Significant correlations summary
+            const significant = correlationResults.filter(r => r.significant && !isNaN(r.pearsonR));
+            const sigDiv = document.getElementById('significantCorrelations');
+
+            if (significant.length === 0) {
+                sigDiv.innerHTML = '<div class="alert alert-warning">No statistically significant correlations found at α = ' + alpha + '</div>';
+            } else {
+                let html = '<div class="stats-grid">';
+                significant.slice(0, 8).forEach(r => {
+                    const direction = r.pearsonR > 0 ? 'positive' : 'negative';
+                    const colorClass = r.pearsonR > 0 ? 'correlation-positive' : 'correlation-negative';
+                    html += `
+                        <div class="stat-card">
+                            <div class="stat-value ${colorClass}">${r.pearsonR.toFixed(3)}</div>
+                            <div class="stat-label">${r.variable}<br><small>${direction}, p=${r.pearsonP.toFixed(4)}</small></div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                sigDiv.innerHTML = html;
+            }
+
+            // Full correlation table
+            const tbody = document.querySelector('#correlationTable tbody');
+            tbody.innerHTML = correlationResults.map(r => {
+                const pClass = r.pearsonR > 0 ? 'correlation-positive' : 'correlation-negative';
+                const sClass = r.spearmanRho > 0 ? 'correlation-positive' : 'correlation-negative';
+                const sigClass = r.significant ? 'significant highlight-row' : '';
+                const strength = getCorrelationStrength(r.pearsonR);
+
+                return `
+                    <tr class="${sigClass}">
+                        <td>${r.variable}</td>
+                        <td class="${pClass}">${isNaN(r.pearsonR) ? 'N/A' : r.pearsonR.toFixed(4)}</td>
+                        <td>${isNaN(r.pearsonP) ? 'N/A' : r.pearsonP.toFixed(4)}</td>
+                        <td class="${sClass}">${isNaN(r.spearmanRho) ? 'N/A' : r.spearmanRho.toFixed(4)}</td>
+                        <td>${isNaN(r.spearmanP) ? 'N/A' : r.spearmanP.toFixed(4)}</td>
+                        <td>${strength}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getCorrelationStrength(r) {
+            const absR = Math.abs(r);
+            if (isNaN(absR)) return 'N/A';
+            if (absR >= 0.7) return 'Strong';
+            if (absR >= 0.4) return 'Moderate';
+            if (absR >= 0.2) return 'Weak';
+            return 'Very weak';
+        }
+
+        // ============ VISUALIZATION ============
+        function populateVizControls() {
+            if (!data.linked) return;
+
+            const scatterX = document.getElementById('scatterX');
+            const excludeCols = ['Sensor_ID', 'Paste_Lot_ID', 'IrB_Lot_ID', 'Mixing_Date', 'Test_Time'];
+            const numericCols = data.linked.columns.filter(col => {
+                if (excludeCols.includes(col)) return false;
+                const vals = data.linked.data.map(r => r[col]);
+                return vals.some(v => typeof v === 'number');
+            });
+
+            scatterX.innerHTML = numericCols.map(col =>
+                `<option value="${col}">${col}</option>`
+            ).join('');
+
+            // Set default to BET_Surface_Area if available
+            if (numericCols.includes('BET_Surface_Area')) {
+                scatterX.value = 'BET_Surface_Area';
+            }
+
+            updateScatterPlot();
+            updateBoxPlot();
+        }
+
+        function updateScatterPlot() {
+            if (!data.linked) return;
+
+            const xVar = document.getElementById('scatterX').value;
+            const yVar = document.getElementById('scatterY').value;
+            const colorBy = document.getElementById('scatterColor').value;
+
+            const xData = data.linked.data.map(r => r[xVar]);
+            const yData = data.linked.data.map(r => r[yVar]);
+
+            let traces = [];
+
+            if (colorBy) {
+                const groups = [...new Set(data.linked.data.map(r => r[colorBy]))];
+                groups.forEach(group => {
+                    const indices = data.linked.data.map((r, i) => r[colorBy] === group ? i : -1).filter(i => i >= 0);
+                    traces.push({
+                        x: indices.map(i => xData[i]),
+                        y: indices.map(i => yData[i]),
+                        mode: 'markers',
+                        type: 'scatter',
+                        name: group,
+                        marker: { size: 10, opacity: 0.7 }
+                    });
+                });
+            } else {
+                traces.push({
+                    x: xData,
+                    y: yData,
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: 'Data',
+                    marker: { size: 10, color: '#6366f1', opacity: 0.7 }
+                });
+            }
+
+            // Add regression line
+            const reg = linearRegression(xData, yData);
+            if (!isNaN(reg.slope)) {
+                const xMin = Math.min(...xData.filter(x => !isNaN(x)));
+                const xMax = Math.max(...xData.filter(x => !isNaN(x)));
+                traces.push({
+                    x: [xMin, xMax],
+                    y: [reg.slope * xMin + reg.intercept, reg.slope * xMax + reg.intercept],
+                    mode: 'lines',
+                    type: 'scatter',
+                    name: `Fit (R²=${reg.r2.toFixed(3)})`,
+                    line: { color: '#ef4444', dash: 'dash', width: 2 }
+                });
+            }
+
+            const layout = {
+                title: `${yVar} vs ${xVar}`,
+                xaxis: { title: xVar, gridcolor: '#334155' },
+                yaxis: { title: yVar, gridcolor: '#334155' },
+                paper_bgcolor: '#334155',
+                plot_bgcolor: '#1e293b',
+                font: { color: '#f1f5f9' },
+                legend: { bgcolor: 'rgba(0,0,0,0)' },
+                hovermode: 'closest'
+            };
+
+            Plotly.newPlot('scatterPlot', traces, layout, { responsive: true });
+        }
+
+        function generateHeatmap() {
+            if (!correlationResults || correlationResults.length === 0) return;
+
+            const variables = correlationResults.map(r => r.variable);
+            const correlations = correlationResults.map(r => r.pearsonR);
+
+            // Create matrix (just response variable correlations as single row for now)
+            const trace = {
+                x: variables,
+                y: ['Voltage Response'],
+                z: [correlations],
+                type: 'heatmap',
+                colorscale: [
+                    [0, '#ef4444'],
+                    [0.5, '#1e293b'],
+                    [1, '#10b981']
+                ],
+                zmin: -1,
+                zmax: 1,
+                hoverongaps: false,
+                showscale: true,
+                colorbar: {
+                    title: 'Pearson r',
+                    titlefont: { color: '#f1f5f9' },
+                    tickfont: { color: '#f1f5f9' }
+                }
+            };
+
+            // Add annotations
+            const annotations = variables.map((v, i) => ({
+                x: v,
+                y: 'Voltage Response',
+                text: isNaN(correlations[i]) ? 'N/A' : correlations[i].toFixed(2),
+                showarrow: false,
+                font: { color: Math.abs(correlations[i]) > 0.5 ? 'white' : '#f1f5f9', size: 11 }
+            }));
+
+            const layout = {
+                title: 'Correlation Heatmap: Powder Properties vs Sensor Response',
+                xaxis: {
+                    tickangle: -45,
+                    tickfont: { size: 10 },
+                    gridcolor: '#334155'
+                },
+                yaxis: { gridcolor: '#334155' },
+                paper_bgcolor: '#334155',
+                plot_bgcolor: '#1e293b',
+                font: { color: '#f1f5f9' },
+                annotations: annotations,
+                margin: { b: 120 }
+            };
+
+            Plotly.newPlot('heatmapPlot', [trace], layout, { responsive: true });
+        }
+
+        function updateBoxPlot() {
+            if (!data.linked) return;
+
+            const groupBy = document.getElementById('boxplotGroup').value;
+            const groups = [...new Set(data.linked.data.map(r => r[groupBy]))].sort();
+
+            const traces = groups.map(group => ({
+                y: data.linked.data.filter(r => r[groupBy] === group).map(r => r.Voltage_Response),
+                type: 'box',
+                name: group,
+                boxpoints: 'all',
+                jitter: 0.3,
+                pointpos: -1.5,
+                marker: { opacity: 0.5 }
+            }));
+
+            const layout = {
+                title: `Sensor Voltage Response by ${groupBy}`,
+                yaxis: { title: 'Voltage Response (mV)', gridcolor: '#334155' },
+                xaxis: { title: groupBy, gridcolor: '#334155' },
+                paper_bgcolor: '#334155',
+                plot_bgcolor: '#1e293b',
+                font: { color: '#f1f5f9' },
+                showlegend: false
+            };
+
+            Plotly.newPlot('boxPlot', traces, layout, { responsive: true });
+        }
+
+        // ============ SUMMARY STATISTICS ============
+        function updateSummaryStats() {
+            if (!data.linked) return;
+
+            const groupBy = document.getElementById('summaryGroupBy').value;
+
+            // Overall statistics
+            const excludeCols = ['Sensor_ID', 'Paste_Lot_ID', 'IrB_Lot_ID', 'Mixing_Date', 'Test_Time'];
+            const numericCols = data.linked.columns.filter(col => {
+                if (excludeCols.includes(col)) return false;
+                return data.linked.data.some(r => typeof r[col] === 'number');
+            });
+
+            const overallTbody = document.querySelector('#overallStatsTable tbody');
+            overallTbody.innerHTML = numericCols.map(col => {
+                const vals = data.linked.data.map(r => r[col]).filter(v => typeof v === 'number' && !isNaN(v));
+                return `
+                    <tr>
+                        <td>${col}</td>
+                        <td>${vals.length}</td>
+                        <td>${mean(vals).toFixed(3)}</td>
+                        <td>${stdDev(vals).toFixed(3)}</td>
+                        <td>${Math.min(...vals).toFixed(3)}</td>
+                        <td>${quantile(vals, 0.25).toFixed(3)}</td>
+                        <td>${quantile(vals, 0.5).toFixed(3)}</td>
+                        <td>${quantile(vals, 0.75).toFixed(3)}</td>
+                        <td>${Math.max(...vals).toFixed(3)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Group statistics
+            const groups = [...new Set(data.linked.data.map(r => r[groupBy]))].sort();
+            const groupTbody = document.querySelector('#groupStatsTable tbody');
+
+            let groupRows = [];
+            groups.forEach(group => {
+                const groupData = data.linked.data.filter(r => r[groupBy] === group);
+                ['Voltage_Response', 'BET_Surface_Area', 'D50'].filter(c => numericCols.includes(c)).forEach(col => {
+                    const vals = groupData.map(r => r[col]).filter(v => typeof v === 'number' && !isNaN(v));
+                    if (vals.length > 0) {
+                        groupRows.push(`
+                            <tr>
+                                <td>${group}</td>
+                                <td>${col}</td>
+                                <td>${vals.length}</td>
+                                <td>${mean(vals).toFixed(3)}</td>
+                                <td>${stdDev(vals).toFixed(3)}</td>
+                                <td>${Math.min(...vals).toFixed(3)}</td>
+                                <td>${Math.max(...vals).toFixed(3)}</td>
+                            </tr>
+                        `);
+                    }
+                });
+            });
+
+            groupTbody.innerHTML = groupRows.join('');
+        }
+
+        // ============ EXPORT FUNCTIONS ============
+        function exportLinkedData() {
+            if (!data.linked) return;
+            downloadCSV(data.linked.data, data.linked.columns, 'linked_dataset.csv');
+        }
+
+        function exportCorrelations() {
+            if (!correlationResults) return;
+            const cols = ['variable', 'pearsonR', 'pearsonP', 'spearmanRho', 'spearmanP', 'n', 'significant'];
+            downloadCSV(correlationResults, cols, 'correlation_results.csv');
+        }
+
+        function exportSummaryStats() {
+            if (!data.linked) return;
+
+            const excludeCols = ['Sensor_ID', 'Paste_Lot_ID', 'IrB_Lot_ID', 'Mixing_Date', 'Test_Time'];
+            const numericCols = data.linked.columns.filter(col => {
+                if (excludeCols.includes(col)) return false;
+                return data.linked.data.some(r => typeof r[col] === 'number');
+            });
+
+            const stats = numericCols.map(col => {
+                const vals = data.linked.data.map(r => r[col]).filter(v => typeof v === 'number' && !isNaN(v));
+                return {
+                    variable: col,
+                    n: vals.length,
+                    mean: mean(vals),
+                    stdDev: stdDev(vals),
+                    min: Math.min(...vals),
+                    q1: quantile(vals, 0.25),
+                    median: quantile(vals, 0.5),
+                    q3: quantile(vals, 0.75),
+                    max: Math.max(...vals)
+                };
+            });
+
+            downloadCSV(stats, ['variable', 'n', 'mean', 'stdDev', 'min', 'q1', 'median', 'q3', 'max'], 'summary_statistics.csv');
+        }
+
+        function downloadCSV(data, columns, filename) {
+            const csv = [
+                columns.join(','),
+                ...data.map(row => columns.map(col => {
+                    const val = row[col];
+                    if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
+                        return `"${val.replace(/"/g, '""')}"`;
+                    }
+                    return val;
+                }).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportFullReport() {
+            if (!data.linked || !correlationResults) {
+                alert('Please complete the analysis first.');
+                return;
+            }
+
+            const alpha = document.getElementById('alphaLevel').value;
+            const significant = correlationResults.filter(r => r.significant);
+
+            const report = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IrB Correlation Analysis Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; }
+        h1 { color: #6366f1; }
+        h2 { color: #475569; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+        th { background: #f1f5f9; }
+        .positive { color: #10b981; }
+        .negative { color: #ef4444; }
+        .significant { background: #fef3c7; }
+        .summary-box { background: #f1f5f9; padding: 15px; border-radius: 8px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>IrB Sensor Data Correlation Analysis Report</h1>
+    <p>Generated: ${new Date().toLocaleString()}</p>
+
+    <div class="summary-box">
+        <h2>Analysis Summary</h2>
+        <ul>
+            <li><strong>Total linked sensors:</strong> ${data.linked.data.length}</li>
+            <li><strong>Unique IrB lots:</strong> ${new Set(data.linked.data.map(r => r.IrB_Lot_ID)).size}</li>
+            <li><strong>Unique paste lots:</strong> ${new Set(data.linked.data.map(r => r.Paste_Lot_ID)).size}</li>
+            <li><strong>Significance level:</strong> α = ${alpha}</li>
+            <li><strong>Significant correlations found:</strong> ${significant.length}</li>
+        </ul>
+    </div>
+
+    <h2>Significant Correlations (p < ${alpha})</h2>
+    ${significant.length > 0 ? `
+    <table>
+        <tr><th>Variable</th><th>Pearson r</th><th>p-value</th><th>Interpretation</th></tr>
+        ${significant.map(r => `
+            <tr class="significant">
+                <td>${r.variable}</td>
+                <td class="${r.pearsonR > 0 ? 'positive' : 'negative'}">${r.pearsonR.toFixed(4)}</td>
+                <td>${r.pearsonP.toFixed(4)}</td>
+                <td>${r.pearsonR > 0 ? 'Positive' : 'Negative'} correlation - ${getCorrelationStrength(r.pearsonR)}</td>
+            </tr>
+        `).join('')}
+    </table>
+    ` : '<p>No statistically significant correlations found.</p>'}
+
+    <h2>Full Correlation Results</h2>
+    <table>
+        <tr><th>Variable</th><th>Pearson r</th><th>Pearson p</th><th>Spearman ρ</th><th>Spearman p</th></tr>
+        ${correlationResults.map(r => `
+            <tr>
+                <td>${r.variable}</td>
+                <td class="${r.pearsonR > 0 ? 'positive' : 'negative'}">${isNaN(r.pearsonR) ? 'N/A' : r.pearsonR.toFixed(4)}</td>
+                <td>${isNaN(r.pearsonP) ? 'N/A' : r.pearsonP.toFixed(4)}</td>
+                <td class="${r.spearmanRho > 0 ? 'positive' : 'negative'}">${isNaN(r.spearmanRho) ? 'N/A' : r.spearmanRho.toFixed(4)}</td>
+                <td>${isNaN(r.spearmanP) ? 'N/A' : r.spearmanP.toFixed(4)}</td>
+            </tr>
+        `).join('')}
+    </table>
+
+    <h2>Key Findings</h2>
+    <div class="summary-box">
+        ${significant.length > 0 ? `
+        <p>The following powder characteristics showed statistically significant correlations with sensor voltage response:</p>
+        <ul>
+            ${significant.slice(0, 5).map(r => `
+                <li><strong>${r.variable}</strong>: ${r.pearsonR > 0 ? 'Positive' : 'Negative'} correlation (r = ${r.pearsonR.toFixed(3)}, p = ${r.pearsonP.toFixed(4)}).
+                ${r.pearsonR > 0 ? 'Higher values associated with higher sensor response.' : 'Higher values associated with lower sensor response.'}</li>
+            `).join('')}
+        </ul>
+        ` : '<p>No statistically significant correlations were identified at the α = ' + alpha + ' significance level.</p>'}
+    </div>
+</body>
+</html>`;
+
+            const blob = new Blob([report], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'irb_correlation_report.html';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
