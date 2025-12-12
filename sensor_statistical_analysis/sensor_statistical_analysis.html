@@ -1295,17 +1295,37 @@
             }
         }
 
+        // Find column index by matching header patterns
+        function findColumnIndex(headers, patterns) {
+            const normalizedHeaders = headers.map(h => String(h).toLowerCase().replace(/[_\s]+/g, ''));
+            for (let i = 0; i < normalizedHeaders.length; i++) {
+                const header = normalizedHeaders[i];
+                for (const pattern of patterns) {
+                    if (typeof pattern === 'string') {
+                        if (header.includes(pattern.toLowerCase().replace(/[_\s]+/g, ''))) {
+                            return i;
+                        }
+                    } else if (pattern instanceof RegExp) {
+                        if (pattern.test(header)) {
+                            return i;
+                        }
+                    }
+                }
+            }
+            return -1;
+        }
+
         // Handle Build Data upload
         async function handleBuildData(file, dropZone) {
             const status = document.getElementById('buildDataStatus');
             status.textContent = 'Parsing...';
-            
+
             try {
                 const rawData = await parseFile(file);
-                
+
                 debugLog('Build data raw rows:', rawData.length);
                 debugLog('First row:', rawData[0]);
-                
+
                 // Find header row (contains "Cell" or "ID")
                 let headerRow = 0;
                 for (let i = 0; i < Math.min(10, rawData.length); i++) {
@@ -1317,24 +1337,44 @@
                         break;
                     }
                 }
-                
+
                 debugLog('Build data header row:', headerRow);
                 debugLog('Header row contents:', rawData[headerRow]);
-                
+
                 const headers = rawData[headerRow].map(h => String(h).trim());
                 const rows = rawData.slice(headerRow + 1).filter(row => row.length > 0 && row[0]);
-                
+
+                // Flexible column detection using pattern matching
+                const colIndices = {
+                    cellId: findColumnIndex(headers, ['cellid', 'cell_id', 'cell id', 'sensorid', 'sensor_id']),
+                    traceType: findColumnIndex(headers, ['tracetype', 'trace_type', 'carbonsilver', 'carbon-silver', 'carbon_silver', 'ratio']),
+                    refLocation: findColumnIndex(headers, ['referencelocation', 'reflocation', 'stencilconfig', 'stencil_config', 'config']),
+                    workingSA: findColumnIndex(headers, ['workingsa', 'working_sa', 'working sa']),
+                    counterSA: findColumnIndex(headers, ['countersa', 'counter_sa', 'counter sa']),
+                    referenceSA: findColumnIndex(headers, ['referencesa', 'reference_sa', 'reference sa'])
+                };
+
+                // Fall back to positional defaults if headers not found
+                if (colIndices.cellId === -1) colIndices.cellId = 0;
+                if (colIndices.traceType === -1) colIndices.traceType = 1;
+                if (colIndices.refLocation === -1) colIndices.refLocation = 2;
+                if (colIndices.workingSA === -1) colIndices.workingSA = 3;
+                if (colIndices.counterSA === -1) colIndices.counterSA = 4;
+                if (colIndices.referenceSA === -1) colIndices.referenceSA = 5;
+
+                debugLog('Detected column indices:', colIndices);
                 debugLog('Build data rows:', rows.length);
                 debugLog('First data row:', rows[0]);
-                debugLog('Raw trace values (first 5 rows):', rows.slice(0, 5).map(r => ({ raw: r[1], type: typeof r[1] })));
-                
+                debugLog('Raw trace values (first 5 rows):', rows.slice(0, 5).map(r => ({ raw: r[colIndices.traceType], type: typeof r[colIndices.traceType] })));
+
                 buildData = {
                     headers,
                     rows,
-                    sensors: rows.map(r => String(r[0]).trim()),
+                    columnIndices: colIndices,
+                    sensors: rows.map(r => String(r[colIndices.cellId]).trim()),
                     traceTypes: rows.map(r => {
                         // Handle all possible null/empty/NaN variations
-                        const raw = r[1];
+                        const raw = r[colIndices.traceType];
                         if (raw === undefined || raw === null || raw === '') {
                             return 'None';
                         }
@@ -1346,7 +1386,7 @@
                         return String(raw).trim();
                     }),
                     refLocations: rows.map(r => {
-                        const raw = r[2];
+                        const raw = r[colIndices.refLocation];
                         if (raw === undefined || raw === null || raw === '') {
                             return 'Center';
                         }
@@ -1356,9 +1396,9 @@
                         }
                         return String(raw).trim();
                     }),
-                    workingSA: rows.map(r => parseFloat(r[3]) || 0),
-                    counterSA: rows.map(r => parseFloat(r[4]) || 0),
-                    referenceSA: rows.map(r => parseFloat(r[5]) || 0)
+                    workingSA: rows.map(r => parseFloat(r[colIndices.workingSA]) || 0),
+                    counterSA: rows.map(r => parseFloat(r[colIndices.counterSA]) || 0),
+                    referenceSA: rows.map(r => parseFloat(r[colIndices.referenceSA]) || 0)
                 };
                 
                 debugLog('Parsed build sensors:', buildData.sensors.slice(0, 5));
