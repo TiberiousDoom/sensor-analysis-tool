@@ -1413,11 +1413,33 @@
                 buildData.totalSA = buildData.workingSA.map((w, i) => 
                     w + buildData.counterSA[i] + buildData.referenceSA[i]);
                 
-                // Create dummy variables
-                buildData.traceCarbon = buildData.traceTypes.map(t => 
-                    String(t).toLowerCase().includes('carbon') ? 1 : 0);
-                buildData.traceSilver = buildData.traceTypes.map(t => 
-                    String(t).toLowerCase().includes('silver') ? 1 : 0);
+                // Create trace material variables (supports both legacy "Carbon"/"Silver" and ratio format "1:0", "4:1", etc.)
+                buildData.traceCarbon = buildData.traceTypes.map(t => {
+                    const val = String(t).trim();
+                    // Check for ratio format (e.g., "1:0", "4:1", "1:4")
+                    const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                    if (ratioMatch) {
+                        const carbon = parseFloat(ratioMatch[1]);
+                        const silver = parseFloat(ratioMatch[2]);
+                        const total = carbon + silver;
+                        return total > 0 ? carbon / total : 0;
+                    }
+                    // Legacy format: check if string contains "carbon"
+                    return val.toLowerCase().includes('carbon') ? 1 : 0;
+                });
+                buildData.traceSilver = buildData.traceTypes.map(t => {
+                    const val = String(t).trim();
+                    // Check for ratio format (e.g., "1:0", "4:1", "1:4")
+                    const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                    if (ratioMatch) {
+                        const carbon = parseFloat(ratioMatch[1]);
+                        const silver = parseFloat(ratioMatch[2]);
+                        const total = carbon + silver;
+                        return total > 0 ? silver / total : 0;
+                    }
+                    // Legacy format: check if string contains "silver"
+                    return val.toLowerCase().includes('silver') ? 1 : 0;
+                });
                 buildData.refSide = buildData.refLocations.map(r => 
                     String(r).toLowerCase().includes('side') ? 1 : 0);
                 
@@ -2795,8 +2817,8 @@
                 const reg3 = multipleRegression(X3, y);
                 updateRegressionTable('model3Table', [
                     { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
-                    { term: 'Tr_Carbon', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
-                    { term: 'Tr_Silver', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
+                    { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
+                    { term: 'Silver_Ratio', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
                     { term: 'Ref_Side', coef: reg3.coeffs[4], se: reg3.stdErrors[4] },
                     { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
                 ]);
@@ -2811,8 +2833,8 @@
                 const tStat3_3 = reg3.stdErrors[3] > 0 ? reg3.coeffs[3] / reg3.stdErrors[3] : 0;
                 const tStat3_4 = reg3.stdErrors[4] > 0 ? reg3.coeffs[4] / reg3.stdErrors[4] : 0;
                 if (Math.abs(tStat3_1) > 2) sigTerms3.push(x1Label);
-                if (Math.abs(tStat3_2) > 2) sigTerms3.push('Trace Carbon');
-                if (Math.abs(tStat3_3) > 2) sigTerms3.push('Trace Silver');
+                if (Math.abs(tStat3_2) > 2) sigTerms3.push('Carbon Ratio');
+                if (Math.abs(tStat3_3) > 2) sigTerms3.push('Silver Ratio');
                 if (Math.abs(tStat3_4) > 2) sigTerms3.push('Reference Side');
 
                 let model3Interp = `This model adds categorical manufacturing variables. `;
@@ -3206,8 +3228,28 @@
             buildData.wcRatio = buildData.workingSA.map((w, i) => w / buildData.counterSA[i]);
             buildData.wrRatio = buildData.workingSA.map((w, i) => w / buildData.referenceSA[i]);
             buildData.totalSA = buildData.workingSA.map((w, i) => w + buildData.counterSA[i] + buildData.referenceSA[i]);
-            buildData.traceCarbon = buildData.traceTypes.map(t => t === 'Carbon' ? 1 : 0);
-            buildData.traceSilver = buildData.traceTypes.map(t => t === 'Silver' ? 1 : 0);
+            buildData.traceCarbon = buildData.traceTypes.map(t => {
+                const val = String(t).trim();
+                const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                if (ratioMatch) {
+                    const carbon = parseFloat(ratioMatch[1]);
+                    const silver = parseFloat(ratioMatch[2]);
+                    const total = carbon + silver;
+                    return total > 0 ? carbon / total : 0;
+                }
+                return val.toLowerCase().includes('carbon') ? 1 : 0;
+            });
+            buildData.traceSilver = buildData.traceTypes.map(t => {
+                const val = String(t).trim();
+                const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                if (ratioMatch) {
+                    const carbon = parseFloat(ratioMatch[1]);
+                    const silver = parseFloat(ratioMatch[2]);
+                    const total = carbon + silver;
+                    return total > 0 ? silver / total : 0;
+                }
+                return val.toLowerCase().includes('silver') ? 1 : 0;
+            });
             buildData.refSide = buildData.refLocations.map(r => r.includes('Side') ? 1 : 0);
             
             // Generate Sensor Response Data (time series)
