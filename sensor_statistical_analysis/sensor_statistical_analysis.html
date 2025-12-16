@@ -1347,7 +1347,10 @@
                 // Flexible column detection using pattern matching
                 const colIndices = {
                     cellId: findColumnIndex(headers, ['cellid', 'cell_id', 'cell id', 'sensorid', 'sensor_id']),
-                    traceType: findColumnIndex(headers, ['tracetype', 'trace_type', 'carbonsilver', 'carbon-silver', 'carbon_silver', 'ratio']),
+                    // Direct Carbon_Ratio column (numeric values)
+                    carbonRatio: findColumnIndex(headers, ['carbonratio', 'carbon_ratio']),
+                    // Legacy trace type column (string values like "Carbon", "Silver", or "1:0")
+                    traceType: findColumnIndex(headers, ['tracetype', 'trace_type', 'carbonsilver', 'carbon-silver', 'carbon_silver']),
                     refLocation: findColumnIndex(headers, ['referencelocation', 'reflocation', 'stencilconfig', 'stencil_config', 'config']),
                     workingSA: findColumnIndex(headers, ['workingsa', 'working_sa', 'working sa']),
                     counterSA: findColumnIndex(headers, ['countersa', 'counter_sa', 'counter sa']),
@@ -1356,16 +1359,20 @@
 
                 // Fall back to positional defaults if headers not found
                 if (colIndices.cellId === -1) colIndices.cellId = 0;
-                if (colIndices.traceType === -1) colIndices.traceType = 1;
-                if (colIndices.refLocation === -1) colIndices.refLocation = 2;
-                if (colIndices.workingSA === -1) colIndices.workingSA = 3;
-                if (colIndices.counterSA === -1) colIndices.counterSA = 4;
-                if (colIndices.referenceSA === -1) colIndices.referenceSA = 5;
+                // carbonRatio can be -1 (not found) - we'll handle that in parsing
+                if (colIndices.traceType === -1 && colIndices.carbonRatio === -1) colIndices.traceType = 1;
+                // refLocation can be -1 (not found) - we'll default to 0 in parsing
+                if (colIndices.workingSA === -1) colIndices.workingSA = headers.length >= 4 ? 3 : -1;
+                if (colIndices.counterSA === -1) colIndices.counterSA = headers.length >= 5 ? 4 : -1;
+                if (colIndices.referenceSA === -1) colIndices.referenceSA = headers.length >= 6 ? 5 : -1;
 
                 debugLog('Detected column indices:', colIndices);
                 debugLog('Build data rows:', rows.length);
                 debugLog('First data row:', rows[0]);
-                debugLog('Raw trace values (first 5 rows):', rows.slice(0, 5).map(r => ({ raw: r[colIndices.traceType], type: typeof r[colIndices.traceType] })));
+
+                // Determine if we have direct Carbon_Ratio column or legacy trace type
+                const hasDirectCarbonRatio = colIndices.carbonRatio !== -1;
+                debugLog('Has direct Carbon_Ratio column:', hasDirectCarbonRatio);
 
                 buildData = {
                     headers,
@@ -1373,8 +1380,9 @@
                     columnIndices: colIndices,
                     sensors: rows.map(r => String(r[colIndices.cellId]).trim()),
                     traceTypes: rows.map(r => {
-                        // Handle all possible null/empty/NaN variations
-                        const raw = r[colIndices.traceType];
+                        // If we have direct carbon ratio column, use that value as the "trace type"
+                        const colIdx = hasDirectCarbonRatio ? colIndices.carbonRatio : colIndices.traceType;
+                        const raw = r[colIdx];
                         if (raw === undefined || raw === null || raw === '') {
                             return 'None';
                         }
@@ -1382,23 +1390,23 @@
                         if (val === '' || val === 'nan' || val === 'undefined' || val === 'null' || val === 'none') {
                             return 'None';
                         }
-                        // Return capitalized version
                         return String(raw).trim();
                     }),
                     refLocations: rows.map(r => {
+                        if (colIndices.refLocation === -1) return 'None';
                         const raw = r[colIndices.refLocation];
                         if (raw === undefined || raw === null || raw === '') {
-                            return 'Center';
+                            return 'None';
                         }
                         const val = String(raw).trim().toLowerCase();
                         if (val === '' || val === 'nan' || val === 'undefined' || val === 'null') {
-                            return 'Center';
+                            return 'None';
                         }
                         return String(raw).trim();
                     }),
-                    workingSA: rows.map(r => parseFloat(r[colIndices.workingSA]) || 0),
-                    counterSA: rows.map(r => parseFloat(r[colIndices.counterSA]) || 0),
-                    referenceSA: rows.map(r => parseFloat(r[colIndices.referenceSA]) || 0)
+                    workingSA: rows.map(r => colIndices.workingSA !== -1 ? (parseFloat(r[colIndices.workingSA]) || 0) : 0),
+                    counterSA: rows.map(r => colIndices.counterSA !== -1 ? (parseFloat(r[colIndices.counterSA]) || 0) : 0),
+                    referenceSA: rows.map(r => colIndices.referenceSA !== -1 ? (parseFloat(r[colIndices.referenceSA]) || 0) : 0)
                 };
                 
                 debugLog('Parsed build sensors:', buildData.sensors.slice(0, 5));
@@ -1413,9 +1421,17 @@
                 buildData.totalSA = buildData.workingSA.map((w, i) => 
                     w + buildData.counterSA[i] + buildData.referenceSA[i]);
                 
-                // Create trace material variables (supports both legacy "Carbon"/"Silver" and ratio format "1:0", "4:1", etc.)
+                // Create trace material variables
+                // Supports: direct numeric (0.0-1.0), ratio format ("1:0", "4:1"), or legacy ("Carbon"/"Silver")
                 buildData.traceCarbon = buildData.traceTypes.map(t => {
                     const val = String(t).trim();
+
+                    // Check if it's a direct numeric value (e.g., "1.0", "0.8", "0")
+                    const numVal = parseFloat(val);
+                    if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                        return numVal;
+                    }
+
                     // Check for ratio format (e.g., "1:0", "4:1", "1:4")
                     const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
                     if (ratioMatch) {
@@ -1424,11 +1440,19 @@
                         const total = carbon + silver;
                         return total > 0 ? carbon / total : 0;
                     }
+
                     // Legacy format: check if string contains "carbon"
                     return val.toLowerCase().includes('carbon') ? 1 : 0;
                 });
                 buildData.traceSilver = buildData.traceTypes.map(t => {
                     const val = String(t).trim();
+
+                    // Check if it's a direct numeric value - silver is 1 - carbon
+                    const numVal = parseFloat(val);
+                    if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                        return 1 - numVal;
+                    }
+
                     // Check for ratio format (e.g., "1:0", "4:1", "1:4")
                     const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
                     if (ratioMatch) {
@@ -1437,11 +1461,24 @@
                         const total = carbon + silver;
                         return total > 0 ? silver / total : 0;
                     }
+
                     // Legacy format: check if string contains "silver"
                     return val.toLowerCase().includes('silver') ? 1 : 0;
                 });
-                buildData.refSide = buildData.refLocations.map(r => 
-                    String(r).toLowerCase().includes('side') ? 1 : 0);
+                // Stencil config / reference side - handle various formats or missing column
+                buildData.refSide = buildData.refLocations.map(r => {
+                    const val = String(r).trim().toLowerCase();
+                    // Check for numeric value first
+                    const numVal = parseFloat(val);
+                    if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                        return numVal;
+                    }
+                    // Check for "side" in the value
+                    if (val.includes('side')) return 1;
+                    // Check for common stencil config patterns (e.g., "wrc" vs "Wrc")
+                    if (val.includes('wrc') || val.includes('w') && val.includes('c')) return 1;
+                    return 0;
+                });
                 
                 status.textContent = `✓ Loaded ${rows.length} sensors`;
                 dropZone.classList.add('loaded');
@@ -3227,6 +3264,10 @@
             buildData.totalSA = buildData.workingSA.map((w, i) => w + buildData.counterSA[i] + buildData.referenceSA[i]);
             buildData.traceCarbon = buildData.traceTypes.map(t => {
                 const val = String(t).trim();
+                const numVal = parseFloat(val);
+                if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                    return numVal;
+                }
                 const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
                 if (ratioMatch) {
                     const carbon = parseFloat(ratioMatch[1]);
@@ -3238,6 +3279,10 @@
             });
             buildData.traceSilver = buildData.traceTypes.map(t => {
                 const val = String(t).trim();
+                const numVal = parseFloat(val);
+                if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                    return 1 - numVal;
+                }
                 const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
                 if (ratioMatch) {
                     const carbon = parseFloat(ratioMatch[1]);
