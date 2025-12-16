@@ -1064,7 +1064,7 @@
                         <label>Include Categoricals</label>
                         <select id="includeCategoricals">
                             <option value="no">No</option>
-                            <option value="yes">Yes (Trace + Reference)</option>
+                            <option value="yes">Yes (Material + Config)</option>
                         </select>
                     </div>
                 </div>
@@ -2806,20 +2806,19 @@
             document.getElementById('model2AdjR2').textContent = (reg2.adjR2 || reg1.r2).toFixed(4);
             
             // Model 3: With categoricals
+            // Note: Only Carbon_Ratio is included (Silver = 1 - Carbon would cause multicollinearity)
             document.getElementById('model3Card').style.display = includeCat ? 'block' : 'none';
             if (includeCat) {
                 const X3 = sensors.map((_, i) => [
                     x1[i],
                     buildData.traceCarbon[matchedIndices[i]],
-                    buildData.traceSilver[matchedIndices[i]],
                     buildData.refSide[matchedIndices[i]]
                 ]);
                 const reg3 = multipleRegression(X3, y);
                 updateRegressionTable('model3Table', [
                     { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
                     { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
-                    { term: 'Silver_Ratio', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
-                    { term: 'Ref_Side', coef: reg3.coeffs[4], se: reg3.stdErrors[4] },
+                    { term: 'Stencil_Config', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
                     { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
                 ]);
                 document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
@@ -2831,11 +2830,9 @@
                 const tStat3_1 = reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0;
                 const tStat3_2 = reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0;
                 const tStat3_3 = reg3.stdErrors[3] > 0 ? reg3.coeffs[3] / reg3.stdErrors[3] : 0;
-                const tStat3_4 = reg3.stdErrors[4] > 0 ? reg3.coeffs[4] / reg3.stdErrors[4] : 0;
                 if (Math.abs(tStat3_1) > 2) sigTerms3.push(x1Label);
                 if (Math.abs(tStat3_2) > 2) sigTerms3.push('Carbon Ratio');
-                if (Math.abs(tStat3_3) > 2) sigTerms3.push('Silver Ratio');
-                if (Math.abs(tStat3_4) > 2) sigTerms3.push('Reference Side');
+                if (Math.abs(tStat3_3) > 2) sigTerms3.push('Stencil Config');
 
                 let model3Interp = `This model adds categorical manufacturing variables. `;
                 model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
