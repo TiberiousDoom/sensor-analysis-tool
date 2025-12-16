@@ -2844,48 +2844,103 @@
             
             // Model 3: With categoricals
             // Note: Only Carbon_Ratio is included (Silver = 1 - Carbon would cause multicollinearity)
+            // Also check for variation in categorical variables to avoid singular matrix
             document.getElementById('model3Card').style.display = includeCat ? 'block' : 'none';
             if (includeCat) {
-                const X3 = sensors.map((_, i) => [
-                    x1[i],
-                    buildData.traceCarbon[matchedIndices[i]],
-                    buildData.refSide[matchedIndices[i]]
-                ]);
-                const reg3 = multipleRegression(X3, y);
-                updateRegressionTable('model3Table', [
-                    { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
-                    { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
-                    { term: 'Stencil_Config', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
-                    { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
-                ]);
-                document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
-                document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
+                // Check which categorical variables have variation
+                const carbonValues = matchedIndices.map(i => buildData.traceCarbon[i]);
+                const refSideValues = matchedIndices.map(i => buildData.refSide[i]);
 
-                // Model 3 interpretation
-                const r2Interp3 = interpretR2(reg3.r2);
-                const sigTerms3 = [];
-                const tStat3_1 = reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0;
-                const tStat3_2 = reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0;
-                const tStat3_3 = reg3.stdErrors[3] > 0 ? reg3.coeffs[3] / reg3.stdErrors[3] : 0;
-                if (Math.abs(tStat3_1) > 2) sigTerms3.push(x1Label);
-                if (Math.abs(tStat3_2) > 2) sigTerms3.push('Carbon Ratio');
-                if (Math.abs(tStat3_3) > 2) sigTerms3.push('Stencil Config');
+                const carbonHasVariation = new Set(carbonValues).size > 1;
+                const refSideHasVariation = new Set(refSideValues).size > 1;
 
-                let model3Interp = `This model adds categorical manufacturing variables. `;
-                model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
-                if (sigTerms3.length > 0) {
-                    model3Interp += `<strong>${sigTerms3.join(', ')}</strong> ${sigTerms3.length === 1 ? 'is' : 'are'} statistically significant (|t| > 2). `;
+                debugLog('Carbon values:', carbonValues.slice(0, 5), 'Has variation:', carbonHasVariation);
+                debugLog('RefSide values:', refSideValues.slice(0, 5), 'Has variation:', refSideHasVariation);
+
+                // Build X matrix with only variables that have variation
+                let X3, tableRows, sigTermsLabels;
+
+                if (carbonHasVariation && refSideHasVariation) {
+                    // Both have variation
+                    X3 = sensors.map((_, i) => [x1[i], carbonValues[i], refSideValues[i]]);
+                    const reg3 = multipleRegression(X3, y);
+                    tableRows = [
+                        { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
+                        { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
+                        { term: 'Stencil_Config', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
+                        { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
+                    ];
+                    updateRegressionTable('model3Table', tableRows);
+                    document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
+                    document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
+
+                    const r2Interp3 = interpretR2(reg3.r2);
+                    const sigTerms3 = [];
+                    if (Math.abs(reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0) > 2) sigTerms3.push(x1Label);
+                    if (Math.abs(reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0) > 2) sigTerms3.push('Carbon Ratio');
+                    if (Math.abs(reg3.stdErrors[3] > 0 ? reg3.coeffs[3] / reg3.stdErrors[3] : 0) > 2) sigTerms3.push('Stencil Config');
+
+                    let model3Interp = `This model adds categorical manufacturing variables. `;
+                    model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
+                    if (sigTerms3.length > 0) {
+                        model3Interp += `<strong>${sigTerms3.join(', ')}</strong> ${sigTerms3.length === 1 ? 'is' : 'are'} statistically significant (|t| > 2). `;
+                    } else {
+                        model3Interp += `No terms reach statistical significance. `;
+                    }
+                    const r2Improvement = reg3.r2 - reg1.r2;
+                    if (r2Improvement > 0.05) {
+                        model3Interp += `Adding categoricals improved R² by <span class="interpretation-highlight highlight-positive">+${(r2Improvement * 100).toFixed(1)}%</span>.`;
+                    } else {
+                        model3Interp += `Categoricals add minimal predictive value beyond ${x1Label}.`;
+                    }
+                    document.getElementById('model3Interpretation').innerHTML = model3Interp;
+                    document.getElementById('model3Interpretation').className = `model-interpretation interpretation-${r2Interp3.class}`;
+                } else if (carbonHasVariation) {
+                    // Only carbon has variation
+                    X3 = sensors.map((_, i) => [x1[i], carbonValues[i]]);
+                    const reg3 = multipleRegression(X3, y);
+                    tableRows = [
+                        { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
+                        { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
+                        { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
+                    ];
+                    updateRegressionTable('model3Table', tableRows);
+                    document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
+                    document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
+
+                    const r2Interp3 = interpretR2(reg3.r2);
+                    const sigTerms3 = [];
+                    if (Math.abs(reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0) > 2) sigTerms3.push(x1Label);
+                    if (Math.abs(reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0) > 2) sigTerms3.push('Carbon Ratio');
+
+                    let model3Interp = `This model adds Carbon Ratio as a categorical variable (Stencil Config excluded - no variation). `;
+                    model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
+                    if (sigTerms3.length > 0) {
+                        model3Interp += `<strong>${sigTerms3.join(', ')}</strong> ${sigTerms3.length === 1 ? 'is' : 'are'} statistically significant (|t| > 2). `;
+                    } else {
+                        model3Interp += `No terms reach statistical significance. `;
+                    }
+                    const r2Improvement = reg3.r2 - reg1.r2;
+                    if (r2Improvement > 0.05) {
+                        model3Interp += `Adding Carbon Ratio improved R² by <span class="interpretation-highlight highlight-positive">+${(r2Improvement * 100).toFixed(1)}%</span>.`;
+                    } else {
+                        model3Interp += `Carbon Ratio adds minimal predictive value beyond ${x1Label}.`;
+                    }
+                    document.getElementById('model3Interpretation').innerHTML = model3Interp;
+                    document.getElementById('model3Interpretation').className = `model-interpretation interpretation-${r2Interp3.class}`;
                 } else {
-                    model3Interp += `No terms reach statistical significance. `;
+                    // No categorical variation - just show Model 1 equivalent
+                    const reg3 = reg1;
+                    tableRows = [
+                        { term: x1Var, coef: reg1.slope, se: reg1.seSlope },
+                        { term: 'Intercept', coef: reg1.intercept, se: reg1.seIntercept }
+                    ];
+                    updateRegressionTable('model3Table', tableRows);
+                    document.getElementById('model3R2').textContent = reg1.r2.toFixed(4);
+                    document.getElementById('model3AdjR2').textContent = reg1.r2.toFixed(4);
+                    document.getElementById('model3Interpretation').innerHTML = `No categorical variables have variation in this dataset. Model 3 is equivalent to Model 1.`;
+                    document.getElementById('model3Interpretation').className = 'model-interpretation interpretation-weak';
                 }
-                const r2Improvement = reg3.r2 - reg1.r2;
-                if (r2Improvement > 0.05) {
-                    model3Interp += `Adding categoricals improved R² by <span class="interpretation-highlight highlight-positive">+${(r2Improvement * 100).toFixed(1)}%</span>.`;
-                } else {
-                    model3Interp += `Categoricals add minimal predictive value beyond ${x1Label}.`;
-                }
-                document.getElementById('model3Interpretation').innerHTML = model3Interp;
-                document.getElementById('model3Interpretation').className = `model-interpretation interpretation-${r2Interp3.class}`;
             }
 
             // Update model titles
