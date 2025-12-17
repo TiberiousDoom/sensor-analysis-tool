@@ -2187,6 +2187,48 @@
                 function normalize(name) {
                     return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
                 }
+
+                // Helper to get material label from trace type or carbon ratio
+                function getMaterialLabel(traceValue, carbonRatioValue) {
+                    const val = String(traceValue).trim();
+                    const valLower = val.toLowerCase();
+
+                    // Check if it's a direct numeric carbon ratio
+                    const numVal = parseFloat(val);
+                    if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                        // Use the numeric carbon ratio to create label
+                        if (numVal >= 0.99) return 'Carbon';
+                        if (numVal <= 0.01) return 'Silver';
+                        if (numVal >= 0.75) return 'C:Ag 4:1';
+                        if (numVal <= 0.25) return 'C:Ag 1:4';
+                        return 'C:Ag 1:1';
+                    }
+
+                    // Check for ratio format (e.g., "1:0", "4:1")
+                    const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                    if (ratioMatch) {
+                        const carbon = parseFloat(ratioMatch[1]);
+                        const silver = parseFloat(ratioMatch[2]);
+                        if (silver === 0) return 'Carbon';
+                        if (carbon === 0) return 'Silver';
+                        return `C:Ag ${Math.round(carbon)}:${Math.round(silver)}`;
+                    }
+
+                    // Legacy string format
+                    if (valLower.includes('carbon')) return 'Carbon';
+                    if (valLower.includes('silver')) return 'Silver';
+
+                    // If we have a carbonRatioValue from buildData.traceCarbon, use it
+                    if (carbonRatioValue !== undefined && !isNaN(carbonRatioValue)) {
+                        if (carbonRatioValue >= 0.99) return 'Carbon';
+                        if (carbonRatioValue <= 0.01) return 'Silver';
+                        if (carbonRatioValue >= 0.75) return 'C:Ag 4:1';
+                        if (carbonRatioValue <= 0.25) return 'C:Ag 1:4';
+                        return 'C:Ag 1:1';
+                    }
+
+                    return 'None';
+                }
                 
                 // Create lookup from KPI data
                 const kpiLookup = {};
@@ -2220,27 +2262,22 @@
                 
                 // T90 Rise by Trace × Reference Combination
                 const t90CombinedGroups = {};
-                const t90GroupOrder = ['Center/Carbon', 'Center/Silver', 'Center/None', 'Side/Carbon', 'Side/Silver', 'Side/None'];
-                
+
                 matchedIndices.forEach(({ idx, kpi }) => {
-                    let trace = String(buildData.traceTypes[idx] || '');
+                    const trace = String(buildData.traceTypes[idx] || '');
                     const ref = String(buildData.refLocations[idx] || '');
-                    
+                    const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+
                     const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
-                    const traceLower = trace.toLowerCase().trim();
-                    let traceClean;
-                    if (traceLower.includes('carbon')) {
-                        traceClean = 'Carbon';
-                    } else if (traceLower.includes('silver')) {
-                        traceClean = 'Silver';
-                    } else {
-                        traceClean = 'None';
-                    }
-                    
+                    const traceClean = getMaterialLabel(trace, carbonRatio);
+
                     const groupName = `${refShort}/${traceClean}`;
                     if (!t90CombinedGroups[groupName]) t90CombinedGroups[groupName] = [];
                     t90CombinedGroups[groupName].push(kpi.t90Rise);
                 });
+
+                // Dynamic group order based on what's present
+                const t90GroupOrder = Object.keys(t90CombinedGroups).sort();
                 
                 const t90CombinedColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
                 const t90CombinedTraces = t90GroupOrder
@@ -2263,27 +2300,22 @@
                 
                 // T50 Recovery by Trace × Reference Combination
                 const t50rCombinedGroups = {};
-                const t50rGroupOrder = ['Center/Carbon', 'Center/Silver', 'Center/None', 'Side/Carbon', 'Side/Silver', 'Side/None'];
-                
+
                 matchedIndices.forEach(({ idx, kpi }) => {
-                    let trace = String(buildData.traceTypes[idx] || '');
+                    const trace = String(buildData.traceTypes[idx] || '');
                     const ref = String(buildData.refLocations[idx] || '');
-                    
+                    const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+
                     const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
-                    const traceLower = trace.toLowerCase().trim();
-                    let traceClean;
-                    if (traceLower.includes('carbon')) {
-                        traceClean = 'Carbon';
-                    } else if (traceLower.includes('silver')) {
-                        traceClean = 'Silver';
-                    } else {
-                        traceClean = 'None';
-                    }
-                    
+                    const traceClean = getMaterialLabel(trace, carbonRatio);
+
                     const groupName = `${refShort}/${traceClean}`;
                     if (!t50rCombinedGroups[groupName]) t50rCombinedGroups[groupName] = [];
                     t50rCombinedGroups[groupName].push(kpi.t50Recovery);
                 });
+
+                // Dynamic group order based on what's present
+                const t50rGroupOrder = Object.keys(t50rCombinedGroups).sort();
                 
                 const t50rCombinedColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
                 const t50rCombinedTraces = t50rGroupOrder
@@ -2306,31 +2338,23 @@
                 
                 // Combined Trace × Reference box plot
                 const combinedGroups = {};
-                const groupOrder = ['Center/Carbon', 'Center/Silver', 'Center/None', 'Side/Carbon', 'Side/Silver', 'Side/None'];
-                
+
                 matchedIndices.forEach(({ idx, kpi }) => {
-                    let trace = String(buildData.traceTypes[idx] || '');
+                    const trace = String(buildData.traceTypes[idx] || '');
                     const ref = String(buildData.refLocations[idx] || '');
-                    
-                    // Simplify reference location name
+                    const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+
                     const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
-                    
-                    // Clean trace name - catch all variations
-                    const traceLower = trace.toLowerCase().trim();
-                    let traceClean;
-                    if (traceLower.includes('carbon')) {
-                        traceClean = 'Carbon';
-                    } else if (traceLower.includes('silver')) {
-                        traceClean = 'Silver';
-                    } else {
-                        traceClean = 'None';  // Empty, NaN, None, null, undefined, etc.
-                    }
-                    
+                    const traceClean = getMaterialLabel(trace, carbonRatio);
+
                     const groupName = `${refShort}/${traceClean}`;
-                    
+
                     if (!combinedGroups[groupName]) combinedGroups[groupName] = [];
                     combinedGroups[groupName].push(kpi.responseMag);
                 });
+
+                // Dynamic group order based on what's present
+                const groupOrder = Object.keys(combinedGroups).sort();
                 
                 debugLog('Combined groups:', Object.entries(combinedGroups).map(([k, v]) => `${k}: ${v.length}`));
                 
@@ -2353,24 +2377,19 @@
                     showlegend: false
                 }, plotlyConfig);
                 
-                // Violin plot - use same trace cleaning logic
+                // Violin plot - use carbon ratio for grouping
                 const violinGroups = {};
                 matchedIndices.forEach(({ idx, kpi }) => {
-                    let trace = String(buildData.traceTypes[idx] || '');
-                    const traceLower = trace.toLowerCase().trim();
-                    let traceClean;
-                    if (traceLower.includes('carbon')) {
-                        traceClean = 'Carbon';
-                    } else if (traceLower.includes('silver')) {
-                        traceClean = 'Silver';
-                    } else {
-                        traceClean = 'None';
-                    }
+                    const trace = String(buildData.traceTypes[idx] || '');
+                    const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+                    const traceClean = getMaterialLabel(trace, carbonRatio);
+
                     if (!violinGroups[traceClean]) violinGroups[traceClean] = [];
                     violinGroups[traceClean].push(kpi.responseMag);
                 });
-                
-                const violinOrder = ['Carbon', 'Silver', 'None'];
+
+                // Dynamic order based on what's present
+                const violinOrder = Object.keys(violinGroups).sort();
                 const violinTraces = violinOrder
                     .filter(t => violinGroups[t] && violinGroups[t].length > 0)
                     .map((trace, i) => ({
@@ -2379,8 +2398,8 @@
                         name: trace,
                         box: { visible: true },
                         meanline: { visible: true },
-                        fillcolor: sensorColors[i],
-                        line: { color: sensorColors[i] },
+                        fillcolor: sensorColors[i % sensorColors.length],
+                        line: { color: sensorColors[i % sensorColors.length] },
                         opacity: 0.7
                     }));
                 
@@ -2444,8 +2463,8 @@
                             'percentRecovery', 't50R', 't10R', 'recoveryRate', 'snr', 'baselineStd'];
             const kpiLabels = ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate',
                               '% Recov', 'T50R', 'T10R', 'Recov Rate', 'SNR', 'Baseline σ'];
-            const designParams = ['wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
-            const designLabels = ['W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
+            const designParams = ['traceCarbon', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
+            const designLabels = ['C Ratio', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
 
             // Build correlation matrix
             const corrMatrix = [];
