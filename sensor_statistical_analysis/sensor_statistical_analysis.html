@@ -2522,8 +2522,9 @@
                 hovertemplate: '%{y} vs %{x}<br>r = %{z:.3f}<extra></extra>'
             }], {
                 ...plotlyLayout,
+                margin: { ...plotlyLayout.margin, l: 80 },
                 xaxis: { ...plotlyLayout.xaxis, title: '' },
-                yaxis: { ...plotlyLayout.yaxis, title: '' }
+                yaxis: { ...plotlyLayout.yaxis, title: '', tickfont: { size: 11 } }
             }, plotlyConfig);
             
             // Scatter plots
