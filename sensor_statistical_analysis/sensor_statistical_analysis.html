@@ -2497,12 +2497,12 @@
 
             // Heatmap interpretation
             let heatmapInterp = `This heatmap shows Pearson correlations between design parameters (columns) and sensor KPIs (rows). `;
-            heatmapInterp += `<strong>Blue = positive correlation</strong> (both increase together), <strong>Red = negative</strong> (one increases as other decreases). `;
+            heatmapInterp += `<strong style="color: #ef5350;">Red = positive correlation</strong> (both increase together), <strong style="color: #42a5f5;">Blue = negative</strong> (one increases as other decreases). `;
             if (strongestCorr.r > 0.5) {
-                heatmapInterp += `Strongest positive: <span class="interpretation-highlight highlight-positive">${strongestCorr.param} → ${strongestCorr.kpi} (r=${strongestCorr.r.toFixed(2)})</span>. `;
+                heatmapInterp += `Strongest positive: <span class="interpretation-highlight" style="background: rgba(239, 83, 80, 0.2); color: #ef5350;">${strongestCorr.param} → ${strongestCorr.kpi} (r=${strongestCorr.r.toFixed(2)})</span>. `;
             }
             if (strongestNeg.r < -0.5) {
-                heatmapInterp += `Strongest negative: <span class="interpretation-highlight highlight-negative">${strongestNeg.param} → ${strongestNeg.kpi} (r=${strongestNeg.r.toFixed(2)})</span>. `;
+                heatmapInterp += `Strongest negative: <span class="interpretation-highlight" style="background: rgba(66, 165, 245, 0.2); color: #42a5f5;">${strongestNeg.param} → ${strongestNeg.kpi} (r=${strongestNeg.r.toFixed(2)})</span>. `;
             }
             if (Math.abs(strongestCorr.r) < 0.3 && Math.abs(strongestNeg.r) < 0.3) {
                 heatmapInterp += `No strong correlations found — design parameters may have limited influence on sensor performance.`;
@@ -2522,8 +2522,9 @@
                 hovertemplate: '%{y} vs %{x}<br>r = %{z:.3f}<extra></extra>'
             }], {
                 ...plotlyLayout,
+                margin: { ...plotlyLayout.margin, l: 80 },
                 xaxis: { ...plotlyLayout.xaxis, title: '' },
-                yaxis: { ...plotlyLayout.yaxis, title: '' }
+                yaxis: { ...plotlyLayout.yaxis, title: '', tickfont: { size: 11 } }
             }, plotlyConfig);
             
             // Scatter plots
