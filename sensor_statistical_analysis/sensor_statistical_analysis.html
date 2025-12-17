@@ -1124,6 +1124,16 @@
                         </div>
                         <div class="model-interpretation" id="model3Interpretation"></div>
                     </div>
+                    <div class="result-card" id="vifCard" style="display: none;">
+                        <h3>📊 Variance Inflation Factors (VIF)</h3>
+                        <table class="result-table" id="vifTable">
+                            <thead>
+                                <tr><th>Variable</th><th>VIF</th><th>Multicollinearity</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div class="model-interpretation" id="vifInterpretation"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1349,6 +1359,12 @@
                     cellId: findColumnIndex(headers, ['cellid', 'cell_id', 'cell id', 'sensorid', 'sensor_id']),
                     // Direct Carbon_Ratio column (numeric values)
                     carbonRatio: findColumnIndex(headers, ['carbonratio', 'carbon_ratio']),
+                    // Silver/Ag ratio column
+                    agRatio: findColumnIndex(headers, ['agratio', 'ag_ratio', 'silverratio', 'silver_ratio']),
+                    // Mixed method column (FlackTek, Hand, N/A)
+                    mixed: findColumnIndex(headers, ['mixed', 'mixmethod', 'mix_method']),
+                    // Sealed method column (Screw, Snap)
+                    sealed: findColumnIndex(headers, ['sealed', 'sealmethod', 'seal_method', 'sealtype']),
                     // Legacy trace type column (string values like "Carbon", "Silver", or "1:0")
                     traceType: findColumnIndex(headers, ['tracetype', 'trace_type', 'carbonsilver', 'carbon-silver', 'carbon_silver']),
                     refLocation: findColumnIndex(headers, ['referencelocation', 'reflocation', 'stencilconfig', 'stencil_config', 'config']),
@@ -1479,7 +1495,38 @@
                     if (val.includes('wrc') || val.includes('w') && val.includes('c')) return 1;
                     return 0;
                 });
-                
+
+                // Mixed method column (FlackTek, Hand, N/A)
+                buildData.mixedMethod = rows.map(r => {
+                    if (colIndices.mixed === -1) return 'N/A';
+                    const raw = r[colIndices.mixed];
+                    if (raw === undefined || raw === null || raw === '') return 'N/A';
+                    const val = String(raw).trim();
+                    if (val.toLowerCase() === 'n/a' || val.toLowerCase() === 'na' || val.toLowerCase() === 'none') return 'N/A';
+                    return val;
+                });
+                // Create dummy variables for mixed method
+                buildData.isMixedFlackTek = buildData.mixedMethod.map(m =>
+                    m.toLowerCase().includes('flacktek') ? 1 : 0);
+                buildData.isMixedHand = buildData.mixedMethod.map(m =>
+                    m.toLowerCase().includes('hand') ? 1 : 0);
+
+                // Sealed method column (Screw, Snap)
+                buildData.sealedMethod = rows.map(r => {
+                    if (colIndices.sealed === -1) return 'N/A';
+                    const raw = r[colIndices.sealed];
+                    if (raw === undefined || raw === null || raw === '') return 'N/A';
+                    const val = String(raw).trim();
+                    if (val.toLowerCase() === 'n/a' || val.toLowerCase() === 'na' || val.toLowerCase() === 'none') return 'N/A';
+                    return val;
+                });
+                // Create dummy variable for sealed method (1 = Snap, 0 = Screw/other)
+                buildData.isSealedSnap = buildData.sealedMethod.map(s =>
+                    s.toLowerCase().includes('snap') ? 1 : 0);
+
+                debugLog('Mixed methods:', [...new Set(buildData.mixedMethod)]);
+                debugLog('Sealed methods:', [...new Set(buildData.sealedMethod)]);
+
                 status.textContent = `✓ Loaded ${rows.length} sensors`;
                 dropZone.classList.add('loaded');
                 
@@ -1883,6 +1930,45 @@
             }
             
             return aug.map(row => row.slice(n));
+        }
+
+        // Calculate Variance Inflation Factors (VIF) for multicollinearity detection
+        // VIF_j = 1 / (1 - R²_j) where R²_j is from regressing predictor j on all other predictors
+        function calculateVIF(X, labels) {
+            const n = X.length;
+            const p = X[0].length;
+            const vifs = [];
+
+            for (let j = 0; j < p; j++) {
+                // Get the j-th predictor as the response
+                const yj = X.map(row => row[j]);
+
+                // Get all other predictors as X matrix
+                const Xothers = X.map(row => row.filter((_, idx) => idx !== j));
+
+                if (Xothers[0].length === 0) {
+                    // Only one predictor, VIF is 1
+                    vifs.push({ variable: labels[j], vif: 1.0 });
+                    continue;
+                }
+
+                // Calculate R² for regressing j on others
+                const reg = multipleRegression(Xothers, yj);
+                const r2 = reg.r2;
+
+                // VIF = 1 / (1 - R²)
+                const vif = r2 >= 0.9999 ? Infinity : 1 / (1 - r2);
+                vifs.push({ variable: labels[j], vif: isNaN(vif) ? 1.0 : vif });
+            }
+
+            return vifs;
+        }
+
+        // Interpret VIF value
+        function interpretVIF(vif) {
+            if (vif < 5) return { level: 'low', text: 'Low', class: 'good' };
+            if (vif < 10) return { level: 'moderate', text: 'Moderate', class: 'warning' };
+            return { level: 'high', text: 'High', class: 'danger' };
         }
 
         // Correlation coefficient
@@ -3016,6 +3102,98 @@
             }
             document.getElementById('model2Interpretation').innerHTML = model2Interp;
             document.getElementById('model2Interpretation').className = `model-interpretation interpretation-${r2Interp2.class}`;
+
+            // Calculate and display VIF for multicollinearity detection
+            const vifCard = document.getElementById('vifCard');
+            const vifTableBody = document.getElementById('vifTable').querySelector('tbody');
+            vifTableBody.innerHTML = '';
+
+            // Build X matrix with all available design parameters for VIF calculation
+            const vifVariables = [];
+            const vifLabels = [];
+            const vifData = [];
+
+            // Add X1 variable
+            vifLabels.push(x1Label);
+            vifData.push(x1);
+
+            // Add X2 if selected
+            if (x2 && x2Label) {
+                vifLabels.push(x2Label);
+                vifData.push(x2);
+            }
+
+            // Add categorical variables if they have variation
+            if (includeCat) {
+                const carbonValues = matchedIndices.map(i => buildData.traceCarbon[i]);
+                if (new Set(carbonValues).size > 1) {
+                    vifLabels.push('Carbon Ratio');
+                    vifData.push(carbonValues);
+                }
+
+                // Add Mixed and Sealed if available and have variation
+                if (buildData.isMixedFlackTek) {
+                    const mixedValues = matchedIndices.map(i => buildData.isMixedFlackTek[i]);
+                    if (new Set(mixedValues).size > 1) {
+                        vifLabels.push('Mixed (FlackTek)');
+                        vifData.push(mixedValues);
+                    }
+                }
+                if (buildData.isSealedSnap) {
+                    const sealedValues = matchedIndices.map(i => buildData.isSealedSnap[i]);
+                    if (new Set(sealedValues).size > 1) {
+                        vifLabels.push('Sealed (Snap)');
+                        vifData.push(sealedValues);
+                    }
+                }
+            }
+
+            // Only calculate VIF if we have 2+ predictors
+            if (vifData.length >= 2) {
+                vifCard.style.display = 'block';
+
+                // Transpose data for VIF calculation
+                const XforVIF = vifData[0].map((_, i) => vifData.map(col => col[i]));
+
+                const vifs = calculateVIF(XforVIF, vifLabels);
+                let hasHighVIF = false;
+                let highVIFVars = [];
+
+                vifs.forEach(({ variable, vif }) => {
+                    const interp = interpretVIF(vif);
+                    const vifDisplay = vif === Infinity ? '∞' : vif.toFixed(2);
+                    let colorClass = '';
+                    if (interp.level === 'high') {
+                        colorClass = 'color: #ef5350;';
+                        hasHighVIF = true;
+                        highVIFVars.push(variable);
+                    } else if (interp.level === 'moderate') {
+                        colorClass = 'color: #ffa726;';
+                    } else {
+                        colorClass = 'color: #66bb6a;';
+                    }
+
+                    vifTableBody.innerHTML += `
+                        <tr>
+                            <td>${variable}</td>
+                            <td style="${colorClass} font-weight: bold;">${vifDisplay}</td>
+                            <td style="${colorClass}">${interp.text}</td>
+                        </tr>
+                    `;
+                });
+
+                // VIF interpretation
+                let vifInterp = `<strong>VIF measures multicollinearity</strong> between predictors. `;
+                vifInterp += `VIF < 5: low concern, 5-10: moderate, > 10: high multicollinearity. `;
+                if (hasHighVIF) {
+                    vifInterp += `<span style="color: #ef5350;"><strong>Warning:</strong> ${highVIFVars.join(', ')} show${highVIFVars.length === 1 ? 's' : ''} high multicollinearity. Consider removing redundant predictors.</span>`;
+                } else {
+                    vifInterp += `<span style="color: #66bb6a;">No concerning multicollinearity detected.</span>`;
+                }
+                document.getElementById('vifInterpretation').innerHTML = vifInterp;
+            } else {
+                vifCard.style.display = 'none';
+            }
 
             // Update chart titles
             document.getElementById('regressionScatterTitle').innerHTML = `📈 ${yLabel} vs ${x1Label}`;
