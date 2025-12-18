@@ -2715,8 +2715,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f' },
-                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f', type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)', type: 'linear' },
                 showlegend: true
             }, plotlyConfig);
 
@@ -2748,8 +2748,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f' },
-                yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s from response start)' },
+                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f', type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s from response start)', type: 'linear' },
                 showlegend: true
             }, plotlyConfig);
 
@@ -2782,8 +2782,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'Working SA (mm²)', tickformat: '.1f' },
-                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                xaxis: { ...plotlyLayout.xaxis, title: 'Working SA (mm²)', tickformat: '.1f', type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)', type: 'linear' },
                 showlegend: true
             }, plotlyConfig);
 
