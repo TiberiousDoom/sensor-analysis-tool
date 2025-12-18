@@ -936,23 +936,33 @@
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">
-                            ⏱️ T90 Rise by Trace × Reference
+                            ⏱️ T90 Rise by Material
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Time to reach 90% of peak response, grouped by Trace Type and Reference Location combination.</span>
+                                <span class="tooltip-text">Time to reach 90% of peak response, grouped by material composition (Carbon/Silver ratio).</span>
                             </span>
                         </div>
                         <div class="chart-plot" id="t90CombinedBoxplot"></div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">
-                            ⏱️ T50 Recovery by Trace × Reference
+                            ⏱️ T50 Recovery by Material
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Time to recover 50% from peak back toward baseline, grouped by Trace Type and Reference Location combination.</span>
+                                <span class="tooltip-text">Time to recover 50% from peak back toward baseline, grouped by material composition.</span>
                             </span>
                         </div>
                         <div class="chart-plot" id="t50rCombinedBoxplot"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            📉 Last 30s % Change by Material
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Percent change in signal over the last 30 seconds of the response, grouped by material composition. Indicates drift or continued recovery.</span>
+                            </span>
+                        </div>
+                        <div class="chart-plot" id="last30ChangeBoxplot"></div>
                     </div>
                     <div class="chart-container large">
                         <div class="chart-title">
@@ -1721,7 +1731,22 @@
                 const t10R = Math.max(0, t10Recovery - peakTime);  // Time to 90% recovery (10% remaining)
 
                 const recoveryRate = (t10Recovery - peakTime) > 0 ? recoveryMag / (t10Recovery - peakTime) : 0;
-                
+
+                // Percent change over last 30 seconds
+                const maxTime = Math.max(...time);
+                const last30Start = maxTime - 30;
+                const last30StartIndex = time.findIndex(t => t >= last30Start);
+                const last30EndIndex = time.length - 1;
+
+                let last30PercentChange = 0;
+                if (last30StartIndex >= 0 && last30StartIndex < last30EndIndex) {
+                    const startValue = values[last30StartIndex];
+                    const endValue = values[last30EndIndex];
+                    if (Math.abs(startValue) > 0.0001) {
+                        last30PercentChange = ((endValue - startValue) / Math.abs(startValue)) * 100;
+                    }
+                }
+
                 // SNR
                 const snr = baselineStd > 0 ? responseMag / baselineStd : 0;
                 const responseNoise = peakStd > 0 ? responseMag / peakStd : 0;
@@ -1731,7 +1756,8 @@
                     responseMag, percentResponse, responseStartTime,
                     t50Rise, t90Rise, t50RiseAbs, t90RiseAbs, riseRate,
                     peakStd, finalValue, recoveryMag, percentRecovery,
-                    t50Recovery, t10Recovery, t50R, t10R, recoveryRate, snr, responseNoise,
+                    t50Recovery, t10Recovery, t50R, t10R, recoveryRate,
+                    last30PercentChange, snr, responseNoise,
                     isSignificant, threshold
                 };
             });
@@ -2355,20 +2381,16 @@
                     return;
                 }
                 
-                // T90 Rise by Trace × Reference Combination
+                // T90 Rise by Material
                 const t90CombinedGroups = {};
 
                 matchedIndices.forEach(({ idx, kpi }) => {
                     const trace = String(buildData.traceTypes[idx] || '');
-                    const ref = String(buildData.refLocations[idx] || '');
                     const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
-
-                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
                     const traceClean = getMaterialLabel(trace, carbonRatio);
 
-                    const groupName = `${refShort}/${traceClean}`;
-                    if (!t90CombinedGroups[groupName]) t90CombinedGroups[groupName] = [];
-                    t90CombinedGroups[groupName].push(kpi.t90Rise);
+                    if (!t90CombinedGroups[traceClean]) t90CombinedGroups[traceClean] = [];
+                    t90CombinedGroups[traceClean].push(kpi.t90Rise);
                 });
 
                 // Dynamic group order based on what's present
@@ -2393,20 +2415,16 @@
                     showlegend: false
                 }, plotlyConfig);
                 
-                // T50 Recovery by Trace × Reference Combination
+                // T50 Recovery by Material
                 const t50rCombinedGroups = {};
 
                 matchedIndices.forEach(({ idx, kpi }) => {
                     const trace = String(buildData.traceTypes[idx] || '');
-                    const ref = String(buildData.refLocations[idx] || '');
                     const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
-
-                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
                     const traceClean = getMaterialLabel(trace, carbonRatio);
 
-                    const groupName = `${refShort}/${traceClean}`;
-                    if (!t50rCombinedGroups[groupName]) t50rCombinedGroups[groupName] = [];
-                    t50rCombinedGroups[groupName].push(kpi.t50Recovery);
+                    if (!t50rCombinedGroups[traceClean]) t50rCombinedGroups[traceClean] = [];
+                    t50rCombinedGroups[traceClean].push(kpi.t50Recovery);
                 });
 
                 // Dynamic group order based on what's present
@@ -2430,7 +2448,40 @@
                     yaxis: { ...plotlyLayout.yaxis, title: 'T50 Recovery Time (s)' },
                     showlegend: false
                 }, plotlyConfig);
-                
+
+                // Last 30 seconds percent change by Material
+                const last30Groups = {};
+
+                matchedIndices.forEach(({ idx, kpi }) => {
+                    const trace = String(buildData.traceTypes[idx] || '');
+                    const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+                    const traceClean = getMaterialLabel(trace, carbonRatio);
+
+                    if (!last30Groups[traceClean]) last30Groups[traceClean] = [];
+                    last30Groups[traceClean].push(kpi.last30PercentChange);
+                });
+
+                const last30GroupOrder = Object.keys(last30Groups).sort();
+
+                const last30Colors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
+                const last30Traces = last30GroupOrder
+                    .filter(g => last30Groups[g] && last30Groups[g].length > 0)
+                    .map((group, i) => ({
+                        y: last30Groups[group],
+                        type: 'box',
+                        name: group,
+                        marker: { color: last30Colors[i % last30Colors.length] },
+                        boxpoints: 'all',
+                        jitter: 0.3,
+                        pointpos: -1.5
+                    }));
+
+                safePlot('last30ChangeBoxplot', last30Traces, {
+                    ...plotlyLayout,
+                    yaxis: { ...plotlyLayout.yaxis, title: 'Last 30s % Change' },
+                    showlegend: false
+                }, plotlyConfig);
+
                 // Combined Trace × Reference box plot
                 const combinedGroups = {};
 
@@ -3272,8 +3323,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: x1Label },
-                yaxis: { ...plotlyLayout.yaxis, title: yLabel }
+                xaxis: { ...plotlyLayout.xaxis, title: x1Label, type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: yLabel, type: 'linear' }
             }, plotlyConfig);
 
             // Residual plot
@@ -3292,8 +3343,8 @@
                 line: { color: '#64748b', width: 1, dash: 'dash' }
             }], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: `Predicted ${yLabel}` },
-                yaxis: { ...plotlyLayout.yaxis, title: 'Residual' },
+                xaxis: { ...plotlyLayout.xaxis, title: `Predicted ${yLabel}`, type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Residual', type: 'linear' },
                 showlegend: false
             }, plotlyConfig);
         }
