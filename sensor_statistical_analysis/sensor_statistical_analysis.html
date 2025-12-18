@@ -457,15 +457,19 @@
 
         .regression-results {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 1.5rem;
+            overflow-x: auto;
+            max-width: 100%;
         }
 
         .result-card {
             background: var(--bg-secondary);
             border-radius: 16px;
-            padding: 1.5rem;
+            padding: 1.25rem;
             border: 1px solid var(--border-color);
+            min-width: 0;
+            overflow-x: auto;
         }
 
         .result-card h3 {
@@ -477,15 +481,17 @@
         .result-table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: auto;
         }
 
         .result-table th,
         .result-table td {
-            padding: 0.6rem;
+            padding: 0.4rem 0.5rem;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
+            white-space: nowrap;
         }
 
         .result-table th {
@@ -959,12 +965,12 @@
                             📉 Last 30s % Change by Material
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Percent change in signal over the last 30 seconds of the response, grouped by material composition. Indicates drift or continued recovery.</span>
+                                <span class="tooltip-text">Percent change in signal over the last 30 seconds, normalized to the response magnitude above baseline. Formula: (end - start) / (start - baseline) × 100. Indicates drift or continued recovery as a fraction of the response.</span>
                             </span>
                         </div>
                         <div class="chart-plot" id="last30ChangeBoxplot"></div>
                     </div>
-                    <div class="chart-container large">
+                    <div class="chart-container">
                         <div class="chart-title">
                             📊 Response by Trace × Reference Combination
                             <span class="tooltip-container">
@@ -1742,8 +1748,9 @@
                 if (last30StartIndex >= 0 && last30StartIndex < last30EndIndex) {
                     const startValue = values[last30StartIndex];
                     const endValue = values[last30EndIndex];
-                    if (Math.abs(startValue) > 0.0001) {
-                        last30PercentChange = ((endValue - startValue) / Math.abs(startValue)) * 100;
+                    const responseAtStart = startValue - baselineMean;
+                    if (Math.abs(responseAtStart) > 0.0001) {
+                        last30PercentChange = ((endValue - startValue) / responseAtStart) * 100;
                     }
                 }
 
@@ -2424,7 +2431,7 @@
                     const traceClean = getMaterialLabel(trace, carbonRatio);
 
                     if (!t50rCombinedGroups[traceClean]) t50rCombinedGroups[traceClean] = [];
-                    t50rCombinedGroups[traceClean].push(kpi.t50Recovery);
+                    t50rCombinedGroups[traceClean].push(kpi.t50R);
                 });
 
                 // Dynamic group order based on what's present
