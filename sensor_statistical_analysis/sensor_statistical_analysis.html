@@ -457,7 +457,7 @@
 
         .regression-results {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 1.5rem;
             overflow-x: auto;
             max-width: 100%;
@@ -999,7 +999,13 @@
             <div class="charts-section visible">
                 <div class="chart-grid">
                     <div class="chart-container large">
-                        <div class="chart-title">🔥 Correlation Heatmap: Design Parameters vs KPIs</div>
+                        <div class="chart-title">
+                            🔥 Correlation Heatmap: Design Parameters vs KPIs
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Shows Pearson correlations between design parameters and sensor KPIs. Red = positive correlation, Blue = negative. Categorical encodings: C Ratio = Carbon fraction (1=Carbon, 0=Silver); Seal = seal method (1=Snap, 0=Screw). Positive correlation with Seal means Snap closure is associated with higher values.</span>
+                            </span>
+                        </div>
                         <div class="chart-plot tall" id="correlationHeatmap"></div>
                         <div class="chart-interpretation" id="correlationHeatmapInterpretation"></div>
                     </div>
@@ -2597,6 +2603,7 @@
                         traceCarbon: buildData.traceCarbon[idx],
                         traceSilver: buildData.traceSilver[idx],
                         refSide: buildData.refSide[idx],
+                        isSealedSnap: buildData.isSealedSnap ? buildData.isSealedSnap[idx] : 0,
                         ...kpi
                     });
                 }
@@ -2616,8 +2623,8 @@
                             'percentRecovery', 't50R', 't10R', 'recoveryRate', 'snr', 'baselineStd'];
             const kpiLabels = ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate',
                               '% Recov', 'T50R', 'T10R', 'Recov Rate', 'SNR', 'Baseline σ'];
-            const designParams = ['traceCarbon', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
-            const designLabels = ['C Ratio', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
+            const designParams = ['traceCarbon', 'isSealedSnap', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
+            const designLabels = ['C Ratio', 'Seal', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
 
             // Build correlation matrix
             const corrMatrix = [];
