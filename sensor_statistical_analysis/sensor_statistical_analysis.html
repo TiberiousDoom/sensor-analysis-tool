@@ -2089,6 +2089,47 @@
             populateTimeSeriesFilters();
         }
 
+        // Helper to get material label from trace type or carbon ratio
+        function getMaterialLabel(traceValue, carbonRatioValue) {
+            const val = String(traceValue || '').trim();
+            const valLower = val.toLowerCase();
+
+            // Check if it's a direct numeric carbon ratio
+            const numVal = parseFloat(val);
+            if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
+                if (numVal >= 0.99) return 'Carbon';
+                if (numVal <= 0.01) return 'Silver';
+                if (numVal >= 0.75) return 'C:Ag 4:1';
+                if (numVal <= 0.25) return 'C:Ag 1:4';
+                return 'C:Ag 1:1';
+            }
+
+            // Check for ratio format (e.g., "1:0", "4:1")
+            const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+            if (ratioMatch) {
+                const carbon = parseFloat(ratioMatch[1]);
+                const silver = parseFloat(ratioMatch[2]);
+                if (silver === 0) return 'Carbon';
+                if (carbon === 0) return 'Silver';
+                return `C:Ag ${Math.round(carbon)}:${Math.round(silver)}`;
+            }
+
+            // Legacy string format
+            if (valLower.includes('carbon')) return 'Carbon';
+            if (valLower.includes('silver')) return 'Silver';
+
+            // If we have a carbonRatioValue from buildData.traceCarbon, use it
+            if (carbonRatioValue !== undefined && !isNaN(carbonRatioValue)) {
+                if (carbonRatioValue >= 0.99) return 'Carbon';
+                if (carbonRatioValue <= 0.01) return 'Silver';
+                if (carbonRatioValue >= 0.75) return 'C:Ag 4:1';
+                if (carbonRatioValue <= 0.25) return 'C:Ag 1:4';
+                return 'C:Ag 1:1';
+            }
+
+            return 'Unknown';
+        }
+
         // Populate Time Series Filters
         function populateTimeSeriesFilters() {
             if (!buildData) return;
@@ -2439,48 +2480,6 @@
                     return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
                 }
 
-                // Helper to get material label from trace type or carbon ratio
-                function getMaterialLabel(traceValue, carbonRatioValue) {
-                    const val = String(traceValue).trim();
-                    const valLower = val.toLowerCase();
-
-                    // Check if it's a direct numeric carbon ratio
-                    const numVal = parseFloat(val);
-                    if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) {
-                        // Use the numeric carbon ratio to create label
-                        if (numVal >= 0.99) return 'Carbon';
-                        if (numVal <= 0.01) return 'Silver';
-                        if (numVal >= 0.75) return 'C:Ag 4:1';
-                        if (numVal <= 0.25) return 'C:Ag 1:4';
-                        return 'C:Ag 1:1';
-                    }
-
-                    // Check for ratio format (e.g., "1:0", "4:1")
-                    const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
-                    if (ratioMatch) {
-                        const carbon = parseFloat(ratioMatch[1]);
-                        const silver = parseFloat(ratioMatch[2]);
-                        if (silver === 0) return 'Carbon';
-                        if (carbon === 0) return 'Silver';
-                        return `C:Ag ${Math.round(carbon)}:${Math.round(silver)}`;
-                    }
-
-                    // Legacy string format
-                    if (valLower.includes('carbon')) return 'Carbon';
-                    if (valLower.includes('silver')) return 'Silver';
-
-                    // If we have a carbonRatioValue from buildData.traceCarbon, use it
-                    if (carbonRatioValue !== undefined && !isNaN(carbonRatioValue)) {
-                        if (carbonRatioValue >= 0.99) return 'Carbon';
-                        if (carbonRatioValue <= 0.01) return 'Silver';
-                        if (carbonRatioValue >= 0.75) return 'C:Ag 4:1';
-                        if (carbonRatioValue <= 0.25) return 'C:Ag 1:4';
-                        return 'C:Ag 1:1';
-                    }
-
-                    return 'None';
-                }
-                
                 // Create lookup from KPI data
                 const kpiLookup = {};
                 Object.keys(kpiData).forEach(s => {
