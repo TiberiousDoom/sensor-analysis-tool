@@ -911,6 +911,29 @@
         <!-- Time Series Tab -->
         <div id="timeseriesTab" class="tab-content" style="display: none;">
             <div class="charts-section visible">
+                <div class="regression-controls" id="timeseriesFilters">
+                    <div class="control-group">
+                        <label>Material</label>
+                        <select id="tsFilterMaterial">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Seal Method</label>
+                        <select id="tsFilterSeal">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Mix Method</label>
+                        <select id="tsFilterMix">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="control-group" style="display: flex; align-items: flex-end;">
+                        <button id="tsResetFilters" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer;">Reset Filters</button>
+                    </div>
+                </div>
                 <div class="chart-grid full-width">
                     <div class="chart-container">
                         <div class="chart-title">📈 All Sensor Responses <span class="badge">Interactive</span></div>
@@ -2051,6 +2074,84 @@
             
             document.getElementById('kpiSection').classList.add('visible');
             document.getElementById('overviewCharts').classList.add('visible');
+
+            // Populate time series filters if build data available
+            populateTimeSeriesFilters();
+        }
+
+        // Populate Time Series Filters
+        function populateTimeSeriesFilters() {
+            if (!buildData) return;
+
+            const materialSelect = document.getElementById('tsFilterMaterial');
+            const sealSelect = document.getElementById('tsFilterSeal');
+            const mixSelect = document.getElementById('tsFilterMix');
+
+            // Get unique values
+            const materials = [...new Set(buildData.sensors.map((s, i) => {
+                const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[i] : undefined;
+                const traceType = buildData.traceTypes ? buildData.traceTypes[i] : undefined;
+                return getMaterialLabel(traceType, carbonRatio);
+            }))].filter(m => m && m !== 'Unknown').sort();
+
+            const sealMethods = [...new Set(buildData.sealedMethod || [])].filter(s => s && s !== 'N/A').sort();
+            const mixMethods = [...new Set(buildData.mixedMethod || [])].filter(m => m && m !== 'N/A').sort();
+
+            // Populate material dropdown
+            materialSelect.innerHTML = '<option value="all">All</option>' +
+                materials.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            // Populate seal dropdown
+            sealSelect.innerHTML = '<option value="all">All</option>' +
+                sealMethods.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Populate mix dropdown
+            mixSelect.innerHTML = '<option value="all">All</option>' +
+                mixMethods.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+
+        // Get filtered sensors for time series
+        function getFilteredSensors() {
+            const allSensors = Object.keys(sensorData.sensors);
+            if (!buildData) return allSensors;
+
+            const materialFilter = document.getElementById('tsFilterMaterial')?.value || 'all';
+            const sealFilter = document.getElementById('tsFilterSeal')?.value || 'all';
+            const mixFilter = document.getElementById('tsFilterMix')?.value || 'all';
+
+            // If all filters are 'all', return all sensors
+            if (materialFilter === 'all' && sealFilter === 'all' && mixFilter === 'all') {
+                return allSensors;
+            }
+
+            // Create lookup for build data by sensor name
+            function normalizeName(name) {
+                return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+            }
+
+            const buildLookup = {};
+            buildData.sensors.forEach((sensor, idx) => {
+                const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+                const traceType = buildData.traceTypes ? buildData.traceTypes[idx] : undefined;
+                buildLookup[normalizeName(sensor)] = {
+                    material: getMaterialLabel(traceType, carbonRatio),
+                    seal: buildData.sealedMethod ? buildData.sealedMethod[idx] : 'N/A',
+                    mix: buildData.mixedMethod ? buildData.mixedMethod[idx] : 'N/A'
+                };
+            });
+
+            // Filter sensors
+            return allSensors.filter(sensor => {
+                const normalized = normalizeName(sensor);
+                const info = buildLookup[normalized];
+                if (!info) return true; // Include if no build data match
+
+                if (materialFilter !== 'all' && info.material !== materialFilter) return false;
+                if (sealFilter !== 'all' && info.seal !== sealFilter) return false;
+                if (mixFilter !== 'all' && info.mix !== mixFilter) return false;
+
+                return true;
+            });
         }
 
         // KPI Summary Cards
@@ -2209,9 +2310,14 @@
 
         // Time Series Charts
         function updateTimeSeriesCharts() {
-            const sensors = Object.keys(sensorData.sensors);
+            const sensors = getFilteredSensors().filter(s => sensorData.sensors[s] && kpiData[s]);
             const time = sensorData.time;
-            
+
+            // Show filter count
+            const totalSensors = Object.keys(sensorData.sensors).length;
+            const filterInfo = sensors.length < totalSensors ?
+                ` (${sensors.length}/${totalSensors} shown)` : '';
+
             // All sensors overlay
             const traces = sensors.map((sensor, i) => ({
                 x: time,
@@ -2222,15 +2328,16 @@
                 line: { color: sensorColors[i % sensorColors.length], width: 1.5 },
                 hovertemplate: `${sensor}<br>Time: %{x:.1f}s<br>Value: %{y:.4f} V<extra></extra>`
             }));
-            
+
             safePlot('allSensorsChart', traces, {
                 ...plotlyLayout,
+                title: sensors.length === 0 ? 'No sensors match filters' : '',
                 xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
                 yaxis: { ...plotlyLayout.yaxis, title: 'Voltage (V)' },
                 showlegend: true,
                 legend: { orientation: 'h', y: -0.2 }
             }, plotlyConfig);
-            
+
             // Heatmap
             const zData = sensors.map(s => sensorData.sensors[s]);
             safePlot('heatmapChart', [{
@@ -2245,7 +2352,7 @@
                 xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
                 yaxis: { ...plotlyLayout.yaxis, title: 'Sensor' }
             }, plotlyConfig);
-            
+
             // Normalized curves
             const normTraces = sensors.map((sensor, i) => {
                 const values = sensorData.sensors[sensor];
@@ -2262,7 +2369,7 @@
                     opacity: 0.6
                 };
             });
-            
+
             safePlot('normalizedChart', normTraces, {
                 ...plotlyLayout,
                 xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
@@ -3404,6 +3511,21 @@
         // Event listeners for regression controls
         ['yVariable', 'x1Variable', 'x2Variable', 'includeCategoricals'].forEach(id => {
             document.getElementById(id).addEventListener('change', updateRegressionAnalysis);
+        });
+
+        // Event listeners for time series filters
+        ['tsFilterMaterial', 'tsFilterSeal', 'tsFilterMix'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                if (sensorData && kpiData) updateTimeSeriesCharts();
+            });
+        });
+
+        // Reset filters button
+        document.getElementById('tsResetFilters').addEventListener('click', () => {
+            document.getElementById('tsFilterMaterial').value = 'all';
+            document.getElementById('tsFilterSeal').value = 'all';
+            document.getElementById('tsFilterMix').value = 'all';
+            if (sensorData && kpiData) updateTimeSeriesCharts();
         });
 
         // Settings change listener with localStorage persistence
