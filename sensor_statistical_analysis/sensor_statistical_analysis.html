@@ -911,6 +911,29 @@
         <!-- Time Series Tab -->
         <div id="timeseriesTab" class="tab-content" style="display: none;">
             <div class="charts-section visible">
+                <div class="regression-controls" id="timeseriesFilters">
+                    <div class="control-group">
+                        <label>Material</label>
+                        <select id="tsFilterMaterial">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Seal Method</label>
+                        <select id="tsFilterSeal">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Mix Method</label>
+                        <select id="tsFilterMix">
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="control-group" style="display: flex; align-items: flex-end;">
+                        <button id="tsResetFilters" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer;">Reset Filters</button>
+                    </div>
+                </div>
                 <div class="chart-grid full-width">
                     <div class="chart-container">
                         <div class="chart-title">📈 All Sensor Responses <span class="badge">Interactive</span></div>
@@ -1003,7 +1026,7 @@
                             🔥 Correlation Heatmap: Design Parameters vs KPIs
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Shows Pearson correlations between design parameters and sensor KPIs. Red = positive correlation, Blue = negative. Categorical encodings: C Ratio = Carbon fraction (1=Carbon, 0=Silver); Seal = seal method (1=Snap, 0=Screw). Positive correlation with Seal means Snap closure is associated with higher values.</span>
+                                <span class="tooltip-text">Shows Pearson correlations between design parameters and sensor KPIs. Red = positive correlation, Blue = negative. Categorical encodings: C Ratio = Carbon fraction (1=Carbon, 0=Silver); Seal = seal method (1=Snap, 0=Screw); Mix = mix method (1=FlackTek, 0=Hand). Positive correlation means the "1" category is associated with higher values.</span>
                             </span>
                         </div>
                         <div class="chart-plot tall" id="correlationHeatmap"></div>
@@ -1083,11 +1106,21 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Include Categoricals</label>
-                        <select id="includeCategoricals">
-                            <option value="no">No</option>
-                            <option value="yes">Yes (Material + Config)</option>
-                        </select>
+                        <label>Include in Model 3</label>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; padding-top: 0.25rem;">
+                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" id="includeMaterial" checked style="width: 16px; height: 16px; cursor: pointer;">
+                                Material
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" id="includeSeal" style="width: 16px; height: 16px; cursor: pointer;">
+                                Seal
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" id="includeMix" style="width: 16px; height: 16px; cursor: pointer;">
+                                Mix
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -2051,6 +2084,84 @@
             
             document.getElementById('kpiSection').classList.add('visible');
             document.getElementById('overviewCharts').classList.add('visible');
+
+            // Populate time series filters if build data available
+            populateTimeSeriesFilters();
+        }
+
+        // Populate Time Series Filters
+        function populateTimeSeriesFilters() {
+            if (!buildData) return;
+
+            const materialSelect = document.getElementById('tsFilterMaterial');
+            const sealSelect = document.getElementById('tsFilterSeal');
+            const mixSelect = document.getElementById('tsFilterMix');
+
+            // Get unique values
+            const materials = [...new Set(buildData.sensors.map((s, i) => {
+                const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[i] : undefined;
+                const traceType = buildData.traceTypes ? buildData.traceTypes[i] : undefined;
+                return getMaterialLabel(traceType, carbonRatio);
+            }))].filter(m => m && m !== 'Unknown').sort();
+
+            const sealMethods = [...new Set(buildData.sealedMethod || [])].filter(s => s && s !== 'N/A').sort();
+            const mixMethods = [...new Set(buildData.mixedMethod || [])].filter(m => m && m !== 'N/A').sort();
+
+            // Populate material dropdown
+            materialSelect.innerHTML = '<option value="all">All</option>' +
+                materials.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            // Populate seal dropdown
+            sealSelect.innerHTML = '<option value="all">All</option>' +
+                sealMethods.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Populate mix dropdown
+            mixSelect.innerHTML = '<option value="all">All</option>' +
+                mixMethods.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+
+        // Get filtered sensors for time series
+        function getFilteredSensors() {
+            const allSensors = Object.keys(sensorData.sensors);
+            if (!buildData) return allSensors;
+
+            const materialFilter = document.getElementById('tsFilterMaterial')?.value || 'all';
+            const sealFilter = document.getElementById('tsFilterSeal')?.value || 'all';
+            const mixFilter = document.getElementById('tsFilterMix')?.value || 'all';
+
+            // If all filters are 'all', return all sensors
+            if (materialFilter === 'all' && sealFilter === 'all' && mixFilter === 'all') {
+                return allSensors;
+            }
+
+            // Create lookup for build data by sensor name
+            function normalizeName(name) {
+                return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+            }
+
+            const buildLookup = {};
+            buildData.sensors.forEach((sensor, idx) => {
+                const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
+                const traceType = buildData.traceTypes ? buildData.traceTypes[idx] : undefined;
+                buildLookup[normalizeName(sensor)] = {
+                    material: getMaterialLabel(traceType, carbonRatio),
+                    seal: buildData.sealedMethod ? buildData.sealedMethod[idx] : 'N/A',
+                    mix: buildData.mixedMethod ? buildData.mixedMethod[idx] : 'N/A'
+                };
+            });
+
+            // Filter sensors
+            return allSensors.filter(sensor => {
+                const normalized = normalizeName(sensor);
+                const info = buildLookup[normalized];
+                if (!info) return true; // Include if no build data match
+
+                if (materialFilter !== 'all' && info.material !== materialFilter) return false;
+                if (sealFilter !== 'all' && info.seal !== sealFilter) return false;
+                if (mixFilter !== 'all' && info.mix !== mixFilter) return false;
+
+                return true;
+            });
         }
 
         // KPI Summary Cards
@@ -2209,9 +2320,14 @@
 
         // Time Series Charts
         function updateTimeSeriesCharts() {
-            const sensors = Object.keys(sensorData.sensors);
+            const sensors = getFilteredSensors().filter(s => sensorData.sensors[s] && kpiData[s]);
             const time = sensorData.time;
-            
+
+            // Show filter count
+            const totalSensors = Object.keys(sensorData.sensors).length;
+            const filterInfo = sensors.length < totalSensors ?
+                ` (${sensors.length}/${totalSensors} shown)` : '';
+
             // All sensors overlay
             const traces = sensors.map((sensor, i) => ({
                 x: time,
@@ -2222,15 +2338,16 @@
                 line: { color: sensorColors[i % sensorColors.length], width: 1.5 },
                 hovertemplate: `${sensor}<br>Time: %{x:.1f}s<br>Value: %{y:.4f} V<extra></extra>`
             }));
-            
+
             safePlot('allSensorsChart', traces, {
                 ...plotlyLayout,
+                title: sensors.length === 0 ? 'No sensors match filters' : '',
                 xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
                 yaxis: { ...plotlyLayout.yaxis, title: 'Voltage (V)' },
                 showlegend: true,
                 legend: { orientation: 'h', y: -0.2 }
             }, plotlyConfig);
-            
+
             // Heatmap
             const zData = sensors.map(s => sensorData.sensors[s]);
             safePlot('heatmapChart', [{
@@ -2245,7 +2362,7 @@
                 xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
                 yaxis: { ...plotlyLayout.yaxis, title: 'Sensor' }
             }, plotlyConfig);
-            
+
             // Normalized curves
             const normTraces = sensors.map((sensor, i) => {
                 const values = sensorData.sensors[sensor];
@@ -2262,7 +2379,7 @@
                     opacity: 0.6
                 };
             });
-            
+
             safePlot('normalizedChart', normTraces, {
                 ...plotlyLayout,
                 xaxis: { ...plotlyLayout.xaxis, title: 'Time (s)' },
@@ -2604,6 +2721,7 @@
                         traceSilver: buildData.traceSilver[idx],
                         refSide: buildData.refSide[idx],
                         isSealedSnap: buildData.isSealedSnap ? buildData.isSealedSnap[idx] : 0,
+                        isMixedFlackTek: buildData.isMixedFlackTek ? buildData.isMixedFlackTek[idx] : 0,
                         ...kpi
                     });
                 }
@@ -2623,8 +2741,8 @@
                             'percentRecovery', 't50R', 't10R', 'recoveryRate', 'snr', 'baselineStd'];
             const kpiLabels = ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate',
                               '% Recov', 'T50R', 'T10R', 'Recov Rate', 'SNR', 'Baseline σ'];
-            const designParams = ['traceCarbon', 'isSealedSnap', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
-            const designLabels = ['C Ratio', 'Seal', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
+            const designParams = ['traceCarbon', 'isSealedSnap', 'isMixedFlackTek', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
+            const designLabels = ['C Ratio', 'Seal', 'Mix', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
 
             // Build correlation matrix
             const corrMatrix = [];
@@ -2715,8 +2833,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f' },
-                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f', type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)', type: 'linear' },
                 showlegend: true
             }, plotlyConfig);
 
@@ -2748,8 +2866,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f' },
-                yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s from response start)' },
+                xaxis: { ...plotlyLayout.xaxis, title: 'W:C Ratio', tickformat: '.2f', type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'T90 Rise (s from response start)', type: 'linear' },
                 showlegend: true
             }, plotlyConfig);
 
@@ -2782,8 +2900,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: 'Working SA (mm²)', tickformat: '.1f' },
-                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)' },
+                xaxis: { ...plotlyLayout.xaxis, title: 'Working SA (mm²)', tickformat: '.1f', type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Response Magnitude (V)', type: 'linear' },
                 showlegend: true
             }, plotlyConfig);
 
@@ -2917,7 +3035,12 @@
             const yVar = document.getElementById('yVariable').value;
             const x1Var = document.getElementById('x1Variable').value;
             const x2Var = document.getElementById('x2Variable').value;
-            const includeCat = document.getElementById('includeCategoricals').value === 'yes';
+
+            // Get individual category selections
+            const includeMaterial = document.getElementById('includeMaterial').checked;
+            const includeSeal = document.getElementById('includeSeal').checked;
+            const includeMix = document.getElementById('includeMix').checked;
+            const includeCat = includeMaterial || includeSeal || includeMix;
 
             // Normalize sensor names for matching between build data and KPI data
             function normalizeName(name) {
@@ -3022,46 +3145,85 @@
             document.getElementById('model2R2').textContent = (reg2.r2 || reg1.r2).toFixed(4);
             document.getElementById('model2AdjR2').textContent = (reg2.adjR2 || reg1.r2).toFixed(4);
             
-            // Model 3: With categoricals
-            // Note: Only Carbon_Ratio is included (Silver = 1 - Carbon would cause multicollinearity)
-            // Also check for variation in categorical variables to avoid singular matrix
+            // Model 3: With selected categoricals
+            // Dynamically include Material, Seal, and/or Mix based on checkbox selections
             document.getElementById('model3Card').style.display = includeCat ? 'block' : 'none';
             if (includeCat) {
-                // Check which categorical variables have variation
+                // Get categorical values for each option
                 const carbonValues = matchedIndices.map(i => buildData.traceCarbon[i]);
-                const refSideValues = matchedIndices.map(i => buildData.refSide[i]);
+                const sealValues = matchedIndices.map(i => buildData.isSealedSnap ? buildData.isSealedSnap[i] : 0);
+                const mixValues = matchedIndices.map(i => buildData.isMixedFlackTek ? buildData.isMixedFlackTek[i] : 0);
 
+                // Check which have variation
                 const carbonHasVariation = new Set(carbonValues).size > 1;
-                const refSideHasVariation = new Set(refSideValues).size > 1;
+                const sealHasVariation = new Set(sealValues).size > 1;
+                const mixHasVariation = new Set(mixValues).size > 1;
 
-                debugLog('Carbon values:', carbonValues.slice(0, 5), 'Has variation:', carbonHasVariation);
-                debugLog('RefSide values:', refSideValues.slice(0, 5), 'Has variation:', refSideHasVariation);
+                debugLog('Carbon variation:', carbonHasVariation, 'Seal variation:', sealHasVariation, 'Mix variation:', mixHasVariation);
 
-                // Build X matrix with only variables that have variation
-                let X3, tableRows, sigTermsLabels;
+                // Build list of variables to include (selected AND has variation)
+                const catVars = [];
+                const catLabels = [];
+                const catValues = [];
 
-                if (carbonHasVariation && refSideHasVariation) {
-                    // Both have variation
-                    X3 = sensors.map((_, i) => [x1[i], carbonValues[i], refSideValues[i]]);
+                if (includeMaterial && carbonHasVariation) {
+                    catVars.push('Carbon_Ratio');
+                    catLabels.push('Material');
+                    catValues.push(carbonValues);
+                }
+                if (includeSeal && sealHasVariation) {
+                    catVars.push('Sealed (Snap)');
+                    catLabels.push('Seal');
+                    catValues.push(sealValues);
+                }
+                if (includeMix && mixHasVariation) {
+                    catVars.push('Mixed (FlackTek)');
+                    catLabels.push('Mix');
+                    catValues.push(mixValues);
+                }
+
+                // Track excluded variables (selected but no variation)
+                const excluded = [];
+                if (includeMaterial && !carbonHasVariation) excluded.push('Material');
+                if (includeSeal && !sealHasVariation) excluded.push('Seal');
+                if (includeMix && !mixHasVariation) excluded.push('Mix');
+
+                if (catVars.length > 0) {
+                    // Build X matrix: [x1, cat1, cat2, ...]
+                    const X3 = sensors.map((_, i) => {
+                        const row = [x1[i]];
+                        catValues.forEach(vals => row.push(vals[i]));
+                        return row;
+                    });
+
                     const reg3 = multipleRegression(X3, y);
-                    tableRows = [
-                        { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
-                        { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
-                        { term: 'Stencil_Config', coef: reg3.coeffs[3], se: reg3.stdErrors[3] },
-                        { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
-                    ];
+
+                    // Build table rows
+                    const tableRows = [{ term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] }];
+                    catVars.forEach((varName, idx) => {
+                        tableRows.push({ term: varName, coef: reg3.coeffs[idx + 2], se: reg3.stdErrors[idx + 2] });
+                    });
+                    tableRows.push({ term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] });
+
                     updateRegressionTable('model3Table', tableRows);
                     document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
                     document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
 
+                    // Find significant terms
                     const r2Interp3 = interpretR2(reg3.r2);
                     const sigTerms3 = [];
                     if (Math.abs(reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0) > 2) sigTerms3.push(x1Label);
-                    if (Math.abs(reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0) > 2) sigTerms3.push('Carbon Ratio');
-                    if (Math.abs(reg3.stdErrors[3] > 0 ? reg3.coeffs[3] / reg3.stdErrors[3] : 0) > 2) sigTerms3.push('Stencil Config');
+                    catVars.forEach((varName, idx) => {
+                        const tStat = reg3.stdErrors[idx + 2] > 0 ? reg3.coeffs[idx + 2] / reg3.stdErrors[idx + 2] : 0;
+                        if (Math.abs(tStat) > 2) sigTerms3.push(varName);
+                    });
 
-                    let model3Interp = `This model adds categorical manufacturing variables. `;
-                    model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
+                    // Build interpretation
+                    let model3Interp = `This model adds ${catLabels.join(', ')} as categorical variable${catLabels.length > 1 ? 's' : ''}`;
+                    if (excluded.length > 0) {
+                        model3Interp += ` (${excluded.join(', ')} excluded - no variation)`;
+                    }
+                    model3Interp += `. R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
                     if (sigTerms3.length > 0) {
                         model3Interp += `<strong>${sigTerms3.join(', ')}</strong> ${sigTerms3.length === 1 ? 'is' : 'are'} statistically significant (|t| > 2). `;
                     } else {
@@ -3075,50 +3237,17 @@
                     }
                     document.getElementById('model3Interpretation').innerHTML = model3Interp;
                     document.getElementById('model3Interpretation').className = `model-interpretation interpretation-${r2Interp3.class}`;
-                } else if (carbonHasVariation) {
-                    // Only carbon has variation
-                    X3 = sensors.map((_, i) => [x1[i], carbonValues[i]]);
-                    const reg3 = multipleRegression(X3, y);
-                    tableRows = [
-                        { term: x1Var, coef: reg3.coeffs[1], se: reg3.stdErrors[1] },
-                        { term: 'Carbon_Ratio', coef: reg3.coeffs[2], se: reg3.stdErrors[2] },
-                        { term: 'Intercept', coef: reg3.coeffs[0], se: reg3.stdErrors[0] }
-                    ];
-                    updateRegressionTable('model3Table', tableRows);
-                    document.getElementById('model3R2').textContent = reg3.r2.toFixed(4);
-                    document.getElementById('model3AdjR2').textContent = reg3.adjR2.toFixed(4);
-
-                    const r2Interp3 = interpretR2(reg3.r2);
-                    const sigTerms3 = [];
-                    if (Math.abs(reg3.stdErrors[1] > 0 ? reg3.coeffs[1] / reg3.stdErrors[1] : 0) > 2) sigTerms3.push(x1Label);
-                    if (Math.abs(reg3.stdErrors[2] > 0 ? reg3.coeffs[2] / reg3.stdErrors[2] : 0) > 2) sigTerms3.push('Carbon Ratio');
-
-                    let model3Interp = `This model adds Carbon Ratio as a categorical variable (Stencil Config excluded - no variation). `;
-                    model3Interp += `R² of <strong>${(reg3.r2 * 100).toFixed(1)}%</strong> shows <strong>${r2Interp3.text}</strong> explanatory power. `;
-                    if (sigTerms3.length > 0) {
-                        model3Interp += `<strong>${sigTerms3.join(', ')}</strong> ${sigTerms3.length === 1 ? 'is' : 'are'} statistically significant (|t| > 2). `;
-                    } else {
-                        model3Interp += `No terms reach statistical significance. `;
-                    }
-                    const r2Improvement = reg3.r2 - reg1.r2;
-                    if (r2Improvement > 0.05) {
-                        model3Interp += `Adding Carbon Ratio improved R² by <span class="interpretation-highlight highlight-positive">+${(r2Improvement * 100).toFixed(1)}%</span>.`;
-                    } else {
-                        model3Interp += `Carbon Ratio adds minimal predictive value beyond ${x1Label}.`;
-                    }
-                    document.getElementById('model3Interpretation').innerHTML = model3Interp;
-                    document.getElementById('model3Interpretation').className = `model-interpretation interpretation-${r2Interp3.class}`;
                 } else {
-                    // No categorical variation - just show Model 1 equivalent
-                    const reg3 = reg1;
-                    tableRows = [
+                    // No categorical variation in selected variables
+                    const tableRows = [
                         { term: x1Var, coef: reg1.slope, se: reg1.seSlope },
                         { term: 'Intercept', coef: reg1.intercept, se: reg1.seIntercept }
                     ];
                     updateRegressionTable('model3Table', tableRows);
                     document.getElementById('model3R2').textContent = reg1.r2.toFixed(4);
                     document.getElementById('model3AdjR2').textContent = reg1.r2.toFixed(4);
-                    document.getElementById('model3Interpretation').innerHTML = `No categorical variables have variation in this dataset. Model 3 is equivalent to Model 1.`;
+                    const excludedMsg = excluded.length > 0 ? `Selected variables (${excluded.join(', ')}) have no variation. ` : '';
+                    document.getElementById('model3Interpretation').innerHTML = `${excludedMsg}Model 3 is equivalent to Model 1.`;
                     document.getElementById('model3Interpretation').className = 'model-interpretation interpretation-weak';
                 }
             }
@@ -3128,7 +3257,12 @@
             document.getElementById('model2Title').textContent = x2Label
                 ? `Model 2: ${yLabel} ~ ${x1Label} + ${x2Label}`
                 : `Model 2: ${yLabel} ~ ${x1Label}`;
-            document.getElementById('model3Title').textContent = `Model 3: ${yLabel} ~ ${x1Label} + Categoricals`;
+            const selectedCats = [];
+            if (includeMaterial) selectedCats.push('Material');
+            if (includeSeal) selectedCats.push('Seal');
+            if (includeMix) selectedCats.push('Mix');
+            const catSuffix = selectedCats.length > 0 ? selectedCats.join(' + ') : 'Categoricals';
+            document.getElementById('model3Title').textContent = `Model 3: ${yLabel} ~ ${x1Label} + ${catSuffix}`;
 
             // Model 1 interpretation
             const r2Interp1 = interpretR2(reg1.r2);
@@ -3402,8 +3536,28 @@
         }
 
         // Event listeners for regression controls
-        ['yVariable', 'x1Variable', 'x2Variable', 'includeCategoricals'].forEach(id => {
+        ['yVariable', 'x1Variable', 'x2Variable'].forEach(id => {
             document.getElementById(id).addEventListener('change', updateRegressionAnalysis);
+        });
+
+        // Event listeners for categorical checkboxes
+        ['includeMaterial', 'includeSeal', 'includeMix'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateRegressionAnalysis);
+        });
+
+        // Event listeners for time series filters
+        ['tsFilterMaterial', 'tsFilterSeal', 'tsFilterMix'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                if (sensorData && kpiData) updateTimeSeriesCharts();
+            });
+        });
+
+        // Reset filters button
+        document.getElementById('tsResetFilters').addEventListener('click', () => {
+            document.getElementById('tsFilterMaterial').value = 'all';
+            document.getElementById('tsFilterSeal').value = 'all';
+            document.getElementById('tsFilterMix').value = 'all';
+            if (sensorData && kpiData) updateTimeSeriesCharts();
         });
 
         // Settings change listener with localStorage persistence
