@@ -3323,8 +3323,8 @@
                 }
             ], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: x1Label },
-                yaxis: { ...plotlyLayout.yaxis, title: yLabel }
+                xaxis: { ...plotlyLayout.xaxis, title: x1Label, type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: yLabel, type: 'linear' }
             }, plotlyConfig);
 
             // Residual plot
@@ -3343,8 +3343,8 @@
                 line: { color: '#64748b', width: 1, dash: 'dash' }
             }], {
                 ...plotlyLayout,
-                xaxis: { ...plotlyLayout.xaxis, title: `Predicted ${yLabel}` },
-                yaxis: { ...plotlyLayout.yaxis, title: 'Residual' },
+                xaxis: { ...plotlyLayout.xaxis, title: `Predicted ${yLabel}`, type: 'linear' },
+                yaxis: { ...plotlyLayout.yaxis, title: 'Residual', type: 'linear' },
                 showlegend: false
             }, plotlyConfig);
         }
