@@ -2237,29 +2237,38 @@
             const sensors = Object.keys(kpiData);
             const responseMags = sensors.map(s => kpiData[s].responseMag);
             const t90Values = sensors.map(s => kpiData[s].t90Rise);
-            
-            // Calculate optimal number of bins (Sturges' rule)
-            const numBins = Math.max(5, Math.min(15, Math.ceil(Math.log2(sensors.length) + 1)));
-            
+
+            // Calculate optimal bin size for histograms
+            const numBins = Math.max(8, Math.min(20, Math.ceil(Math.sqrt(sensors.length))));
+
+            // Calculate bin sizes based on data range
+            const respMin = Math.min(...responseMags);
+            const respMax = Math.max(...responseMags);
+            const respBinSize = (respMax - respMin) / numBins || 0.1;
+
+            const t90Min = Math.min(...t90Values);
+            const t90Max = Math.max(...t90Values);
+            const t90BinSize = (t90Max - t90Min) / numBins || 1;
+
             // Response Histogram
             safePlot('responseHistogram', [{
                 x: responseMags,
                 type: 'histogram',
                 marker: { color: sensorColors[0], line: { color: '#fff', width: 1 } },
-                nbinsx: numBins,
+                xbins: { start: respMin, end: respMax, size: respBinSize },
                 hovertemplate: 'Range: %{x}<br>Count: %{y}<extra></extra>'
             }], {
                 ...plotlyLayout,
                 xaxis: { ...plotlyLayout.xaxis, title: 'Response Magnitude (V)' },
                 yaxis: { ...plotlyLayout.yaxis, title: 'Count' }
             }, plotlyConfig);
-            
+
             // T90 Histogram
             safePlot('t90Histogram', [{
                 x: t90Values,
                 type: 'histogram',
                 marker: { color: sensorColors[1], line: { color: '#fff', width: 1 } },
-                nbinsx: numBins,
+                xbins: { start: t90Min, end: t90Max, size: t90BinSize },
                 hovertemplate: 'Range: %{x}<br>Count: %{y}<extra></extra>'
             }], {
                 ...plotlyLayout,
