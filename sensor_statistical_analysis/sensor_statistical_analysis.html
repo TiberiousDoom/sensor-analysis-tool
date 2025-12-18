@@ -936,20 +936,20 @@
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">
-                            ⏱️ T90 Rise by Trace × Reference
+                            ⏱️ T90 Rise by Material
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Time to reach 90% of peak response, grouped by Trace Type and Reference Location combination.</span>
+                                <span class="tooltip-text">Time to reach 90% of peak response, grouped by material composition (Carbon/Silver ratio).</span>
                             </span>
                         </div>
                         <div class="chart-plot" id="t90CombinedBoxplot"></div>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">
-                            ⏱️ T50 Recovery by Trace × Reference
+                            ⏱️ T50 Recovery by Material
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Time to recover 50% from peak back toward baseline, grouped by Trace Type and Reference Location combination.</span>
+                                <span class="tooltip-text">Time to recover 50% from peak back toward baseline, grouped by material composition.</span>
                             </span>
                         </div>
                         <div class="chart-plot" id="t50rCombinedBoxplot"></div>
@@ -2355,20 +2355,16 @@
                     return;
                 }
                 
-                // T90 Rise by Trace × Reference Combination
+                // T90 Rise by Material
                 const t90CombinedGroups = {};
 
                 matchedIndices.forEach(({ idx, kpi }) => {
                     const trace = String(buildData.traceTypes[idx] || '');
-                    const ref = String(buildData.refLocations[idx] || '');
                     const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
-
-                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
                     const traceClean = getMaterialLabel(trace, carbonRatio);
 
-                    const groupName = `${refShort}/${traceClean}`;
-                    if (!t90CombinedGroups[groupName]) t90CombinedGroups[groupName] = [];
-                    t90CombinedGroups[groupName].push(kpi.t90Rise);
+                    if (!t90CombinedGroups[traceClean]) t90CombinedGroups[traceClean] = [];
+                    t90CombinedGroups[traceClean].push(kpi.t90Rise);
                 });
 
                 // Dynamic group order based on what's present
@@ -2393,20 +2389,16 @@
                     showlegend: false
                 }, plotlyConfig);
                 
-                // T50 Recovery by Trace × Reference Combination
+                // T50 Recovery by Material
                 const t50rCombinedGroups = {};
 
                 matchedIndices.forEach(({ idx, kpi }) => {
                     const trace = String(buildData.traceTypes[idx] || '');
-                    const ref = String(buildData.refLocations[idx] || '');
                     const carbonRatio = buildData.traceCarbon ? buildData.traceCarbon[idx] : undefined;
-
-                    const refShort = ref.toLowerCase().includes('side') ? 'Side' : 'Center';
                     const traceClean = getMaterialLabel(trace, carbonRatio);
 
-                    const groupName = `${refShort}/${traceClean}`;
-                    if (!t50rCombinedGroups[groupName]) t50rCombinedGroups[groupName] = [];
-                    t50rCombinedGroups[groupName].push(kpi.t50Recovery);
+                    if (!t50rCombinedGroups[traceClean]) t50rCombinedGroups[traceClean] = [];
+                    t50rCombinedGroups[traceClean].push(kpi.t50Recovery);
                 });
 
                 // Dynamic group order based on what's present
