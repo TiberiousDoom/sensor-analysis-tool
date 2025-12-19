@@ -802,26 +802,12 @@
             <div id="matchingDetails" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text-secondary);"></div>
         </div>
 
-        <!-- Debug Report Button (commented out - uncomment for debugging)
+        <!-- Data Report Button -->
         <div id="debugButtonContainer" style="display: none; margin-bottom: 1rem;">
             <button id="generateDebugReportBtn" style="background: var(--accent-amber); color: #000; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-weight: 600;">
-                🔍 Generate Debug Report
+                📊 Generate Data Report
             </button>
         </div>
-        -->
-
-        <!-- Debug Report Output (commented out - uncomment for debugging)
-        <div id="debugReport" style="display: none; background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); max-height: 600px; overflow-y: auto;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <div style="font-weight: 600; font-size: 1.1rem;">📋 Debug Report (Copy this for troubleshooting)</div>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button id="copyDebugReportBtn" style="background: var(--accent-teal); color: #000; border: none; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; font-weight: 600;">Copy</button>
-                    <button id="closeDebugReportBtn" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;">Close</button>
-                </div>
-            </div>
-            <pre id="debugReportContent" style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; white-space: pre-wrap; background: var(--bg-primary); padding: 1rem; border-radius: 8px; max-height: 450px; overflow-y: auto;"></pre>
-        </div>
-        -->
 
         <!-- Test/Debug Buttons (commented out - uncomment for debugging)
         <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
@@ -1709,8 +1695,8 @@
                         <em>Ensure sensor names match between files.</em>`;
                 }
 
-                // Show debug button (commented out - uncomment for debugging)
-                // document.getElementById('debugButtonContainer').style.display = 'block';
+                // Show data report button
+                document.getElementById('debugButtonContainer').style.display = 'block';
 
                 calculateKPIs();
                 document.getElementById('mainTabs').style.display = 'flex';
@@ -3875,7 +3861,7 @@
             checkDataReady();
         }
 
-        // Generate comprehensive debug report for troubleshooting
+        // Generate comprehensive data report for trend analysis
         function generateDebugReport() {
             if (!kpiData || !buildData) {
                 alert('Please load both sensor data and build data first!');
@@ -3885,93 +3871,58 @@
             const report = [];
             const timestamp = new Date().toISOString();
 
-            report.push('═══════════════════════════════════════════════════════════════');
-            report.push('         SENSOR STATISTICAL ANALYSIS - DEBUG REPORT            ');
-            report.push('═══════════════════════════════════════════════════════════════');
+            report.push('═══════════════════════════════════════════════════════════════════════════════');
+            report.push('                    SENSOR STATISTICAL ANALYSIS - DATA REPORT                  ');
+            report.push('═══════════════════════════════════════════════════════════════════════════════');
             report.push(`Generated: ${timestamp}`);
             report.push('');
 
             // Section 1: Data Summary
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 1. DATA SUMMARY                                             │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 1. DATA SUMMARY                                                             │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             const sensors = Object.keys(kpiData);
-            report.push(`Sensors in KPI data: ${sensors.length}`);
-            report.push(`Sensors in build data: ${buildData.sensors.length}`);
-            report.push(`Time points: ${sensorData.time.length}`);
-            report.push(`Time range: ${sensorData.time[0]}s to ${sensorData.time[sensorData.time.length-1]}s`);
+            report.push(`Total Sensors Analyzed: ${sensors.length}`);
+            report.push(`Sensors in Build Data: ${buildData.sensors.length}`);
+            report.push(`Time Points: ${sensorData.time.length}`);
+            report.push(`Time Range: ${sensorData.time[0]}s to ${sensorData.time[sensorData.time.length-1]}s`);
+            report.push(`Exposure Duration: ${(sensorData.time[sensorData.time.length-1] - sensorData.time[0]).toFixed(1)}s`);
             report.push('');
 
-            // Section 2: Build Data Columns
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 2. BUILD DATA COLUMNS DETECTED                              │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-            report.push(`Headers: ${buildData.headers.join(', ')}`);
-            report.push(`traceCarbon available: ${buildData.traceCarbon ? 'Yes (' + [...new Set(buildData.traceCarbon)].join(', ') + ')' : 'No'}`);
-            report.push(`traceTypes available: ${buildData.traceTypes ? 'Yes (' + [...new Set(buildData.traceTypes)].join(', ') + ')' : 'No'}`);
-            report.push(`sealedMethod available: ${buildData.sealedMethod ? 'Yes (' + [...new Set(buildData.sealedMethod)].join(', ') + ')' : 'No'}`);
-            report.push(`mixedMethod available: ${buildData.mixedMethod ? 'Yes (' + [...new Set(buildData.mixedMethod)].join(', ') + ')' : 'No'}`);
-            report.push(`isSealedSnap values: ${buildData.isSealedSnap ? [...new Set(buildData.isSealedSnap)].join(', ') : 'N/A'}`);
-            report.push(`isMixedFlackTek values: ${buildData.isMixedFlackTek ? [...new Set(buildData.isMixedFlackTek)].join(', ') : 'N/A'}`);
+            // Section 2: Build Data Columns & Categories
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 2. BUILD PARAMETERS & CATEGORIES                                            │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            report.push(`Available Headers: ${buildData.headers.join(', ')}`);
+            report.push('');
+            report.push('Category Breakdown:');
+            if (buildData.traceCarbon) {
+                const carbonValues = [...new Set(buildData.traceCarbon)].sort((a,b) => a-b);
+                report.push(`  Carbon Ratio: ${carbonValues.map(v => v.toFixed(2)).join(', ')} (n=${carbonValues.length} unique)`);
+            }
+            if (buildData.sealedMethod) {
+                const sealCounts = {};
+                buildData.sealedMethod.forEach(s => sealCounts[s] = (sealCounts[s] || 0) + 1);
+                report.push(`  Seal Method: ${Object.entries(sealCounts).map(([k,v]) => `${k}(n=${v})`).join(', ')}`);
+            }
+            if (buildData.mixedMethod) {
+                const mixCounts = {};
+                buildData.mixedMethod.forEach(m => mixCounts[m] = (mixCounts[m] || 0) + 1);
+                report.push(`  Mix Method: ${Object.entries(mixCounts).map(([k,v]) => `${k}(n=${v})`).join(', ')}`);
+            }
             report.push('');
 
-            // Section 3: Settings
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 3. ANALYSIS SETTINGS                                        │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
+            // Section 3: Analysis Settings
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 3. ANALYSIS SETTINGS                                                        │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             report.push(`Baseline Points: ${settings.baselinePoints}`);
             report.push(`Peak Window: ${settings.peakWindow}`);
             report.push(`Final Avg Points: ${settings.finalAvgPoints}`);
             report.push(`Response Threshold: ${settings.responseThreshold}σ`);
             report.push('');
 
-            // Section 4: KPI Values for All Sensors
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 4. KPI VALUES (ALL SENSORS)                                 │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-            report.push('Sensor          | Baseline | Peak    | Response | T90 Rise | % Recov | Signif');
-            report.push('----------------|----------|---------|----------|----------|---------|-------');
-            sensors.forEach(s => {
-                const k = kpiData[s];
-                const row = [
-                    s.padEnd(15),
-                    k.baselineMean.toFixed(4).padStart(8),
-                    k.peakValue.toFixed(4).padStart(7),
-                    k.responseMag.toFixed(4).padStart(8),
-                    k.t90Rise.toFixed(2).padStart(8),
-                    (k.percentRecovery || 0).toFixed(1).padStart(7),
-                    k.isSignificant ? 'Yes' : 'No'
-                ];
-                report.push(row.join(' | '));
-            });
-            report.push('');
-
-            // Section 5: Build Data Values
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 5. BUILD DATA VALUES                                        │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-            report.push('Sensor          | C_Ratio | Work_SA | Cntr_SA | Ref_SA  | Seal  | Mix');
-            report.push('----------------|---------|---------|---------|---------|-------|--------');
-            buildData.sensors.forEach((s, i) => {
-                const row = [
-                    s.padEnd(15),
-                    (buildData.traceCarbon ? buildData.traceCarbon[i].toFixed(2) : 'N/A').padStart(7),
-                    (buildData.workingSA[i] || 0).toFixed(2).padStart(7),
-                    (buildData.counterSA[i] || 0).toFixed(2).padStart(7),
-                    (buildData.referenceSA[i] || 0).toFixed(2).padStart(7),
-                    (buildData.sealedMethod ? buildData.sealedMethod[i] : 'N/A').padStart(5),
-                    (buildData.mixedMethod ? buildData.mixedMethod[i] : 'N/A').padStart(8)
-                ];
-                report.push(row.join(' | '));
-            });
-            report.push('');
-
-            // Section 6: Key Correlations
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 6. KEY CORRELATIONS (Response Magnitude)                    │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-
-            // Match sensors for correlation
+            // Match sensors for analysis
             const normalize = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
             const kpiLookup = {};
             Object.keys(kpiData).forEach(s => kpiLookup[normalize(s)] = kpiData[s]);
@@ -3981,106 +3932,415 @@
                 const kpi = kpiLookup[normalize(s)];
                 if (kpi) {
                     matched.push({
+                        sensor: s,
                         responseMag: kpi.responseMag,
+                        baselineMean: kpi.baselineMean,
+                        peakValue: kpi.peakValue,
                         t90Rise: kpi.t90Rise,
-                        carbonRatio: buildData.traceCarbon ? buildData.traceCarbon[i] : 0,
+                        t50R: kpi.t50R || 0,
+                        percentRecovery: kpi.percentRecovery || 0,
+                        last30sChange: kpi.last30sPercentChange || 0,
+                        isSignificant: kpi.isSignificant,
+                        carbonRatio: buildData.traceCarbon ? buildData.traceCarbon[i] : null,
                         workingSA: buildData.workingSA[i],
+                        counterSA: buildData.counterSA[i],
+                        referenceSA: buildData.referenceSA[i],
                         wcRatio: buildData.wcRatio[i],
                         wrRatio: buildData.wrRatio[i],
-                        isSealedSnap: buildData.isSealedSnap ? buildData.isSealedSnap[i] : 0,
-                        isMixedFlackTek: buildData.isMixedFlackTek ? buildData.isMixedFlackTek[i] : 0
+                        sealMethod: buildData.sealedMethod ? buildData.sealedMethod[i] : null,
+                        mixMethod: buildData.mixedMethod ? buildData.mixedMethod[i] : null,
+                        isSealedSnap: buildData.isSealedSnap ? buildData.isSealedSnap[i] : null,
+                        isMixedFlackTek: buildData.isMixedFlackTek ? buildData.isMixedFlackTek[i] : null
                     });
                 }
             });
 
+            // Section 4: Complete Sensor Data Table
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 4. COMPLETE SENSOR DATA                                                     │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            report.push('');
+            report.push('KPI Metrics:');
+            report.push('Sensor          | Baseline | Peak     | Response | T90(s)  | T50R(s) | %Recov | L30s%  | Sig');
+            report.push('----------------|----------|----------|----------|---------|---------|--------|--------|----');
+            matched.forEach(m => {
+                const row = [
+                    m.sensor.padEnd(15),
+                    m.baselineMean.toFixed(4).padStart(8),
+                    m.peakValue.toFixed(4).padStart(8),
+                    m.responseMag.toFixed(4).padStart(8),
+                    m.t90Rise.toFixed(2).padStart(7),
+                    m.t50R.toFixed(2).padStart(7),
+                    m.percentRecovery.toFixed(1).padStart(6),
+                    m.last30sChange.toFixed(1).padStart(6),
+                    m.isSignificant ? 'Y' : 'N'
+                ];
+                report.push(row.join(' | '));
+            });
+            report.push('');
+            report.push('Build Parameters:');
+            report.push('Sensor          | C_Ratio | W_SA    | C_SA    | R_SA    | W:C     | W:R     | Seal     | Mix');
+            report.push('----------------|---------|---------|---------|---------|---------|---------|----------|--------');
+            matched.forEach(m => {
+                const row = [
+                    m.sensor.padEnd(15),
+                    (m.carbonRatio !== null ? m.carbonRatio.toFixed(2) : 'N/A').padStart(7),
+                    (m.workingSA || 0).toFixed(2).padStart(7),
+                    (m.counterSA || 0).toFixed(2).padStart(7),
+                    (m.referenceSA || 0).toFixed(2).padStart(7),
+                    (m.wcRatio || 0).toFixed(3).padStart(7),
+                    (m.wrRatio || 0).toFixed(3).padStart(7),
+                    (m.sealMethod || 'N/A').padStart(8),
+                    (m.mixMethod || 'N/A').padStart(8)
+                ];
+                report.push(row.join(' | '));
+            });
+            report.push('');
+
+            // Section 5: Statistical Summary
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 5. STATISTICAL SUMMARY                                                      │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            const responses = matched.map(m => m.responseMag);
+            const t90s = matched.map(m => m.t90Rise);
+            const t50Rs = matched.map(m => m.t50R);
+            const recoveries = matched.map(m => m.percentRecovery);
+
+            report.push('Metric              | Mean      | Std Dev   | Min       | Max       | Median');
+            report.push('--------------------|-----------|-----------|-----------|-----------|----------');
+            report.push(`Response Mag (V)    | ${mean(responses).toFixed(4).padStart(9)} | ${std(responses).toFixed(4).padStart(9)} | ${Math.min(...responses).toFixed(4).padStart(9)} | ${Math.max(...responses).toFixed(4).padStart(9)} | ${median(responses).toFixed(4).padStart(9)}`);
+            report.push(`T90 Rise (s)        | ${mean(t90s).toFixed(2).padStart(9)} | ${std(t90s).toFixed(2).padStart(9)} | ${Math.min(...t90s).toFixed(2).padStart(9)} | ${Math.max(...t90s).toFixed(2).padStart(9)} | ${median(t90s).toFixed(2).padStart(9)}`);
+            report.push(`T50 Recovery (s)    | ${mean(t50Rs).toFixed(2).padStart(9)} | ${std(t50Rs).toFixed(2).padStart(9)} | ${Math.min(...t50Rs).toFixed(2).padStart(9)} | ${Math.max(...t50Rs).toFixed(2).padStart(9)} | ${median(t50Rs).toFixed(2).padStart(9)}`);
+            report.push(`% Recovery          | ${mean(recoveries).toFixed(1).padStart(9)} | ${std(recoveries).toFixed(1).padStart(9)} | ${Math.min(...recoveries).toFixed(1).padStart(9)} | ${Math.max(...recoveries).toFixed(1).padStart(9)} | ${median(recoveries).toFixed(1).padStart(9)}`);
+            report.push('');
+
+            // Section 6: Correlation Matrix
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 6. CORRELATION MATRIX                                                       │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             if (matched.length >= 3) {
                 const respMags = matched.map(m => m.responseMag);
-                const carbonRatios = matched.map(m => m.carbonRatio);
-                const workingSAs = matched.map(m => m.workingSA);
-                const wcRatios = matched.map(m => m.wcRatio);
-                const sealSnap = matched.map(m => m.isSealedSnap);
-                const mixFlack = matched.map(m => m.isMixedFlackTek);
+                const carbonRatios = matched.map(m => m.carbonRatio || 0);
+                const workingSAs = matched.map(m => m.workingSA || 0);
+                const wcRatios = matched.map(m => m.wcRatio || 0);
+                const wrRatios = matched.map(m => m.wrRatio || 0);
+                const t90Values = matched.map(m => m.t90Rise);
+                const sealSnap = matched.map(m => m.isSealedSnap || 0);
+                const mixFlack = matched.map(m => m.isMixedFlackTek || 0);
 
-                report.push(`Matched sensors for correlation: ${matched.length}`);
-                report.push(`r(Carbon_Ratio, Response): ${correlation(carbonRatios, respMags).toFixed(4)}`);
-                report.push(`r(Working_SA, Response):   ${correlation(workingSAs, respMags).toFixed(4)}`);
-                report.push(`r(W:C_Ratio, Response):    ${correlation(wcRatios, respMags).toFixed(4)}`);
-                report.push(`r(Seal_Snap, Response):    ${correlation(sealSnap, respMags).toFixed(4)}`);
-                report.push(`r(Mix_FlackTek, Response): ${correlation(mixFlack, respMags).toFixed(4)}`);
-            } else {
-                report.push('Not enough matched sensors for correlation analysis');
+                report.push('Correlations with Response Magnitude:');
+                report.push(`  Carbon Ratio:     r = ${correlation(carbonRatios, respMags).toFixed(4)}`);
+                report.push(`  Working SA:       r = ${correlation(workingSAs, respMags).toFixed(4)}`);
+                report.push(`  W:C Ratio:        r = ${correlation(wcRatios, respMags).toFixed(4)}`);
+                report.push(`  W:R Ratio:        r = ${correlation(wrRatios, respMags).toFixed(4)}`);
+                report.push(`  T90 Rise:         r = ${correlation(t90Values, respMags).toFixed(4)}`);
+                if (buildData.sealedMethod) report.push(`  Seal (Snap=1):    r = ${correlation(sealSnap, respMags).toFixed(4)}`);
+                if (buildData.mixedMethod) report.push(`  Mix (FlackTek=1): r = ${correlation(mixFlack, respMags).toFixed(4)}`);
+                report.push('');
+
+                report.push('Correlations with T90 Rise Time:');
+                report.push(`  Carbon Ratio:     r = ${correlation(carbonRatios, t90Values).toFixed(4)}`);
+                report.push(`  Working SA:       r = ${correlation(workingSAs, t90Values).toFixed(4)}`);
+                report.push(`  Response Mag:     r = ${correlation(respMags, t90Values).toFixed(4)}`);
+                report.push('');
+
+                report.push('Predictor Inter-correlations (check for multicollinearity):');
+                report.push(`  Carbon vs W:C:    r = ${correlation(carbonRatios, wcRatios).toFixed(4)}`);
+                report.push(`  Carbon vs W_SA:   r = ${correlation(carbonRatios, workingSAs).toFixed(4)}`);
+                report.push(`  W:C vs W:R:       r = ${correlation(wcRatios, wrRatios).toFixed(4)}`);
             }
             report.push('');
 
-            // Section 7: Regression (Model 1 - Response ~ Carbon Ratio)
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 7. REGRESSION: Response ~ Carbon_Ratio                      │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-            if (matched.length >= 3) {
-                const respMags = matched.map(m => m.responseMag);
-                const carbonRatios = matched.map(m => m.carbonRatio);
-                const reg = linearRegression(carbonRatios, respMags);
-                report.push(`Slope:     ${reg.slope.toFixed(6)}`);
-                report.push(`Intercept: ${reg.intercept.toFixed(6)}`);
-                report.push(`R²:        ${reg.r2.toFixed(6)}`);
-                report.push(`Std Error (slope): ${reg.seSlope ? reg.seSlope.toFixed(6) : 'N/A'}`);
-            }
-            report.push('');
+            // Section 7: Group Analysis
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 7. GROUP ANALYSIS                                                           │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
 
-            // Section 8: Statistical Summary
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 8. STATISTICAL SUMMARY                                      │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-            const responses = sensors.map(s => kpiData[s].responseMag);
-            const t90s = sensors.map(s => kpiData[s].t90Rise);
-            report.push(`Response Magnitude:`);
-            report.push(`  Mean:   ${mean(responses).toFixed(6)}`);
-            report.push(`  Std:    ${std(responses).toFixed(6)}`);
-            report.push(`  Min:    ${Math.min(...responses).toFixed(6)}`);
-            report.push(`  Max:    ${Math.max(...responses).toFixed(6)}`);
-            report.push(`  Median: ${median(responses).toFixed(6)}`);
-            report.push('');
-            report.push(`T90 Rise Time:`);
-            report.push(`  Mean:   ${mean(t90s).toFixed(2)}s`);
-            report.push(`  Std:    ${std(t90s).toFixed(2)}s`);
-            report.push(`  Min:    ${Math.min(...t90s).toFixed(2)}s`);
-            report.push(`  Max:    ${Math.max(...t90s).toFixed(2)}s`);
-            report.push('');
-
-            // Section 9: Expected vs Actual (for mock data)
-            report.push('┌─────────────────────────────────────────────────────────────┐');
-            report.push('│ 9. VALIDATION CHECKS                                        │');
-            report.push('└─────────────────────────────────────────────────────────────┘');
-            const significantCount = sensors.filter(s => kpiData[s].isSignificant).length;
-            report.push(`Significant responses: ${significantCount}/${sensors.length}`);
-
-            // Check for expected patterns in mock data
-            if (matched.length >= 3) {
-                const carbonCorr = correlation(matched.map(m => m.carbonRatio), matched.map(m => m.responseMag));
-                report.push(`Carbon-Response correlation: ${carbonCorr.toFixed(4)} (expect > 0.9 for mock data)`);
-
-                // Group by carbon ratio and check response ordering
-                const groups = {};
+            // By Carbon Ratio
+            if (matched.some(m => m.carbonRatio !== null)) {
+                const carbonGroups = {};
                 matched.forEach(m => {
-                    const key = m.carbonRatio.toFixed(1);
-                    if (!groups[key]) groups[key] = [];
-                    groups[key].push(m.responseMag);
+                    if (m.carbonRatio !== null) {
+                        const key = m.carbonRatio.toFixed(2);
+                        if (!carbonGroups[key]) carbonGroups[key] = [];
+                        carbonGroups[key].push(m);
+                    }
                 });
-                report.push('Response by Carbon Ratio group:');
-                Object.keys(groups).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(k => {
-                    const avg = mean(groups[k]);
-                    report.push(`  C_Ratio=${k}: avg response = ${avg.toFixed(4)} (n=${groups[k].length})`);
+                report.push('By Carbon Ratio:');
+                report.push('C_Ratio | n  | Resp Mean | Resp Std  | T90 Mean | T90 Std');
+                report.push('--------|----|-----------|-----------|---------|---------');
+                Object.keys(carbonGroups).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(k => {
+                    const g = carbonGroups[k];
+                    const resps = g.map(x => x.responseMag);
+                    const t90s = g.map(x => x.t90Rise);
+                    report.push(`${k.padStart(7)} | ${String(g.length).padStart(2)} | ${mean(resps).toFixed(4).padStart(9)} | ${std(resps).toFixed(4).padStart(9)} | ${mean(t90s).toFixed(2).padStart(7)} | ${std(t90s).toFixed(2).padStart(7)}`);
                 });
+                report.push('');
+            }
+
+            // By Seal Method
+            if (matched.some(m => m.sealMethod !== null)) {
+                const sealGroups = {};
+                matched.forEach(m => {
+                    if (m.sealMethod !== null) {
+                        if (!sealGroups[m.sealMethod]) sealGroups[m.sealMethod] = [];
+                        sealGroups[m.sealMethod].push(m);
+                    }
+                });
+                report.push('By Seal Method:');
+                report.push('Seal     | n  | Resp Mean | Resp Std  | T90 Mean | T90 Std');
+                report.push('---------|----|-----------|-----------|---------|---------');
+                Object.keys(sealGroups).forEach(k => {
+                    const g = sealGroups[k];
+                    const resps = g.map(x => x.responseMag);
+                    const t90s = g.map(x => x.t90Rise);
+                    report.push(`${k.padEnd(8)} | ${String(g.length).padStart(2)} | ${mean(resps).toFixed(4).padStart(9)} | ${std(resps).toFixed(4).padStart(9)} | ${mean(t90s).toFixed(2).padStart(7)} | ${std(t90s).toFixed(2).padStart(7)}`);
+                });
+                report.push('');
+            }
+
+            // By Mix Method
+            if (matched.some(m => m.mixMethod !== null)) {
+                const mixGroups = {};
+                matched.forEach(m => {
+                    if (m.mixMethod !== null) {
+                        if (!mixGroups[m.mixMethod]) mixGroups[m.mixMethod] = [];
+                        mixGroups[m.mixMethod].push(m);
+                    }
+                });
+                report.push('By Mix Method:');
+                report.push('Mix      | n  | Resp Mean | Resp Std  | T90 Mean | T90 Std');
+                report.push('---------|----|-----------|-----------|---------|---------');
+                Object.keys(mixGroups).forEach(k => {
+                    const g = mixGroups[k];
+                    const resps = g.map(x => x.responseMag);
+                    const t90s = g.map(x => x.t90Rise);
+                    report.push(`${k.padEnd(8)} | ${String(g.length).padStart(2)} | ${mean(resps).toFixed(4).padStart(9)} | ${std(resps).toFixed(4).padStart(9)} | ${mean(t90s).toFixed(2).padStart(7)} | ${std(t90s).toFixed(2).padStart(7)}`);
+                });
+                report.push('');
+            }
+
+            // Section 8: Regression Analysis
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 8. REGRESSION ANALYSIS                                                      │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            if (matched.length >= 3) {
+                const respMags = matched.map(m => m.responseMag);
+
+                // Model 1: Response ~ W:C Ratio
+                const wcRatios = matched.map(m => m.wcRatio || 0);
+                const reg1 = linearRegression(wcRatios, respMags);
+                report.push('Model 1: Response ~ W:C Ratio');
+                report.push(`  Slope:     ${reg1.slope.toFixed(6)}`);
+                report.push(`  Intercept: ${reg1.intercept.toFixed(6)}`);
+                report.push(`  R²:        ${reg1.r2.toFixed(4)}`);
+                report.push(`  SE(slope): ${reg1.seSlope ? reg1.seSlope.toFixed(6) : 'N/A'}`);
+                report.push('');
+
+                // Model 2: Response ~ Carbon Ratio
+                if (matched.some(m => m.carbonRatio !== null)) {
+                    const carbonRatios = matched.map(m => m.carbonRatio || 0);
+                    const reg2 = linearRegression(carbonRatios, respMags);
+                    report.push('Model 2: Response ~ Carbon Ratio');
+                    report.push(`  Slope:     ${reg2.slope.toFixed(6)}`);
+                    report.push(`  Intercept: ${reg2.intercept.toFixed(6)}`);
+                    report.push(`  R²:        ${reg2.r2.toFixed(4)}`);
+                    report.push(`  SE(slope): ${reg2.seSlope ? reg2.seSlope.toFixed(6) : 'N/A'}`);
+                    report.push('');
+                }
+
+                // Model 3: Response ~ Working SA
+                const workingSAs = matched.map(m => m.workingSA || 0);
+                const reg3 = linearRegression(workingSAs, respMags);
+                report.push('Model 3: Response ~ Working SA');
+                report.push(`  Slope:     ${reg3.slope.toFixed(6)}`);
+                report.push(`  Intercept: ${reg3.intercept.toFixed(6)}`);
+                report.push(`  R²:        ${reg3.r2.toFixed(4)}`);
+                report.push(`  SE(slope): ${reg3.seSlope ? reg3.seSlope.toFixed(6) : 'N/A'}`);
             }
             report.push('');
 
-            report.push('═══════════════════════════════════════════════════════════════');
-            report.push('                      END OF DEBUG REPORT                      ');
-            report.push('═══════════════════════════════════════════════════════════════');
+            // Section 9: Outlier Detection
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 9. OUTLIER DETECTION                                                        │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            const respMean = mean(responses);
+            const respStd = std(responses);
+            const outliers = matched.filter(m => Math.abs(m.responseMag - respMean) > 2 * respStd);
+            if (outliers.length > 0) {
+                report.push(`Sensors with Response > 2σ from mean (${respMean.toFixed(4)} ± ${(2*respStd).toFixed(4)}):`);
+                outliers.forEach(o => {
+                    const zScore = (o.responseMag - respMean) / respStd;
+                    report.push(`  ${o.sensor}: ${o.responseMag.toFixed(4)} (z=${zScore.toFixed(2)})`);
+                });
+            } else {
+                report.push('No outliers detected (all responses within 2σ of mean)');
+            }
+            report.push('');
 
-            // Display report
-            document.getElementById('debugReportContent').textContent = report.join('\n');
-            document.getElementById('debugReport').style.display = 'block';
+            // Section 10: Data Quality
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 10. DATA QUALITY & VALIDATION                                               │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            const significantCount = matched.filter(m => m.isSignificant).length;
+            report.push(`Significant Responses: ${significantCount}/${matched.length} (${(100*significantCount/matched.length).toFixed(1)}%)`);
+            report.push(`Matched Sensors: ${matched.length}/${buildData.sensors.length} from build data`);
+
+            // Check data quality indicators
+            const hasNegativeResponses = matched.some(m => m.responseMag < 0);
+            const hasZeroResponses = matched.some(m => m.responseMag === 0);
+            const hasVeryHighT90 = matched.some(m => m.t90Rise > 300);
+            report.push('');
+            report.push('Quality Checks:');
+            report.push(`  Negative responses: ${hasNegativeResponses ? 'WARNING - Found' : 'OK - None'}`);
+            report.push(`  Zero responses: ${hasZeroResponses ? 'WARNING - Found' : 'OK - None'}`);
+            report.push(`  T90 > 300s: ${hasVeryHighT90 ? 'WARNING - Found (may indicate no response)' : 'OK - None'}`);
+            report.push('');
+
+            // Section 11: Raw Data for Import
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 11. RAW DATA (CSV FORMAT)                                                   │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            report.push('Copy this section for spreadsheet import:');
+            report.push('');
+            const csvHeaders = ['Sensor','Response','Baseline','Peak','T90','T50R','%Recovery','Last30s%','Significant','CarbonRatio','WorkingSA','CounterSA','RefSA','WC_Ratio','WR_Ratio','Seal','Mix'];
+            report.push(csvHeaders.join(','));
+            matched.forEach(m => {
+                const row = [
+                    m.sensor,
+                    m.responseMag.toFixed(6),
+                    m.baselineMean.toFixed(6),
+                    m.peakValue.toFixed(6),
+                    m.t90Rise.toFixed(2),
+                    m.t50R.toFixed(2),
+                    m.percentRecovery.toFixed(2),
+                    m.last30sChange.toFixed(2),
+                    m.isSignificant ? 1 : 0,
+                    m.carbonRatio !== null ? m.carbonRatio.toFixed(4) : '',
+                    (m.workingSA || 0).toFixed(4),
+                    (m.counterSA || 0).toFixed(4),
+                    (m.referenceSA || 0).toFixed(4),
+                    (m.wcRatio || 0).toFixed(4),
+                    (m.wrRatio || 0).toFixed(4),
+                    m.sealMethod || '',
+                    m.mixMethod || ''
+                ];
+                report.push(row.join(','));
+            });
+            report.push('');
+
+            report.push('═══════════════════════════════════════════════════════════════════════════════');
+            report.push('                             END OF DATA REPORT                                ');
+            report.push('═══════════════════════════════════════════════════════════════════════════════');
+
+            // Open in popup window
+            const reportText = report.join('\n');
+            const popupContent = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Sensor Analysis Data Report</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            padding: 20px;
+            margin: 0;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #4ecdc4;
+        }
+        .copy-btn {
+            background: #4ecdc4;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .copy-btn:hover {
+            background: #3dbdb5;
+        }
+        .copy-btn.copied {
+            background: #45b7aa;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #0d0d1a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        .instructions {
+            background: #2a2a4a;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Sensor Analysis Data Report</h1>
+        <button class="copy-btn" onclick="copyReport()">📋 Copy Report</button>
+    </div>
+    <div class="instructions">
+        💡 <strong>Tip:</strong> Click "Copy Report" to copy the full report, then paste it to share for trend analysis.
+        The CSV section at the bottom can be imported directly into spreadsheet software.
+    </div>
+    <pre id="reportContent">${reportText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+    <script>
+        function copyReport() {
+            const content = document.getElementById('reportContent').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy Report';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(() => {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = content;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => btn.textContent = '📋 Copy Report', 2000);
+            });
+        }
+    </script>
+</body>
+</html>`;
+
+            const popup = window.open('', 'DataReport', 'width=900,height=800,scrollbars=yes,resizable=yes');
+            if (popup) {
+                popup.document.write(popupContent);
+                popup.document.close();
+            } else {
+                alert('Popup blocked! Please allow popups for this site to view the report.');
+            }
         }
 
         function runDiagnostics() {
@@ -4242,32 +4502,9 @@
             document.getElementById('diagnosticsReport').style.display = 'none';
         });
 
-        // Event listeners for debug report buttons
+        // Event listener for data report button (opens popup window)
         const debugBtn = document.getElementById('generateDebugReportBtn');
-        const copyDebugBtn = document.getElementById('copyDebugReportBtn');
-        const closeDebugBtn = document.getElementById('closeDebugReportBtn');
-
         if (debugBtn) debugBtn.addEventListener('click', generateDebugReport);
-        if (copyDebugBtn) copyDebugBtn.addEventListener('click', () => {
-            const content = document.getElementById('debugReportContent').textContent;
-            navigator.clipboard.writeText(content).then(() => {
-                copyDebugBtn.textContent = 'Copied!';
-                setTimeout(() => copyDebugBtn.textContent = 'Copy', 2000);
-            }).catch(() => {
-                // Fallback for older browsers
-                const textarea = document.createElement('textarea');
-                textarea.value = content;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                copyDebugBtn.textContent = 'Copied!';
-                setTimeout(() => copyDebugBtn.textContent = 'Copy', 2000);
-            });
-        });
-        if (closeDebugBtn) closeDebugBtn.addEventListener('click', () => {
-            document.getElementById('debugReport').style.display = 'none';
-        });
     </script>
 </body>
 </html>
