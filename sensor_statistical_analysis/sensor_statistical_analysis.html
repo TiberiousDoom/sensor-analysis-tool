@@ -4235,109 +4235,47 @@
 
             // Open in popup window
             const reportText = report.join('\n');
-            const popupContent = `<!DOCTYPE html>
-<html>
-<head>
-    <title>Sensor Analysis Data Report</title>
-    <style>
-        body {
-            background: #1a1a2e;
-            color: #e0e0e0;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-            padding: 20px;
-            margin: 0;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #444;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 18px;
-            color: #4ecdc4;
-        }
-        .copy-btn {
-            background: #4ecdc4;
-            color: #1a1a2e;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        .copy-btn:hover {
-            background: #3dbdb5;
-        }
-        .copy-btn.copied {
-            background: #45b7aa;
-        }
-        pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            background: #0d0d1a;
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #333;
-            overflow-x: auto;
-            line-height: 1.4;
-        }
-        .instructions {
-            background: #2a2a4a;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            font-size: 13px;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📊 Sensor Analysis Data Report</h1>
-        <button class="copy-btn" onclick="copyReport()">📋 Copy Report</button>
-    </div>
-    <div class="instructions">
-        💡 <strong>Tip:</strong> Click "Copy Report" to copy the full report, then paste it to share for trend analysis.
-        The CSV section at the bottom can be imported directly into spreadsheet software.
-    </div>
-    <pre id="reportContent">${reportText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
-    <script>
-        function copyReport() {
-            const content = document.getElementById('reportContent').textContent;
-            navigator.clipboard.writeText(content).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                btn.textContent = '✓ Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = '📋 Copy Report';
-                    btn.classList.remove('copied');
-                }, 2000);
-            }).catch(() => {
-                // Fallback
-                const textarea = document.createElement('textarea');
-                textarea.value = content;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                const btn = document.querySelector('.copy-btn');
-                btn.textContent = '✓ Copied!';
-                setTimeout(() => btn.textContent = '📋 Copy Report', 2000);
-            });
-        }
-    </script>
-</body>
-</html>`;
 
             const popup = window.open('', 'DataReport', 'width=900,height=800,scrollbars=yes,resizable=yes');
             if (popup) {
-                popup.document.write(popupContent);
+                popup.document.write('<!DOCTYPE html><html><head><title>Sensor Analysis Data Report</title>');
+                popup.document.write('<style>');
+                popup.document.write('body { background: #1a1a2e; color: #e0e0e0; font-family: Consolas, Monaco, "Courier New", monospace; font-size: 12px; padding: 20px; margin: 0; }');
+                popup.document.write('.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #444; }');
+                popup.document.write('.header h1 { margin: 0; font-size: 18px; color: #4ecdc4; }');
+                popup.document.write('.copy-btn { background: #4ecdc4; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }');
+                popup.document.write('.copy-btn:hover { background: #3dbdb5; }');
+                popup.document.write('pre { white-space: pre-wrap; word-wrap: break-word; background: #0d0d1a; padding: 20px; border-radius: 8px; border: 1px solid #333; overflow-x: auto; line-height: 1.4; }');
+                popup.document.write('.instructions { background: #2a2a4a; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; }');
+                popup.document.write('</style></head><body>');
+                popup.document.write('<div class="header"><h1>Sensor Analysis Data Report</h1>');
+                popup.document.write('<button class="copy-btn" id="copyBtn">Copy Report</button></div>');
+                popup.document.write('<div class="instructions"><strong>Tip:</strong> Click "Copy Report" to copy the full report, then paste it to share for trend analysis. The CSV section at the bottom can be imported directly into spreadsheet software.</div>');
+                popup.document.write('<pre id="reportContent"></pre>');
+                popup.document.write('</body></html>');
                 popup.document.close();
+
+                // Set content safely via textContent (avoids HTML injection issues)
+                popup.document.getElementById('reportContent').textContent = reportText;
+
+                // Add copy button handler
+                popup.document.getElementById('copyBtn').addEventListener('click', function() {
+                    const content = popup.document.getElementById('reportContent').textContent;
+                    navigator.clipboard.writeText(content).then(() => {
+                        this.textContent = 'Copied!';
+                        setTimeout(() => { this.textContent = 'Copy Report'; }, 2000);
+                    }).catch(() => {
+                        // Fallback for older browsers
+                        const textarea = popup.document.createElement('textarea');
+                        textarea.value = content;
+                        popup.document.body.appendChild(textarea);
+                        textarea.select();
+                        popup.document.execCommand('copy');
+                        popup.document.body.removeChild(textarea);
+                        this.textContent = 'Copied!';
+                        setTimeout(() => { this.textContent = 'Copy Report'; }, 2000);
+                    });
+                });
             } else {
                 alert('Popup blocked! Please allow popups for this site to view the report.');
             }
