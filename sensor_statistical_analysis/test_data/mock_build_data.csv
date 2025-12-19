@@ -1,0 +1,13 @@
+Cell_ID,Carbon_Ratio,Working_SA,Counter_SA,Reference_SA,Mixed,Sealed
+Sensor_01,0.0,2.0,1.5,1.0,FlackTek,Snap
+Sensor_02,0.0,2.0,1.5,1.0,FlackTek,Screw
+Sensor_03,0.0,2.0,1.5,1.0,FlackTek,Snap
+Sensor_04,0.2,3.0,2.0,1.2,FlackTek,Screw
+Sensor_05,0.2,3.0,2.0,1.2,FlackTek,Snap
+Sensor_06,0.2,3.0,2.0,1.2,FlackTek,Screw
+Sensor_07,0.8,4.5,2.5,1.5,Hand,Snap
+Sensor_08,0.8,4.5,2.5,1.5,Hand,Screw
+Sensor_09,0.8,4.5,2.5,1.5,Hand,Snap
+Sensor_10,1.0,6.0,3.0,2.0,Hand,Screw
+Sensor_11,1.0,6.0,3.0,2.0,Hand,Snap
+Sensor_12,1.0,6.0,3.0,2.0,Hand,Screw
