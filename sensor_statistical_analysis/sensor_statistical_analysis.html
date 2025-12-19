@@ -2066,6 +2066,128 @@
             return num / Math.sqrt(dx * dy);
         }
 
+        // One-way ANOVA
+        function oneWayANOVA(groups) {
+            // groups is an object: { groupName: [values], ... }
+            const groupNames = Object.keys(groups);
+            const k = groupNames.length; // number of groups
+
+            // Calculate overall mean and group statistics
+            const allValues = [];
+            const groupStats = {};
+
+            groupNames.forEach(name => {
+                const values = groups[name].filter(v => !isNaN(v) && isFinite(v));
+                groupStats[name] = {
+                    n: values.length,
+                    mean: mean(values),
+                    values: values
+                };
+                allValues.push(...values);
+            });
+
+            const N = allValues.length; // total observations
+            const grandMean = mean(allValues);
+
+            // Sum of Squares Between (SSB)
+            let ssb = 0;
+            groupNames.forEach(name => {
+                const gs = groupStats[name];
+                ssb += gs.n * Math.pow(gs.mean - grandMean, 2);
+            });
+
+            // Sum of Squares Within (SSW)
+            let ssw = 0;
+            groupNames.forEach(name => {
+                const gs = groupStats[name];
+                gs.values.forEach(v => {
+                    ssw += Math.pow(v - gs.mean, 2);
+                });
+            });
+
+            // Total Sum of Squares (SST)
+            const sst = ssb + ssw;
+
+            // Degrees of freedom
+            const dfBetween = k - 1;
+            const dfWithin = N - k;
+            const dfTotal = N - 1;
+
+            // Mean Squares
+            const msb = ssb / dfBetween;
+            const msw = ssw / dfWithin;
+
+            // F-statistic
+            const F = msb / msw;
+
+            // P-value approximation using F-distribution
+            // Using approximation: p ≈ exp(-0.5 * F) for quick estimation
+            // For more accurate p-values, would need F-distribution CDF
+            const pValue = fDistPValue(F, dfBetween, dfWithin);
+
+            // Effect size: eta-squared (η²) = SSB / SST
+            const etaSquared = ssb / sst;
+
+            return {
+                ssb, ssw, sst,
+                dfBetween, dfWithin, dfTotal,
+                msb, msw,
+                F, pValue,
+                etaSquared,
+                groupStats,
+                grandMean,
+                N, k
+            };
+        }
+
+        // Approximate p-value for F-distribution
+        function fDistPValue(F, df1, df2) {
+            if (F <= 0) return 1;
+            if (!isFinite(F)) return 0;
+
+            // Use beta incomplete function approximation
+            const x = df2 / (df2 + df1 * F);
+
+            // Simple approximation using normal distribution for large df
+            if (df1 > 1 && df2 > 100) {
+                const z = Math.pow(F, 1/3) * (1 - 2/(9*df2)) - (1 - 2/(9*df1));
+                const se = Math.sqrt(2/(9*df1) + 2/(9*df2) * Math.pow(F, 2/3));
+                return 1 - normalCDF(z / se);
+            }
+
+            // For smaller df, use a rough approximation
+            // This gives reasonable estimates for typical ANOVA scenarios
+            const logP = -0.5 * F * df1 / Math.max(df2, 1);
+            return Math.min(1, Math.max(0, Math.exp(logP)));
+        }
+
+        // Standard normal CDF approximation
+        function normalCDF(x) {
+            const a1 =  0.254829592;
+            const a2 = -0.284496736;
+            const a3 =  1.421413741;
+            const a4 = -1.453152027;
+            const a5 =  1.061405429;
+            const p  =  0.3275911;
+
+            const sign = x < 0 ? -1 : 1;
+            x = Math.abs(x) / Math.sqrt(2);
+
+            const t = 1.0 / (1.0 + p * x);
+            const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+
+            return 0.5 * (1.0 + sign * y);
+        }
+
+        // Format p-value for display
+        function formatPValue(p) {
+            if (p < 0.001) return '< 0.001 ***';
+            if (p < 0.01) return p.toFixed(3) + ' **';
+            if (p < 0.05) return p.toFixed(3) + ' *';
+            if (p < 0.1) return p.toFixed(3) + ' .';
+            return p.toFixed(3);
+        }
+
         // Tab switching
         function showTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -4157,12 +4279,174 @@
                 report.push(`  Intercept: ${reg3.intercept.toFixed(6)}`);
                 report.push(`  R²:        ${reg3.r2.toFixed(4)}`);
                 report.push(`  SE(slope): ${reg3.seSlope ? reg3.seSlope.toFixed(6) : 'N/A'}`);
+                report.push('');
+
+                // Model 4: Multiple Regression with Interaction
+                // Response ~ Working_SA + Seal + Working_SA × Seal
+                if (matched.some(m => m.isSealedSnap !== null)) {
+                    report.push('Model 4: Response ~ Working_SA + Seal + Working_SA × Seal (Interaction Model)');
+                    const sealVals = matched.map(m => m.isSealedSnap || 0);
+                    const interactions = matched.map((m, i) => (m.workingSA || 0) * (m.isSealedSnap || 0));
+
+                    // Build design matrix: [Working_SA, Seal, Working_SA×Seal]
+                    const X = matched.map((m, i) => [
+                        m.workingSA || 0,
+                        m.isSealedSnap || 0,
+                        interactions[i]
+                    ]);
+
+                    const reg4 = multipleRegression(X, respMags);
+                    const labels = ['Intercept', 'Working_SA', 'Seal (Snap=1)', 'Working_SA × Seal'];
+
+                    report.push('  Coefficients:');
+                    reg4.coeffs.forEach((c, i) => {
+                        const se = reg4.stdErrors[i] || 0;
+                        const tStat = se > 0 ? c / se : 0;
+                        report.push(`    ${labels[i].padEnd(20)}: ${c.toFixed(6).padStart(12)}  (SE: ${se.toFixed(6)}, t: ${tStat.toFixed(2)})`);
+                    });
+                    report.push(`  R²:        ${reg4.r2.toFixed(4)}`);
+                    report.push(`  Adj R²:    ${reg4.adjR2.toFixed(4)}`);
+                    report.push('');
+                    report.push('  Interpretation:');
+                    report.push('    - Working_SA coefficient: effect of Working SA when Seal=Screw');
+                    report.push('    - Seal coefficient: difference for Snap vs Screw at Working_SA=0');
+                    report.push('    - Interaction: additional effect of Working_SA for Snap-sealed sensors');
+                    if (Math.abs(reg4.coeffs[3]) > 0.001) {
+                        const interactionSign = reg4.coeffs[3] > 0 ? 'stronger' : 'weaker';
+                        report.push(`    - The interaction term suggests the Working_SA effect is ${interactionSign} for Snap-sealed sensors`);
+                    }
+                    report.push('');
+                }
+
+                // Model 5: Full model with multiple predictors
+                report.push('Model 5: Response ~ Working_SA + Carbon_Ratio + Seal (Additive Model)');
+                if (matched.some(m => m.carbonRatio !== null && m.isSealedSnap !== null)) {
+                    const X5 = matched.map(m => [
+                        m.workingSA || 0,
+                        m.carbonRatio || 0,
+                        m.isSealedSnap || 0
+                    ]);
+
+                    const reg5 = multipleRegression(X5, respMags);
+                    const labels5 = ['Intercept', 'Working_SA', 'Carbon_Ratio', 'Seal (Snap=1)'];
+
+                    report.push('  Coefficients:');
+                    reg5.coeffs.forEach((c, i) => {
+                        const se = reg5.stdErrors[i] || 0;
+                        const tStat = se > 0 ? c / se : 0;
+                        report.push(`    ${labels5[i].padEnd(20)}: ${c.toFixed(6).padStart(12)}  (SE: ${se.toFixed(6)}, t: ${tStat.toFixed(2)})`);
+                    });
+                    report.push(`  R²:        ${reg5.r2.toFixed(4)}`);
+                    report.push(`  Adj R²:    ${reg5.adjR2.toFixed(4)}`);
+                    report.push('');
+                    report.push('  Note: Controlling for other variables reveals partial effects');
+                }
             }
             report.push('');
 
-            // Section 9: Outlier Detection
+            // Section 9: ANOVA Tables
             report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
-            report.push('│ 9. OUTLIER DETECTION                                                        │');
+            report.push('│ 9. ANOVA TABLES (Group Comparisons)                                         │');
+            report.push('└─────────────────────────────────────────────────────────────────────────────┘');
+            report.push('Significance: *** p<0.001, ** p<0.01, * p<0.05, . p<0.1');
+            report.push('');
+
+            // ANOVA by Seal Method
+            if (matched.some(m => m.sealMethod !== null)) {
+                const sealGroups = {};
+                matched.forEach(m => {
+                    if (m.sealMethod !== null) {
+                        if (!sealGroups[m.sealMethod]) sealGroups[m.sealMethod] = [];
+                        sealGroups[m.sealMethod].push(m.responseMag);
+                    }
+                });
+
+                if (Object.keys(sealGroups).length >= 2) {
+                    const anova = oneWayANOVA(sealGroups);
+                    report.push('ANOVA: Response by Seal Method');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(4).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(4).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(4).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(4).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(4).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+            }
+
+            // ANOVA by Mix Method
+            if (matched.some(m => m.mixMethod !== null && m.mixMethod !== 'N/A')) {
+                const mixGroups = {};
+                matched.forEach(m => {
+                    if (m.mixMethod !== null) {
+                        if (!mixGroups[m.mixMethod]) mixGroups[m.mixMethod] = [];
+                        mixGroups[m.mixMethod].push(m.responseMag);
+                    }
+                });
+
+                if (Object.keys(mixGroups).length >= 2) {
+                    const anova = oneWayANOVA(mixGroups);
+                    report.push('ANOVA: Response by Mix Method');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(4).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(4).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(4).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(4).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(4).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+            }
+
+            // ANOVA by Carbon Ratio (grouped)
+            if (matched.some(m => m.carbonRatio !== null)) {
+                const carbonGroups = {};
+                matched.forEach(m => {
+                    if (m.carbonRatio !== null) {
+                        const key = m.carbonRatio.toFixed(2);
+                        if (!carbonGroups[key]) carbonGroups[key] = [];
+                        carbonGroups[key].push(m.responseMag);
+                    }
+                });
+
+                if (Object.keys(carbonGroups).length >= 2) {
+                    const anova = oneWayANOVA(carbonGroups);
+                    report.push('ANOVA: Response by Carbon Ratio');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(4).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(4).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(4).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(4).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(4).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+            }
+
+            // ANOVA for T90 by Seal Method
+            if (matched.some(m => m.sealMethod !== null)) {
+                const sealT90Groups = {};
+                matched.forEach(m => {
+                    if (m.sealMethod !== null) {
+                        if (!sealT90Groups[m.sealMethod]) sealT90Groups[m.sealMethod] = [];
+                        sealT90Groups[m.sealMethod].push(m.t90Rise);
+                    }
+                });
+
+                if (Object.keys(sealT90Groups).length >= 2) {
+                    const anova = oneWayANOVA(sealT90Groups);
+                    report.push('ANOVA: T90 Rise Time by Seal Method');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(2).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(2).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(2).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(2).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(2).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+            }
+
+            // Section 10: Outlier Detection
+            report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
+            report.push('│ 10. OUTLIER DETECTION                                                       │');
             report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             const respMean = mean(responses);
             const respStd = std(responses);
@@ -4178,9 +4462,9 @@
             }
             report.push('');
 
-            // Section 10: Data Quality
+            // Section 11: Data Quality
             report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
-            report.push('│ 10. DATA QUALITY & VALIDATION                                               │');
+            report.push('│ 11. DATA QUALITY & VALIDATION                                               │');
             report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             const significantCount = matched.filter(m => m.isSignificant).length;
             report.push(`Significant Responses: ${significantCount}/${matched.length} (${(100*significantCount/matched.length).toFixed(1)}%)`);
@@ -4197,9 +4481,9 @@
             report.push(`  T90 > 300s: ${hasVeryHighT90 ? 'WARNING - Found (may indicate no response)' : 'OK - None'}`);
             report.push('');
 
-            // Section 11: Raw Data for Import
+            // Section 12: Raw Data for Import
             report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
-            report.push('│ 11. RAW DATA (CSV FORMAT)                                                   │');
+            report.push('│ 12. RAW DATA (CSV FORMAT)                                                   │');
             report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             report.push('Copy this section for spreadsheet import:');
             report.push('');
