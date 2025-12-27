@@ -1033,7 +1033,7 @@
                             🔥 Correlation Heatmap: Design Parameters vs KPIs
                             <span class="tooltip-container">
                                 <span class="tooltip-icon">?</span>
-                                <span class="tooltip-text">Shows Pearson correlations between design parameters and sensor KPIs. Red = positive correlation, Blue = negative. Categorical encodings: C Ratio = Carbon fraction (1=Carbon, 0=Silver); Seal = seal method (1=Snap, 0=Screw); Mix = mix method (1=FlackTek, 0=Hand). Positive correlation means the "1" category is associated with higher values.</span>
+                                <span class="tooltip-text">Shows Pearson correlations between design parameters and sensor KPIs. Red = positive correlation, Blue = negative. Categorical encodings: C Ratio = Carbon fraction (1=Carbon, 0=Silver); Seal = seal method (1=Snap, 0=Screw); Mix = mix method (1=FlackTek, 0=Hand); O-ring = O-ring type (1=Square, 0=Round). Positive correlation means the "1" category is associated with higher values.</span>
                             </span>
                         </div>
                         <div class="chart-plot tall" id="correlationHeatmap"></div>
@@ -1113,19 +1113,29 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Include in Model 3</label>
+                        <label class="has-tooltip">Include in Model 3
+                            <span class="tooltip-text">Select categorical variables to include in the multiple regression model (Model 3). Each variable is encoded as 0/1: Material (1=Carbon, 0=Silver), Seal (1=Snap, 0=Screw), Mix (1=FlackTek, 0=Hand), O-ring (1=Square, 0=Round).</span>
+                        </label>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap; padding-top: 0.25rem;">
-                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                            <label class="has-tooltip" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
                                 <input type="checkbox" id="includeMaterial" checked style="width: 16px; height: 16px; cursor: pointer;">
                                 Material
+                                <span class="tooltip-text">Carbon ratio as fraction (1.0 = pure Carbon, 0.0 = pure Silver). Parsed from Carbon-Silver ratio like "4:1" → 0.8.</span>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                            <label class="has-tooltip" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
                                 <input type="checkbox" id="includeSeal" style="width: 16px; height: 16px; cursor: pointer;">
                                 Seal
+                                <span class="tooltip-text">Seal method dummy variable: 1 = Snap seal, 0 = Screw seal or other.</span>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                            <label class="has-tooltip" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
                                 <input type="checkbox" id="includeMix" style="width: 16px; height: 16px; cursor: pointer;">
                                 Mix
+                                <span class="tooltip-text">Mix method dummy variable: 1 = FlackTek mixed, 0 = Hand mixed or other.</span>
+                            </label>
+                            <label class="has-tooltip" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" id="includeOring" style="width: 16px; height: 16px; cursor: pointer;">
+                                O-ring
+                                <span class="tooltip-text">O-ring type dummy variable: 1 = Square O-ring, 0 = Round O-ring or other.</span>
                             </label>
                         </div>
                     </div>
@@ -2885,6 +2895,7 @@
                         refSide: buildData.refSide[idx],
                         isSealedSnap: buildData.isSealedSnap ? buildData.isSealedSnap[idx] : 0,
                         isMixedFlackTek: buildData.isMixedFlackTek ? buildData.isMixedFlackTek[idx] : 0,
+                        isOringSquare: buildData.isOringSquare ? buildData.isOringSquare[idx] : 0,
                         ...kpi
                     });
                 }
@@ -2904,8 +2915,8 @@
                             'percentRecovery', 't50R', 't10R', 'recoveryRate', 'snr', 'baselineStd'];
             const kpiLabels = ['Response', '% Resp', 'T90 (rel)', 'T90 (abs)', 'Rise Rate',
                               '% Recov', 'T50R', 'T10R', 'Recov Rate', 'SNR', 'Baseline σ'];
-            const designParams = ['traceCarbon', 'isSealedSnap', 'isMixedFlackTek', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
-            const designLabels = ['C Ratio', 'Seal', 'Mix', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
+            const designParams = ['traceCarbon', 'isSealedSnap', 'isMixedFlackTek', 'isOringSquare', 'wcRatio', 'wrRatio', 'workingSA', 'counterSA', 'referenceSA', 'totalSA'];
+            const designLabels = ['C Ratio', 'Seal', 'Mix', 'O-ring', 'W:C', 'W:R', 'Work SA', 'Cntr SA', 'Ref SA', 'Total SA'];
 
             // Build correlation matrix
             const corrMatrix = [];
@@ -3203,7 +3214,8 @@
             const includeMaterial = document.getElementById('includeMaterial').checked;
             const includeSeal = document.getElementById('includeSeal').checked;
             const includeMix = document.getElementById('includeMix').checked;
-            const includeCat = includeMaterial || includeSeal || includeMix;
+            const includeOring = document.getElementById('includeOring').checked;
+            const includeCat = includeMaterial || includeSeal || includeMix || includeOring;
 
             // Normalize sensor names for matching between build data and KPI data
             function normalizeName(name) {
@@ -3316,13 +3328,15 @@
                 const carbonValues = matchedIndices.map(i => buildData.traceCarbon[i]);
                 const sealValues = matchedIndices.map(i => buildData.isSealedSnap ? buildData.isSealedSnap[i] : 0);
                 const mixValues = matchedIndices.map(i => buildData.isMixedFlackTek ? buildData.isMixedFlackTek[i] : 0);
+                const oringValues = matchedIndices.map(i => buildData.isOringSquare ? buildData.isOringSquare[i] : 0);
 
                 // Check which have variation
                 const carbonHasVariation = new Set(carbonValues).size > 1;
                 const sealHasVariation = new Set(sealValues).size > 1;
                 const mixHasVariation = new Set(mixValues).size > 1;
+                const oringHasVariation = new Set(oringValues).size > 1;
 
-                debugLog('Carbon variation:', carbonHasVariation, 'Seal variation:', sealHasVariation, 'Mix variation:', mixHasVariation);
+                debugLog('Carbon variation:', carbonHasVariation, 'Seal variation:', sealHasVariation, 'Mix variation:', mixHasVariation, 'O-ring variation:', oringHasVariation);
 
                 // Build list of variables to include (selected AND has variation)
                 const catVars = [];
@@ -3344,12 +3358,18 @@
                     catLabels.push('Mix');
                     catValues.push(mixValues);
                 }
+                if (includeOring && oringHasVariation) {
+                    catVars.push('O-ring (Square)');
+                    catLabels.push('O-ring');
+                    catValues.push(oringValues);
+                }
 
                 // Track excluded variables (selected but no variation)
                 const excluded = [];
                 if (includeMaterial && !carbonHasVariation) excluded.push('Material');
                 if (includeSeal && !sealHasVariation) excluded.push('Seal');
                 if (includeMix && !mixHasVariation) excluded.push('Mix');
+                if (includeOring && !oringHasVariation) excluded.push('O-ring');
 
                 if (catVars.length > 0) {
                     // Build X matrix: [x1, cat1, cat2, ...]
@@ -3424,6 +3444,7 @@
             if (includeMaterial) selectedCats.push('Material');
             if (includeSeal) selectedCats.push('Seal');
             if (includeMix) selectedCats.push('Mix');
+            if (includeOring) selectedCats.push('O-ring');
             const catSuffix = selectedCats.length > 0 ? selectedCats.join(' + ') : 'Categoricals';
             document.getElementById('model3Title').textContent = `Model 3: ${yLabel} ~ ${x1Label} + ${catSuffix}`;
 
@@ -3704,7 +3725,7 @@
         });
 
         // Event listeners for categorical checkboxes
-        ['includeMaterial', 'includeSeal', 'includeMix'].forEach(id => {
+        ['includeMaterial', 'includeSeal', 'includeMix', 'includeOring'].forEach(id => {
             document.getElementById(id).addEventListener('change', updateRegressionAnalysis);
         });
 
