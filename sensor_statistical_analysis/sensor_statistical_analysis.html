@@ -1427,8 +1427,13 @@
                     mixed: findColumnIndex(headers, ['mixed', 'mixmethod', 'mix_method']),
                     // Sealed method column (Screw, Snap)
                     sealed: findColumnIndex(headers, ['sealed', 'sealmethod', 'seal_method', 'sealtype']),
+                    // O-ring type column (Round, Square)
+                    oRing: findColumnIndex(headers, ['oring', 'o-ring', 'o_ring', 'oringtype', 'oring_type']),
+                    // Filter Flow column (numeric)
+                    filterFlow: findColumnIndex(headers, ['filterflow', 'filter_flow', 'filter flow', 'flow']),
                     // Legacy trace type column (string values like "Carbon", "Silver", or "1:0")
-                    traceType: findColumnIndex(headers, ['tracetype', 'trace_type', 'carbonsilver', 'carbon-silver', 'carbon_silver']),
+                    traceType: findColumnIndex(headers, ['tracetype', 'trace_type', 'carbonsilver', 'carbon-silver', 'carbon_silver', 'carbon-silver_ratio', 'carbonsilverratio']),
+                    // Stencil config column (Wrc, wrC, etc.)
                     refLocation: findColumnIndex(headers, ['referencelocation', 'reflocation', 'stencilconfig', 'stencil_config', 'config']),
                     workingSA: findColumnIndex(headers, ['workingsa', 'working_sa', 'working sa']),
                     counterSA: findColumnIndex(headers, ['countersa', 'counter_sa', 'counter sa']),
@@ -1586,8 +1591,51 @@
                 buildData.isSealedSnap = buildData.sealedMethod.map(s =>
                     s.toLowerCase().includes('snap') ? 1 : 0);
 
+                // O-ring type column (Round, Square)
+                buildData.oRingType = rows.map(r => {
+                    if (colIndices.oRing === -1) return 'N/A';
+                    const raw = r[colIndices.oRing];
+                    if (raw === undefined || raw === null || raw === '') return 'N/A';
+                    const val = String(raw).trim();
+                    if (val.toLowerCase() === 'n/a' || val.toLowerCase() === 'na' || val.toLowerCase() === 'none') return 'N/A';
+                    return val;
+                });
+                // Create dummy variable for O-ring type (1 = Square, 0 = Round/other)
+                buildData.isOringSquare = buildData.oRingType.map(o =>
+                    o.toLowerCase().includes('square') ? 1 : 0);
+                buildData.isOringRound = buildData.oRingType.map(o =>
+                    o.toLowerCase().includes('round') ? 1 : 0);
+
+                // Filter Flow column (numeric)
+                buildData.filterFlow = rows.map(r => {
+                    if (colIndices.filterFlow === -1) return 0;
+                    const raw = r[colIndices.filterFlow];
+                    return parseFloat(raw) || 0;
+                });
+
+                // Stencil Config (Wrc, wrC, etc.) - uppercase C indicates reference on counter side
+                buildData.stencilConfig = buildData.refLocations.map(r => {
+                    const val = String(r).trim();
+                    if (val === 'None' || val === '' || val.toLowerCase() === 'n/a') return 'N/A';
+                    return val;
+                });
+                // Create dummy variable: 1 = reference on counter side (capital C), 0 = reference on working side (capital W)
+                buildData.isRefOnCounter = buildData.stencilConfig.map(s => {
+                    if (s === 'N/A') return 0;
+                    // Check if C is uppercase (reference on counter side)
+                    return s.includes('C') ? 1 : 0;
+                });
+                buildData.isRefOnWorking = buildData.stencilConfig.map(s => {
+                    if (s === 'N/A') return 0;
+                    // Check if W is uppercase (reference on working side)
+                    return s.includes('W') ? 1 : 0;
+                });
+
                 debugLog('Mixed methods:', [...new Set(buildData.mixedMethod)]);
                 debugLog('Sealed methods:', [...new Set(buildData.sealedMethod)]);
+                debugLog('O-ring types:', [...new Set(buildData.oRingType)]);
+                debugLog('Stencil configs:', [...new Set(buildData.stencilConfig)]);
+                debugLog('Filter flows:', [...new Set(buildData.filterFlow)]);
 
                 status.textContent = `✓ Loaded ${rows.length} sensors`;
                 dropZone.classList.add('loaded');
@@ -4027,10 +4075,24 @@
                 buildData.sealedMethod.forEach(s => sealCounts[s] = (sealCounts[s] || 0) + 1);
                 report.push(`  Seal Method: ${Object.entries(sealCounts).map(([k,v]) => `${k}(n=${v})`).join(', ')}`);
             }
+            if (buildData.oRingType && buildData.oRingType.some(o => o !== 'N/A')) {
+                const oRingCounts = {};
+                buildData.oRingType.forEach(o => oRingCounts[o] = (oRingCounts[o] || 0) + 1);
+                report.push(`  O-ring Type: ${Object.entries(oRingCounts).map(([k,v]) => `${k}(n=${v})`).join(', ')}`);
+            }
             if (buildData.mixedMethod) {
                 const mixCounts = {};
                 buildData.mixedMethod.forEach(m => mixCounts[m] = (mixCounts[m] || 0) + 1);
                 report.push(`  Mix Method: ${Object.entries(mixCounts).map(([k,v]) => `${k}(n=${v})`).join(', ')}`);
+            }
+            if (buildData.stencilConfig && buildData.stencilConfig.some(s => s !== 'N/A')) {
+                const stencilCounts = {};
+                buildData.stencilConfig.forEach(s => stencilCounts[s] = (stencilCounts[s] || 0) + 1);
+                report.push(`  Stencil Config: ${Object.entries(stencilCounts).map(([k,v]) => `${k}(n=${v})`).join(', ')}`);
+            }
+            if (buildData.filterFlow && buildData.filterFlow.some(f => f > 0)) {
+                const flowValues = [...new Set(buildData.filterFlow)].filter(f => f > 0).sort((a,b) => a-b);
+                report.push(`  Filter Flow: ${flowValues.join(', ')} (n=${flowValues.length} unique)`);
             }
             report.push('');
 
@@ -4072,7 +4134,12 @@
                         sealMethod: buildData.sealedMethod ? buildData.sealedMethod[i] : null,
                         mixMethod: buildData.mixedMethod ? buildData.mixedMethod[i] : null,
                         isSealedSnap: buildData.isSealedSnap ? buildData.isSealedSnap[i] : null,
-                        isMixedFlackTek: buildData.isMixedFlackTek ? buildData.isMixedFlackTek[i] : null
+                        isMixedFlackTek: buildData.isMixedFlackTek ? buildData.isMixedFlackTek[i] : null,
+                        oRingType: buildData.oRingType ? buildData.oRingType[i] : null,
+                        isOringSquare: buildData.isOringSquare ? buildData.isOringSquare[i] : null,
+                        stencilConfig: buildData.stencilConfig ? buildData.stencilConfig[i] : null,
+                        isRefOnCounter: buildData.isRefOnCounter ? buildData.isRefOnCounter[i] : null,
+                        filterFlow: buildData.filterFlow ? buildData.filterFlow[i] : null
                     });
                 }
             });
@@ -4101,8 +4168,8 @@
             });
             report.push('');
             report.push('Build Parameters:');
-            report.push('Sensor          | C_Ratio | W_SA    | C_SA    | R_SA    | W:C     | W:R     | Seal     | Mix');
-            report.push('----------------|---------|---------|---------|---------|---------|---------|----------|--------');
+            report.push('Sensor          | C_Ratio | W_SA    | C_SA    | R_SA    | W:C     | W:R     | Seal     | Mix      | O-ring   | Stencil | Flow');
+            report.push('----------------|---------|---------|---------|---------|---------|---------|----------|----------|----------|---------|-----');
             matched.forEach(m => {
                 const row = [
                     m.sensor.padEnd(15),
@@ -4113,7 +4180,10 @@
                     (m.wcRatio || 0).toFixed(3).padStart(7),
                     (m.wrRatio || 0).toFixed(3).padStart(7),
                     (m.sealMethod || 'N/A').padStart(8),
-                    (m.mixMethod || 'N/A').padStart(8)
+                    (m.mixMethod || 'N/A').padStart(8),
+                    (m.oRingType || 'N/A').padStart(8),
+                    (m.stencilConfig || 'N/A').padStart(7),
+                    (m.filterFlow !== null ? String(m.filterFlow) : 'N/A').padStart(4)
                 ];
                 report.push(row.join(' | '));
             });
@@ -4150,6 +4220,11 @@
                 const sealSnap = matched.map(m => m.isSealedSnap || 0);
                 const mixFlack = matched.map(m => m.isMixedFlackTek || 0);
 
+                // Get new variable arrays
+                const oringSquare = matched.map(m => m.isOringSquare || 0);
+                const refOnCounter = matched.map(m => m.isRefOnCounter || 0);
+                const filterFlows = matched.map(m => m.filterFlow || 0);
+
                 report.push('Correlations with Response Magnitude:');
                 report.push(`  Carbon Ratio:     r = ${correlation(carbonRatios, respMags).toFixed(4)}`);
                 report.push(`  Working SA:       r = ${correlation(workingSAs, respMags).toFixed(4)}`);
@@ -4158,12 +4233,27 @@
                 report.push(`  T90 Rise:         r = ${correlation(t90Values, respMags).toFixed(4)}`);
                 if (buildData.sealedMethod) report.push(`  Seal (Snap=1):    r = ${correlation(sealSnap, respMags).toFixed(4)}`);
                 if (buildData.mixedMethod) report.push(`  Mix (FlackTek=1): r = ${correlation(mixFlack, respMags).toFixed(4)}`);
+                if (buildData.oRingType && buildData.oRingType.some(o => o !== 'N/A')) {
+                    report.push(`  O-ring (Sq=1):    r = ${correlation(oringSquare, respMags).toFixed(4)}`);
+                }
+                if (buildData.filterFlow && buildData.filterFlow.some(f => f > 0)) {
+                    report.push(`  Filter Flow:      r = ${correlation(filterFlows, respMags).toFixed(4)}`);
+                }
+                if (buildData.isRefOnCounter && buildData.isRefOnCounter.some(r => r > 0)) {
+                    report.push(`  Ref on Counter:   r = ${correlation(refOnCounter, respMags).toFixed(4)}`);
+                }
                 report.push('');
 
                 report.push('Correlations with T90 Rise Time:');
                 report.push(`  Carbon Ratio:     r = ${correlation(carbonRatios, t90Values).toFixed(4)}`);
                 report.push(`  Working SA:       r = ${correlation(workingSAs, t90Values).toFixed(4)}`);
                 report.push(`  Response Mag:     r = ${correlation(respMags, t90Values).toFixed(4)}`);
+                if (buildData.oRingType && buildData.oRingType.some(o => o !== 'N/A')) {
+                    report.push(`  O-ring (Sq=1):    r = ${correlation(oringSquare, t90Values).toFixed(4)}`);
+                }
+                if (buildData.filterFlow && buildData.filterFlow.some(f => f > 0)) {
+                    report.push(`  Filter Flow:      r = ${correlation(filterFlows, t90Values).toFixed(4)}`);
+                }
                 report.push('');
 
                 report.push('Predictor Inter-correlations (check for multicollinearity):');
@@ -4235,6 +4325,48 @@
                 report.push('---------|----|-----------|-----------|---------|---------');
                 Object.keys(mixGroups).forEach(k => {
                     const g = mixGroups[k];
+                    const resps = g.map(x => x.responseMag);
+                    const t90s = g.map(x => x.t90Rise);
+                    report.push(`${k.padEnd(8)} | ${String(g.length).padStart(2)} | ${mean(resps).toFixed(4).padStart(9)} | ${std(resps).toFixed(4).padStart(9)} | ${mean(t90s).toFixed(2).padStart(7)} | ${std(t90s).toFixed(2).padStart(7)}`);
+                });
+                report.push('');
+            }
+
+            // By O-ring Type
+            if (matched.some(m => m.oRingType !== null && m.oRingType !== 'N/A')) {
+                const oringGroups = {};
+                matched.forEach(m => {
+                    if (m.oRingType !== null && m.oRingType !== 'N/A') {
+                        if (!oringGroups[m.oRingType]) oringGroups[m.oRingType] = [];
+                        oringGroups[m.oRingType].push(m);
+                    }
+                });
+                report.push('By O-ring Type:');
+                report.push('O-ring   | n  | Resp Mean | Resp Std  | T90 Mean | T90 Std');
+                report.push('---------|----|-----------|-----------|---------|---------');
+                Object.keys(oringGroups).forEach(k => {
+                    const g = oringGroups[k];
+                    const resps = g.map(x => x.responseMag);
+                    const t90s = g.map(x => x.t90Rise);
+                    report.push(`${k.padEnd(8)} | ${String(g.length).padStart(2)} | ${mean(resps).toFixed(4).padStart(9)} | ${std(resps).toFixed(4).padStart(9)} | ${mean(t90s).toFixed(2).padStart(7)} | ${std(t90s).toFixed(2).padStart(7)}`);
+                });
+                report.push('');
+            }
+
+            // By Stencil Config
+            if (matched.some(m => m.stencilConfig !== null && m.stencilConfig !== 'N/A')) {
+                const stencilGroups = {};
+                matched.forEach(m => {
+                    if (m.stencilConfig !== null && m.stencilConfig !== 'N/A') {
+                        if (!stencilGroups[m.stencilConfig]) stencilGroups[m.stencilConfig] = [];
+                        stencilGroups[m.stencilConfig].push(m);
+                    }
+                });
+                report.push('By Stencil Config:');
+                report.push('Config   | n  | Resp Mean | Resp Std  | T90 Mean | T90 Std');
+                report.push('---------|----|-----------|-----------|---------|---------');
+                Object.keys(stencilGroups).forEach(k => {
+                    const g = stencilGroups[k];
                     const resps = g.map(x => x.responseMag);
                     const t90s = g.map(x => x.t90Rise);
                     report.push(`${k.padEnd(8)} | ${String(g.length).padStart(2)} | ${mean(resps).toFixed(4).padStart(9)} | ${std(resps).toFixed(4).padStart(9)} | ${mean(t90s).toFixed(2).padStart(7)} | ${std(t90s).toFixed(2).padStart(7)}`);
@@ -4444,6 +4576,73 @@
                 }
             }
 
+            // ANOVA by O-ring Type
+            if (matched.some(m => m.oRingType !== null && m.oRingType !== 'N/A')) {
+                const oringGroups = {};
+                matched.forEach(m => {
+                    if (m.oRingType !== null && m.oRingType !== 'N/A') {
+                        if (!oringGroups[m.oRingType]) oringGroups[m.oRingType] = [];
+                        oringGroups[m.oRingType].push(m.responseMag);
+                    }
+                });
+
+                if (Object.keys(oringGroups).length >= 2) {
+                    const anova = oneWayANOVA(oringGroups);
+                    report.push('ANOVA: Response by O-ring Type');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(4).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(4).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(4).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(4).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(4).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+
+                // ANOVA T90 by O-ring Type
+                const oringT90Groups = {};
+                matched.forEach(m => {
+                    if (m.oRingType !== null && m.oRingType !== 'N/A') {
+                        if (!oringT90Groups[m.oRingType]) oringT90Groups[m.oRingType] = [];
+                        oringT90Groups[m.oRingType].push(m.t90Rise);
+                    }
+                });
+
+                if (Object.keys(oringT90Groups).length >= 2) {
+                    const anova = oneWayANOVA(oringT90Groups);
+                    report.push('ANOVA: T90 Rise Time by O-ring Type');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(2).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(2).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(2).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(2).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(2).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+            }
+
+            // ANOVA by Stencil Config
+            if (matched.some(m => m.stencilConfig !== null && m.stencilConfig !== 'N/A')) {
+                const stencilGroups = {};
+                matched.forEach(m => {
+                    if (m.stencilConfig !== null && m.stencilConfig !== 'N/A') {
+                        if (!stencilGroups[m.stencilConfig]) stencilGroups[m.stencilConfig] = [];
+                        stencilGroups[m.stencilConfig].push(m.responseMag);
+                    }
+                });
+
+                if (Object.keys(stencilGroups).length >= 2) {
+                    const anova = oneWayANOVA(stencilGroups);
+                    report.push('ANOVA: Response by Stencil Config');
+                    report.push('Source          |    SS      |  df  |     MS     |     F     | p-value');
+                    report.push('----------------|------------|------|------------|-----------|------------');
+                    report.push(`Between Groups  | ${anova.ssb.toFixed(4).padStart(10)} | ${String(anova.dfBetween).padStart(4)} | ${anova.msb.toFixed(4).padStart(10)} | ${anova.F.toFixed(4).padStart(9)} | ${formatPValue(anova.pValue)}`);
+                    report.push(`Within Groups   | ${anova.ssw.toFixed(4).padStart(10)} | ${String(anova.dfWithin).padStart(4)} | ${anova.msw.toFixed(4).padStart(10)} |           |`);
+                    report.push(`Total           | ${anova.sst.toFixed(4).padStart(10)} | ${String(anova.dfTotal).padStart(4)} |            |           |`);
+                    report.push(`Effect Size (η²): ${anova.etaSquared.toFixed(4)} (${anova.etaSquared > 0.14 ? 'Large' : anova.etaSquared > 0.06 ? 'Medium' : 'Small'})`);
+                    report.push('');
+                }
+            }
+
             // Section 10: Outlier Detection
             report.push('┌─────────────────────────────────────────────────────────────────────────────┐');
             report.push('│ 10. OUTLIER DETECTION                                                       │');
@@ -4487,7 +4686,7 @@
             report.push('└─────────────────────────────────────────────────────────────────────────────┘');
             report.push('Copy this section for spreadsheet import:');
             report.push('');
-            const csvHeaders = ['Sensor','Response','Baseline','Peak','T90','T50R','%Recovery','Last30s%','Significant','CarbonRatio','WorkingSA','CounterSA','RefSA','WC_Ratio','WR_Ratio','Seal','Mix'];
+            const csvHeaders = ['Sensor','Response','Baseline','Peak','T90','T50R','%Recovery','Last30s%','Significant','CarbonRatio','WorkingSA','CounterSA','RefSA','WC_Ratio','WR_Ratio','Seal','Mix','O-ring','StencilConfig','FilterFlow'];
             report.push(csvHeaders.join(','));
             matched.forEach(m => {
                 const row = [
@@ -4507,7 +4706,10 @@
                     (m.wcRatio || 0).toFixed(4),
                     (m.wrRatio || 0).toFixed(4),
                     m.sealMethod || '',
-                    m.mixMethod || ''
+                    m.mixMethod || '',
+                    m.oRingType || '',
+                    m.stencilConfig || '',
+                    m.filterFlow !== null ? m.filterFlow : ''
                 ];
                 report.push(row.join(','));
             });
