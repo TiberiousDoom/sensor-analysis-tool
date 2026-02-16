@@ -2151,7 +2151,7 @@ else if (typeof exports === 'object'){
         } else {
             // Build histogram bins
             const minV = Math.floor(Math.min(...failedReadings) * 2) / 2; // round down to nearest 0.5
-            const maxV = Math.ceil(Math.max(...failedReadings) * 2) / 2;  // round up to nearest 0.5
+            const maxV = Math.min(Math.ceil(Math.max(...failedReadings) * 2) / 2, 5.0); // round up to nearest 0.5, cap at 5V
             const binWidth = 0.25;
             const bins = [];
             for (let edge = minV; edge < maxV; edge = parseFloat((edge + binWidth).toFixed(4))) {
