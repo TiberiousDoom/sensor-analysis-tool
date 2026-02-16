@@ -42,6 +42,7 @@
             .tab-btn:not(.active) { background: #3d3d3d !important; color: #ccc !important; }
             table th { background: #3d3d3d !important; color: #ccc !important; }
             .filter-pill:not(.active) { background: #3d3d3d !important; color: #ccc !important; }
+            .date-group-btn:not(.active) { background: #3d3d3d !important; color: #ccc !important; border-color: #4d4d4d !important; }
             .upload-area { border-color: var(--border-dark) !important; }
             .collapsible-header { background: #3d3d3d !important; }
             .metric-value { color: var(--text-dark); }
@@ -476,6 +477,27 @@
             vertical-align: middle;
         }
         
+        /* Date grouping toggle for fail rate chart */
+        .date-group-toggles { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+        .date-group-btn {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 2px solid var(--border-light);
+            background: var(--card-light);
+            color: var(--text-light);
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .date-group-btn:hover { border-color: var(--primary); }
+        .date-group-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
         /* Toggle switches for trend lines */
         .line-toggles { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
         .line-toggle {
@@ -627,6 +649,12 @@
                     <div class="charts-grid">
                         <div class="card">
                             <div class="card-title">&#x1F4CA; Fail Rate by Test Number (unique new fails)</div>
+                            <div class="date-group-toggles" id="dateGroupToggles">
+                                <button class="date-group-btn active" data-group="cumulative">Cumulative</button>
+                                <button class="date-group-btn" data-group="monthly">Monthly</button>
+                                <button class="date-group-btn" data-group="quarterly">Quarterly</button>
+                                <button class="date-group-btn" data-group="yearly">Yearly</button>
+                            </div>
                             <div class="chart-container"><canvas id="failRateByTestChart"></canvas></div>
                         </div>
                         <div class="card">
@@ -1667,6 +1695,7 @@ else if (typeof exports === 'object'){
                         job,
                         test: testNum,
                         serial,
+                        timestamp: row['Timestamp'] || '',
                         status,
                         isFL: codes.includes('FL'),
                         isFH: codes.includes('FH'),
@@ -1764,6 +1793,10 @@ else if (typeof exports === 'object'){
                 document.getElementById('resultsSection').classList.remove('hidden');
                 
                 renderMetrics();
+                // Reset date grouping toggle to cumulative
+                currentDateGroup = 'cumulative';
+                document.querySelectorAll('#dateGroupToggles .date-group-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('#dateGroupToggles .date-group-btn[data-group="cumulative"]').classList.add('active');
                 renderOverviewCharts();
                 renderHeatmap();
                 renderTrendChart();
@@ -1853,18 +1886,45 @@ else if (typeof exports === 'object'){
     // RENDER: Overview Charts
     // ============================================================
     
-    function renderOverviewCharts() {
-        Object.values(charts).forEach(c => c?.destroy());
-        charts = {};
-        
+    let currentDateGroup = 'cumulative';
+
+    function getDatePeriodKey(timestamp, mode) {
+        if (!timestamp) return null;
+        // Expect YYYY-MM-DD or similar parseable date string
+        const d = new Date(timestamp);
+        if (isNaN(d.getTime())) return null;
+        const year = d.getFullYear();
+        const month = d.getMonth(); // 0-indexed
+        if (mode === 'monthly') return `${year}-${String(month + 1).padStart(2, '0')}`;
+        if (mode === 'quarterly') return `${year} Q${Math.floor(month / 3) + 1}`;
+        if (mode === 'yearly') return `${year}`;
+        return null;
+    }
+
+    function formatPeriodLabel(key, mode) {
+        if (mode === 'monthly') {
+            const [y, m] = key.split('-');
+            const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return `${names[parseInt(m, 10) - 1]} ${y}`;
+        }
+        return key; // quarterly ("2025 Q1") and yearly ("2025") are already readable
+    }
+
+    function renderOverviewCharts(dateGroupMode) {
+        if (dateGroupMode !== undefined) currentDateGroup = dateGroupMode;
+        const mode = currentDateGroup;
+
+        // Destroy only the fail-rate-by-test chart (chart 1) and rebuild it.
+        // Chart 2 (failure code distribution) stays the same since it is cumulative only.
+        if (charts.failRateByTest) { charts.failRateByTest.destroy(); delete charts.failRateByTest; }
+        if (charts.failCodeByTest) { charts.failCodeByTest.destroy(); delete charts.failCodeByTest; }
+
         const uniqueTests = [...new Set(analysisData.map(a => a.test))].sort((a, b) => a - b);
-        
-        // Aggregate by test number using unique serials
-        // A sensor that hard-failed (FL/FH) on an earlier test is NOT counted
-        // as a failure again on later tests (global dedup across all jobs)
+
+        // ---- Cumulative aggregation (always needed for chart 2 & insight) ----
         const byTest = {};
-        const globalFailedSerials = new Set(); // serials already counted as failed on a prior test
-        
+        const globalFailedSerials = new Set();
+
         uniqueTests.forEach(t => {
             const serials = new Set();
             const failed = new Set();
@@ -1873,7 +1933,6 @@ else if (typeof exports === 'object'){
                 if (sr.test !== t) return;
                 if (sr.excluded) return;
                 serials.add(sr.serial);
-                // Only count as a new failure if not already counted on an earlier test
                 if ((sr.isFL || sr.isFH) && !globalFailedSerials.has(sr.serial)) {
                     failed.add(sr.serial);
                     if (sr.isFL) codes.fl.add(sr.serial);
@@ -1881,7 +1940,6 @@ else if (typeof exports === 'object'){
                 }
                 if (sr.isDM) codes.dm.add(sr.serial);
             });
-            // After processing this test, mark its failures as globally counted
             failed.forEach(s => globalFailedSerials.add(s));
             byTest[t] = {
                 total: serials.size, failed: failed.size,
@@ -1889,59 +1947,163 @@ else if (typeof exports === 'object'){
                 dm: codes.dm.size
             };
         });
-        
-        const labels = uniqueTests.map(t => `Test ${t}`);
-        const failRates = uniqueTests.map(t => {
-            const d = byTest[t];
-            return d.total > 0 ? parseFloat((d.failed / d.total * 100).toFixed(1)) : 0;
-        });
-        
-        // Chart 1: Fail Rate by Test
+
+        // ---- Chart 1: Fail Rate by Test ----
         const ctx1 = document.getElementById('failRateByTestChart').getContext('2d');
-        charts.failRateByTest = new Chart(ctx1, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Fail Rate %',
-                    data: failRates,
-                    backgroundColor: failRates.map(r => r > 20 ? 'rgba(239, 68, 68, 0.7)' : r > 5 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(16, 185, 129, 0.7)'),
-                    borderRadius: 6,
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            afterBody: function(ctx) {
-                                const t = uniqueTests[ctx[0].dataIndex];
-                                const d = byTest[t];
-                                return `${d.failed} failed of ${d.total} sensors`;
+
+        if (mode === 'cumulative') {
+            const labels = uniqueTests.map(t => `Test ${t}`);
+            const failRates = uniqueTests.map(t => {
+                const d = byTest[t];
+                return d.total > 0 ? parseFloat((d.failed / d.total * 100).toFixed(1)) : 0;
+            });
+
+            charts.failRateByTest = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Fail Rate %',
+                        data: failRates,
+                        backgroundColor: failRates.map(r => r > 20 ? 'rgba(239, 68, 68, 0.7)' : r > 5 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(16, 185, 129, 0.7)'),
+                        borderRadius: 6,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterBody: function(ctx) {
+                                    const t = uniqueTests[ctx[0].dataIndex];
+                                    const d = byTest[t];
+                                    return `${d.failed} failed of ${d.total} sensors`;
+                                }
                             }
                         }
-                    }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: { display: true, text: 'Fail Rate (%)' },
-                        ticks: { callback: v => v + '%' }
                     },
-                    x: { title: { display: true, text: 'Test Number' } }
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Fail Rate (%)' },
+                            ticks: { callback: v => v + '%' }
+                        },
+                        x: { title: { display: true, text: 'Test Number' } }
+                    }
                 }
+            });
+        } else {
+            // ---- Date-grouped view (monthly / quarterly / yearly) ----
+            // Collect all period keys from sensorResults that have a valid timestamp
+            const periodSet = new Set();
+            sensorResults.forEach(sr => {
+                if (sr.excluded) return;
+                const pk = getDatePeriodKey(sr.timestamp, mode);
+                if (pk) periodSet.add(pk);
+            });
+            const periods = [...periodSet].sort();
+
+            if (periods.length === 0) {
+                // No timestamp data available — show a message in the chart area
+                charts.failRateByTest = new Chart(ctx1, {
+                    type: 'bar',
+                    data: { labels: ['No timestamp data'], datasets: [{ label: 'Fail Rate %', data: [0], backgroundColor: '#ccc' }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'No Timestamp data available in the database. Dates are required for this view.', color: '#f59e0b', font: { size: 13 } }
+                        },
+                        scales: { y: { display: false }, x: { display: false } }
+                    }
+                });
+            } else {
+                // Aggregate: for each period, calculate fail rate per test number
+                // Deduplication: within each period, a serial that hard-failed on an earlier test is not re-counted
+                const byPeriodTest = {}; // key: "period|||test" -> { total, failed }
+                periods.forEach(p => {
+                    const periodFailedSerials = new Set();
+                    uniqueTests.forEach(t => {
+                        const serials = new Set();
+                        const failed = new Set();
+                        sensorResults.forEach(sr => {
+                            if (sr.test !== t || sr.excluded) return;
+                            const pk = getDatePeriodKey(sr.timestamp, mode);
+                            if (pk !== p) return;
+                            serials.add(sr.serial);
+                            if ((sr.isFL || sr.isFH) && !periodFailedSerials.has(sr.serial)) {
+                                failed.add(sr.serial);
+                            }
+                        });
+                        failed.forEach(s => periodFailedSerials.add(s));
+                        byPeriodTest[`${p}|||${t}`] = { total: serials.size, failed: failed.size };
+                    });
+                });
+
+                const labels = periods.map(p => formatPeriodLabel(p, mode));
+
+                // One dataset per test number
+                const datasets = uniqueTests.map((t, idx) => {
+                    const color = TEST_COLORS[idx % TEST_COLORS.length];
+                    return {
+                        label: `Test ${t}`,
+                        data: periods.map(p => {
+                            const d = byPeriodTest[`${p}|||${t}`];
+                            if (!d || d.total === 0) return null;
+                            return parseFloat((d.failed / d.total * 100).toFixed(1));
+                        }),
+                        backgroundColor: color + 'B3', // ~70% opacity
+                        borderColor: color,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    };
+                });
+
+                charts.failRateByTest = new Chart(ctx1, {
+                    type: 'bar',
+                    data: { labels, datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    afterBody: function(ctx) {
+                                        const pIdx = ctx[0].dataIndex;
+                                        const dsIdx = ctx[0].datasetIndex;
+                                        const p = periods[pIdx];
+                                        const t = uniqueTests[dsIdx];
+                                        const d = byPeriodTest[`${p}|||${t}`];
+                                        if (!d) return '';
+                                        return `${d.failed} failed of ${d.total} sensors`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Fail Rate (%)' },
+                                ticks: { callback: v => v + '%' }
+                            },
+                            x: { title: { display: true, text: mode.charAt(0).toUpperCase() + mode.slice(1) + ' Period' } }
+                        }
+                    }
+                });
             }
-        });
-        
-        // Chart 2: Failure Code Distribution by Test (stacked) — FL, FH, DM only
+        }
+
+        // Chart 2: Failure Code Distribution by Test (stacked) — always cumulative
+        const codeLabels = uniqueTests.map(t => `Test ${t}`);
         const ctx2 = document.getElementById('failCodeByTestChart').getContext('2d');
         charts.failCodeByTest = new Chart(ctx2, {
             type: 'bar',
             data: {
-                labels,
+                labels: codeLabels,
                 datasets: [
                     { label: 'FL', data: uniqueTests.map(t => byTest[t].fl), backgroundColor: STATUS_COLORS['FL'] },
                     { label: 'FH', data: uniqueTests.map(t => byTest[t].fh), backgroundColor: STATUS_COLORS['FH'] },
@@ -1958,7 +2120,7 @@ else if (typeof exports === 'object'){
                 }
             }
         });
-        
+
         // Insight callout
         renderInsight(uniqueTests, byTest);
     }
@@ -2474,6 +2636,15 @@ else if (typeof exports === 'object'){
         // Tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        // Date grouping toggles for Fail Rate by Test chart
+        document.querySelectorAll('#dateGroupToggles .date-group-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#dateGroupToggles .date-group-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderOverviewCharts(btn.dataset.group);
+            });
         });
         
         // Detail table filters
