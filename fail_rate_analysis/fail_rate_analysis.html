@@ -1924,9 +1924,7 @@ else if (typeof exports === 'object'){
         if (charts.failRateByTest) { charts.failRateByTest.destroy(); delete charts.failRateByTest; }
         if (charts.failCodeByTest) { charts.failCodeByTest.destroy(); delete charts.failCodeByTest; }
 
-        const uniqueTests = [...new Set(analysisData.map(a => a.test))].sort((a, b) => a - b);
-
-        // ---- Cumulative aggregation (always needed for chart 2 & insight) ----
+        const uniqueTests = [...new Set(analysisData.map(a => a.test))].sort((a, b) => a - b).filter(t => t >= 1 && t <= 4);
         const byTest = {};
         const globalFailedSerials = new Set();
 
@@ -2111,8 +2109,7 @@ else if (typeof exports === 'object'){
                 labels: codeLabels,
                 datasets: [
                     { label: 'FL', data: uniqueTests.map(t => byTest[t].fl), backgroundColor: STATUS_COLORS['FL'] },
-                    { label: 'FH', data: uniqueTests.map(t => byTest[t].fh), backgroundColor: STATUS_COLORS['FH'] },
-                    { label: 'DM', data: uniqueTests.map(t => byTest[t].dm), backgroundColor: STATUS_COLORS['DM'] }
+                    { label: 'FH', data: uniqueTests.map(t => byTest[t].fh), backgroundColor: STATUS_COLORS['FH'] }
                 ].filter(ds => ds.data.some(v => v > 0))
             },
             options: {
