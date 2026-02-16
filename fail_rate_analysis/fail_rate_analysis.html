@@ -72,6 +72,37 @@
             top: 0;
         }
         
+        .home-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-light);
+            color: var(--text-light);
+            border: 1px solid var(--border-light);
+            padding: 6px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.85em;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-btn:hover {
+            background: var(--card-light);
+            border-color: var(--primary);
+        }
+        @media (prefers-color-scheme: dark) {
+            .home-btn {
+                background: #3d3d3d;
+                color: #ccc;
+                border-color: var(--border-dark);
+            }
+            .home-btn:hover {
+                background: #4d4d4d;
+                border-color: var(--primary);
+            }
+        }
+
         .sidebar-header {
             font-size: 1.1rem;
             font-weight: 700;
@@ -502,6 +533,7 @@
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
+            <a href="../index.html" class="home-btn">&larr; Home</a>
             <div class="sidebar-header">&#x1F4CA; Fail Rate Analysis</div>
             
             <div class="sidebar-section">
