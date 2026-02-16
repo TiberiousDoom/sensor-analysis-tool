@@ -662,9 +662,13 @@
                             <div class="chart-container"><canvas id="failCodeByTestChart"></canvas></div>
                         </div>
                     </div>
+                    <div class="card" style="margin-top: 1.5rem;">
+                        <div class="card-title">&#x1F4CA; Failed Sensor 120s Voltage Distribution</div>
+                        <div class="chart-container"><canvas id="failVoltageHistogram"></canvas></div>
+                    </div>
                     <div id="insightCallout" class="insight-callout hidden"></div>
                 </div>
-                
+
                 <!-- Tab 2: Heatmap -->
                 <div id="heatmap" class="tab-content">
                     <div class="card">
@@ -1696,6 +1700,7 @@ else if (typeof exports === 'object'){
                         test: testNum,
                         serial,
                         timestamp: row['Timestamp'] || '',
+                        reading120,
                         status,
                         isFL: codes.includes('FL'),
                         isFH: codes.includes('FH'),
@@ -2120,6 +2125,150 @@ else if (typeof exports === 'object'){
                 }
             }
         });
+
+        // Chart 3: Histogram of 120s voltage readings for failed sensors
+        if (charts.failVoltageHistogram) { charts.failVoltageHistogram.destroy(); delete charts.failVoltageHistogram; }
+
+        const failedReadings = sensorResults
+            .filter(sr => !sr.excluded && (sr.isFL || sr.isFH) && sr.reading120 !== null && !isNaN(sr.reading120))
+            .map(sr => sr.reading120);
+
+        const ctx3 = document.getElementById('failVoltageHistogram').getContext('2d');
+
+        if (failedReadings.length === 0) {
+            charts.failVoltageHistogram = new Chart(ctx3, {
+                type: 'bar',
+                data: { labels: ['No failed sensors'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'No failed sensor readings to display.', color: '#f59e0b', font: { size: 13 } }
+                    },
+                    scales: { y: { display: false }, x: { display: false } }
+                }
+            });
+        } else {
+            // Build histogram bins
+            const minV = Math.floor(Math.min(...failedReadings) * 2) / 2; // round down to nearest 0.5
+            const maxV = Math.ceil(Math.max(...failedReadings) * 2) / 2;  // round up to nearest 0.5
+            const binWidth = 0.25;
+            const bins = [];
+            for (let edge = minV; edge < maxV; edge = parseFloat((edge + binWidth).toFixed(4))) {
+                bins.push({ lo: edge, hi: parseFloat((edge + binWidth).toFixed(4)), count: 0 });
+            }
+            if (bins.length === 0) bins.push({ lo: minV, hi: minV + binWidth, count: 0 });
+
+            failedReadings.forEach(v => {
+                // Find the right bin
+                for (let i = 0; i < bins.length; i++) {
+                    if (v >= bins[i].lo && (v < bins[i].hi || i === bins.length - 1)) {
+                        bins[i].count++;
+                        break;
+                    }
+                }
+            });
+
+            const thresholdSet = document.getElementById('thresholdSet').value;
+            const thresholds = THRESHOLDS[thresholdSet];
+            const histLabels = bins.map(b => `${b.lo.toFixed(2)}–${b.hi.toFixed(2)}V`);
+            const histData = bins.map(b => b.count);
+            // Color bars: red if bin is in FL zone, dark red if in FH zone, amber if somehow in-range
+            const histColors = bins.map(b => {
+                const mid = (b.lo + b.hi) / 2;
+                if (mid < thresholds.min_120s) return 'rgba(239, 68, 68, 0.75)';
+                if (mid > thresholds.max_120s) return 'rgba(220, 38, 38, 0.75)';
+                return 'rgba(245, 158, 11, 0.75)';
+            });
+
+            // Inline plugin to draw threshold lines without chartjs-plugin-annotation
+            const thresholdLinePlugin = {
+                id: 'histThresholdLines',
+                afterDraw(chart) {
+                    const xScale = chart.scales.x;
+                    const yScale = chart.scales.y;
+                    const ctx = chart.ctx;
+                    const drawLine = (voltage, color, label) => {
+                        // Map voltage to x pixel: find which bin it falls in, interpolate
+                        const binIdx = bins.findIndex(b => voltage >= b.lo && voltage <= b.hi);
+                        let xPixel;
+                        if (binIdx >= 0) {
+                            const barStart = xScale.getPixelForValue(binIdx) - (xScale.getPixelForValue(1) - xScale.getPixelForValue(0)) / 2;
+                            const barWidth = xScale.getPixelForValue(1) - xScale.getPixelForValue(0);
+                            const frac = (voltage - bins[binIdx].lo) / binWidth;
+                            xPixel = barStart + frac * barWidth;
+                        } else if (voltage <= bins[0].lo) {
+                            xPixel = xScale.left;
+                        } else {
+                            xPixel = xScale.right;
+                        }
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.setLineDash([6, 4]);
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 2;
+                        ctx.moveTo(xPixel, yScale.top);
+                        ctx.lineTo(xPixel, yScale.bottom);
+                        ctx.stroke();
+                        // Label
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 10px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(label, xPixel, yScale.top - 4);
+                        ctx.restore();
+                    };
+                    if (thresholds.min_120s >= minV && thresholds.min_120s <= maxV) {
+                        drawLine(thresholds.min_120s, '#ef4444', `FL < ${thresholds.min_120s}V`);
+                    }
+                    if (thresholds.max_120s >= minV && thresholds.max_120s <= maxV) {
+                        drawLine(thresholds.max_120s, '#dc2626', `FH > ${thresholds.max_120s}V`);
+                    }
+                }
+            };
+
+            charts.failVoltageHistogram = new Chart(ctx3, {
+                type: 'bar',
+                data: {
+                    labels: histLabels,
+                    datasets: [{
+                        label: 'Failed Sensors',
+                        data: histData,
+                        backgroundColor: histColors,
+                        borderRadius: 3,
+                        borderWidth: 0,
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    }]
+                },
+                plugins: [thresholdLinePlugin],
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 16 } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(ctx) { return ctx[0].label; },
+                                label: function(ctx) { return `${ctx.parsed.y} sensor${ctx.parsed.y !== 1 ? 's' : ''}`; }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Number of Failed Sensors' },
+                            ticks: { stepSize: 1 }
+                        },
+                        x: {
+                            title: { display: true, text: '120s Voltage (V)' },
+                            ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 }
+                        }
+                    }
+                }
+            });
+        }
 
         // Insight callout
         renderInsight(uniqueTests, byTest);
