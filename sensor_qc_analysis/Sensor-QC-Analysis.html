@@ -1740,6 +1740,10 @@ else if (typeof exports === 'object'){
                 if (TIME_POINTS.includes(header) || header === 'Test #') {
                     const num = parseFloat(value);
                     row[header] = isNaN(num) ? null : num;
+                } else if (header === 'Timestamp' || header === 'Date' || header === 'Test Date') {
+                    // Normalize date column names to 'Timestamp'
+                    const trimmed = value.trim();
+                    row['Timestamp'] = trimmed !== '' ? trimmed : null;
                 } else {
                     row[header] = value.trim();
                 }
@@ -1825,6 +1829,8 @@ else if (typeof exports === 'object'){
                     if (TIME_POINTS.includes(col) || col === 'Test #') {
                         const num = parseFloat(row[idx]);
                         obj[col] = isNaN(num) ? null : num;
+                    } else if (col === 'Timestamp') {
+                        obj[col] = row[idx] !== null ? String(row[idx]).trim() : null;
                     } else {
                         obj[col] = row[idx] !== null ? String(row[idx]).trim() : '';
                     }

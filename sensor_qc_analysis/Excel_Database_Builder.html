@@ -456,11 +456,11 @@
             <div class="schema-info">
                 <code>sensor_readings</code> (<br>
                 &nbsp;&nbsp;id, Job #, Serial Number, Channel,<br>
-                &nbsp;&nbsp;0, 5, 15, 30, 60, 90, 120, Test #<br>
+                &nbsp;&nbsp;0, 5, 15, 30, 60, 90, 120, Test #, Timestamp<br>
                 )
             </div>
             <p class="info-text" style="margin-top: 1rem;">
-                Your Excel files should have columns matching these headers. The tool will automatically map common variations like "Job Number" → "Job #".
+                Your Excel files should have columns matching these headers. The tool will automatically map common variations like "Job Number" → "Job #" and "Date" → "Timestamp".
             </p>
         </div>
     </div>
@@ -544,7 +544,7 @@
                 reader.onload = (e) => {
                     try {
                         const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
 
                         const sheets = [];
                         const targetSheetName = 'Test Results';
@@ -561,6 +561,8 @@
 
                         if (jsonData.length > 0) {
                             // Process data to match expected format
+                            const TIMESTAMP_COLUMNS = ['Timestamp', 'Date', 'Test Date'];
+
                             const processedData = jsonData.map(row => {
                                 const processed = {};
                                 for (const [key, value] of Object.entries(row)) {
@@ -569,6 +571,15 @@
                                     if (TIME_POINTS.includes(trimmedKey) || trimmedKey === 'Test #') {
                                         const num = parseFloat(value);
                                         processed[trimmedKey] = isNaN(num) ? null : num;
+                                    } else if (TIMESTAMP_COLUMNS.includes(trimmedKey)) {
+                                        // Handle date values - convert Date objects to ISO string
+                                        if (value instanceof Date) {
+                                            processed[trimmedKey] = value.toISOString().slice(0, 10);
+                                        } else if (value != null && String(value).trim() !== '') {
+                                            processed[trimmedKey] = String(value).trim();
+                                        } else {
+                                            processed[trimmedKey] = null;
+                                        }
                                     } else {
                                         processed[trimmedKey] = String(value).trim();
                                     }
@@ -726,14 +737,15 @@
                         "60" REAL,
                         "90" REAL,
                         "120" REAL,
-                        "Test #" INTEGER
+                        "Test #" INTEGER,
+                        "Timestamp" TEXT
                     )
                 `);
 
                 // Prepare insert statement
                 const insertStmt = db.prepare(`
-                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #")
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp")
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
 
                 let totalInserted = 0;
@@ -753,7 +765,8 @@
                                 row['60'] ?? null,
                                 row['90'] ?? null,
                                 row['120'] ?? null,
-                                row['Test #'] ?? row['Test'] ?? null
+                                row['Test #'] ?? row['Test'] ?? null,
+                                row['Timestamp'] || row['Date'] || row['Test Date'] || null
                             ]);
                             totalInserted++;
                         }
