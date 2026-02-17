@@ -775,6 +775,12 @@
                     </div>
                     <div class="card" style="margin-top: 1.5rem;">
                         <div class="card-title">&#x1F464; Failures by Builder Initials</div>
+                        <div class="date-group-toggles" id="initialsDateGroupToggles">
+                            <button class="date-group-btn active" data-group="cumulative">Cumulative</button>
+                            <button class="date-group-btn" data-group="monthly">Monthly</button>
+                            <button class="date-group-btn" data-group="quarterly">Quarterly</button>
+                            <button class="date-group-btn" data-group="yearly">Yearly</button>
+                        </div>
                         <div class="chart-container" style="height: 400px;"><canvas id="failByInitialsChart"></canvas></div>
                     </div>
                     <div id="insightCallout" class="insight-callout hidden"></div>
@@ -1984,10 +1990,13 @@ else if (typeof exports === 'object'){
                 document.getElementById('resultsSection').classList.remove('hidden');
                 
                 renderMetrics();
-                // Reset date grouping toggle to cumulative
+                // Reset date grouping toggles to cumulative
                 currentDateGroup = 'cumulative';
                 document.querySelectorAll('#dateGroupToggles .date-group-btn').forEach(b => b.classList.remove('active'));
                 document.querySelector('#dateGroupToggles .date-group-btn[data-group="cumulative"]').classList.add('active');
+                currentInitialsDateGroup = 'cumulative';
+                document.querySelectorAll('#initialsDateGroupToggles .date-group-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('#initialsDateGroupToggles .date-group-btn[data-group="cumulative"]').classList.add('active');
                 renderOverviewCharts();
                 renderHeatmap();
                 renderTrendChart();
@@ -2079,6 +2088,7 @@ else if (typeof exports === 'object'){
     // ============================================================
     
     let currentDateGroup = 'cumulative';
+    let currentInitialsDateGroup = 'cumulative';
 
     function getDatePeriodKey(timestamp, mode) {
         if (!timestamp) return null;
@@ -2455,87 +2465,218 @@ else if (typeof exports === 'object'){
         }
 
         // Chart 4: Failures by Builder Initials
-        if (charts.failByInitials) { charts.failByInitials.destroy(); delete charts.failByInitials; }
-
-        const initialsMap = {}; // initials -> { fl, fh, total, tested }
-        sensorResults.forEach(sr => {
-            if (sr.excluded) return;
-            const initials = sr.initials || 'Unknown';
-            if (!initialsMap[initials]) initialsMap[initials] = { fl: 0, fh: 0, total: 0, tested: 0 };
-            initialsMap[initials].tested++;
-            if (!sr.isFL && !sr.isFH) return;
-            if (sr.isFL) initialsMap[initials].fl++;
-            if (sr.isFH) initialsMap[initials].fh++;
-            initialsMap[initials].total++;
-        });
-
-        const ctx4 = document.getElementById('failByInitialsChart').getContext('2d');
-        const sortedInitials = Object.entries(initialsMap)
-            .sort((a, b) => b[1].total - a[1].total);
-
-        if (sortedInitials.length === 0 || sortedInitials.every(([, d]) => d.total === 0)) {
-            charts.failByInitials = new Chart(ctx4, {
-                type: 'bar',
-                data: { labels: ['No failures'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'No failure data by initials available.', color: '#f59e0b', font: { size: 13 } }
-                    },
-                    scales: { y: { display: false }, x: { display: false } }
-                }
-            });
-        } else {
-            const initialsLabels = sortedInitials.map(([name]) => name);
-            const flCounts = sortedInitials.map(([, d]) => d.fl);
-            const fhCounts = sortedInitials.map(([, d]) => d.fh);
-
-            charts.failByInitials = new Chart(ctx4, {
-                type: 'bar',
-                data: {
-                    labels: initialsLabels,
-                    datasets: [
-                        { label: 'FL', data: flCounts, backgroundColor: STATUS_COLORS['FL'] },
-                        { label: 'FH', data: fhCounts, backgroundColor: STATUS_COLORS['FH'] }
-                    ].filter(ds => ds.data.some(v => v > 0))
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top' },
-                        tooltip: {
-                            callbacks: {
-                                afterBody: function(ctx) {
-                                    const name = initialsLabels[ctx[0].dataIndex];
-                                    const d = initialsMap[name];
-                                    const rate = d.tested > 0 ? (d.total / d.tested * 100).toFixed(1) : '0.0';
-                                    return `${d.total} failures out of ${d.tested} sensors tested (${rate}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: true,
-                            title: { display: true, text: 'Builder Initials' }
-                        },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            title: { display: true, text: 'Failure Count' },
-                            ticks: { stepSize: 1 }
-                        }
-                    }
-                }
-            });
-        }
+        renderInitialsChart();
 
         // Insight callout
         renderInsight(uniqueTests, byTest);
     }
-    
+
+    function renderInitialsChart(dateGroupMode) {
+        if (dateGroupMode !== undefined) currentInitialsDateGroup = dateGroupMode;
+        const mode = currentInitialsDateGroup;
+
+        if (charts.failByInitials) { charts.failByInitials.destroy(); delete charts.failByInitials; }
+
+        const ctx4 = document.getElementById('failByInitialsChart').getContext('2d');
+
+        if (mode === 'cumulative') {
+            const initialsMap = {}; // initials -> { fl, fh, total, tested }
+            sensorResults.forEach(sr => {
+                if (sr.excluded) return;
+                const initials = sr.initials || 'Unknown';
+                if (!initialsMap[initials]) initialsMap[initials] = { fl: 0, fh: 0, total: 0, tested: 0 };
+                initialsMap[initials].tested++;
+                if (!sr.isFL && !sr.isFH) return;
+                if (sr.isFL) initialsMap[initials].fl++;
+                if (sr.isFH) initialsMap[initials].fh++;
+                initialsMap[initials].total++;
+            });
+
+            const sortedInitials = Object.entries(initialsMap)
+                .filter(([, d]) => d.total > 0)
+                .sort((a, b) => b[1].total - a[1].total);
+
+            if (sortedInitials.length === 0) {
+                charts.failByInitials = new Chart(ctx4, {
+                    type: 'bar',
+                    data: { labels: ['No failures'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'No failure data by initials available.', color: '#f59e0b', font: { size: 13 } }
+                        },
+                        scales: { y: { display: false }, x: { display: false } }
+                    }
+                });
+            } else {
+                const initialsLabels = sortedInitials.map(([name]) => name);
+                const flCounts = sortedInitials.map(([, d]) => d.fl);
+                const fhCounts = sortedInitials.map(([, d]) => d.fh);
+
+                charts.failByInitials = new Chart(ctx4, {
+                    type: 'bar',
+                    data: {
+                        labels: initialsLabels,
+                        datasets: [
+                            { label: 'FL', data: flCounts, backgroundColor: STATUS_COLORS['FL'] },
+                            { label: 'FH', data: fhCounts, backgroundColor: STATUS_COLORS['FH'] }
+                        ].filter(ds => ds.data.some(v => v > 0))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    afterBody: function(ctx) {
+                                        const name = initialsLabels[ctx[0].dataIndex];
+                                        const d = initialsMap[name];
+                                        const rate = d.tested > 0 ? (d.total / d.tested * 100).toFixed(1) : '0.0';
+                                        return `${d.total} failures out of ${d.tested} sensors tested (${rate}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                stacked: true,
+                                title: { display: true, text: 'Builder Initials' }
+                            },
+                            y: {
+                                stacked: true,
+                                beginAtZero: true,
+                                title: { display: true, text: 'Failure Count' },
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+            }
+        } else {
+            // ---- Date-grouped view (monthly / quarterly / yearly) ----
+            const periodSet = new Set();
+            sensorResults.forEach(sr => {
+                if (sr.excluded) return;
+                const pk = getDatePeriodKey(sr.timestamp, mode);
+                if (pk) periodSet.add(pk);
+            });
+            const periods = [...periodSet].sort();
+
+            if (periods.length === 0) {
+                charts.failByInitials = new Chart(ctx4, {
+                    type: 'bar',
+                    data: { labels: ['No timestamp data'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'No Timestamp data available in the database. Dates are required for this view.', color: '#f59e0b', font: { size: 13 } }
+                        },
+                        scales: { y: { display: false }, x: { display: false } }
+                    }
+                });
+            } else {
+                // Collect all initials that have at least one failure
+                const allInitials = new Set();
+                const byPeriodInitials = {}; // key: "period|||initials" -> { fl, fh, total, tested }
+                periods.forEach(p => {
+                    const periodMap = {};
+                    sensorResults.forEach(sr => {
+                        if (sr.excluded) return;
+                        const pk = getDatePeriodKey(sr.timestamp, mode);
+                        if (pk !== p) return;
+                        const initials = sr.initials || 'Unknown';
+                        if (!periodMap[initials]) periodMap[initials] = { fl: 0, fh: 0, total: 0, tested: 0 };
+                        periodMap[initials].tested++;
+                        if (!sr.isFL && !sr.isFH) return;
+                        if (sr.isFL) periodMap[initials].fl++;
+                        if (sr.isFH) periodMap[initials].fh++;
+                        periodMap[initials].total++;
+                    });
+                    Object.entries(periodMap).forEach(([initials, d]) => {
+                        if (d.total > 0) allInitials.add(initials);
+                        byPeriodInitials[`${p}|||${initials}`] = d;
+                    });
+                });
+
+                const initialsArr = [...allInitials].sort();
+                const labels = periods.map(p => formatPeriodLabel(p, mode));
+
+                if (initialsArr.length === 0) {
+                    charts.failByInitials = new Chart(ctx4, {
+                        type: 'bar',
+                        data: { labels: ['No failures'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                title: { display: true, text: 'No failure data by initials available.', color: '#f59e0b', font: { size: 13 } }
+                            },
+                            scales: { y: { display: false }, x: { display: false } }
+                        }
+                    });
+                } else {
+                    // One dataset per builder initials
+                    const datasets = initialsArr.map((initials, idx) => {
+                        const color = TEST_COLORS[idx % TEST_COLORS.length];
+                        return {
+                            label: initials,
+                            data: periods.map(p => {
+                                const d = byPeriodInitials[`${p}|||${initials}`];
+                                if (!d) return 0;
+                                return d.total;
+                            }),
+                            backgroundColor: color + 'B3',
+                            borderColor: color,
+                            borderWidth: 1,
+                            borderRadius: 4
+                        };
+                    });
+
+                    charts.failByInitials = new Chart(ctx4, {
+                        type: 'bar',
+                        data: { labels, datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'top' },
+                                tooltip: {
+                                    callbacks: {
+                                        afterBody: function(ctx) {
+                                            const pIdx = ctx[0].dataIndex;
+                                            const dsIdx = ctx[0].datasetIndex;
+                                            const p = periods[pIdx];
+                                            const initials = initialsArr[dsIdx];
+                                            const d = byPeriodInitials[`${p}|||${initials}`];
+                                            if (!d) return '';
+                                            const rate = d.tested > 0 ? (d.total / d.tested * 100).toFixed(1) : '0.0';
+                                            return `${d.total} failures out of ${d.tested} sensors tested (${rate}%)`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    stacked: true,
+                                    title: { display: true, text: mode.charAt(0).toUpperCase() + mode.slice(1) + ' Period' }
+                                },
+                                y: {
+                                    stacked: true,
+                                    beginAtZero: true,
+                                    title: { display: true, text: 'Failure Count' },
+                                    ticks: { stepSize: 1 }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
     function renderInsight(uniqueTests, byTest) {
         const callout = document.getElementById('insightCallout');
         if (uniqueTests.length < 2) {
@@ -3059,7 +3200,16 @@ else if (typeof exports === 'object'){
                 renderOverviewCharts(btn.dataset.group);
             });
         });
-        
+
+        // Date grouping toggles for Failures by Builder Initials chart
+        document.querySelectorAll('#initialsDateGroupToggles .date-group-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#initialsDateGroupToggles .date-group-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderInitialsChart(btn.dataset.group);
+            });
+        });
+
         // Legend popover
         const legendBtn = document.getElementById('legendBtn');
         const legendPopover = document.getElementById('legendPopover');
