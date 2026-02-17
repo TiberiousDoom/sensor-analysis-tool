@@ -2610,43 +2610,48 @@ else if (typeof exports === 'object'){
                 const allInitials = new Set();
                 const byPeriodInitials = {}; // key: "period|||initials" -> { fl, fh, total, tested }
 
-                // Step 1: Determine primary builder for each serial per period
-                // (use initials from the earliest test number for each serial)
-                const serialPrimaryBuilder = {}; // "period|||serial" -> { initials, test }
+                // Step 1: Determine global primary builder for each serial
+                // (use initials from the earliest test number across ALL data)
+                const serialGlobalBuilder = {}; // serial -> { initials, test, period }
                 sensorResults.forEach(sr => {
                     if (sr.excluded) return;
                     const pk = getDatePeriodKey(sr.timestamp, mode);
                     if (!pk) return;
-                    const key = `${pk}|||${sr.serial}`;
-                    if (!serialPrimaryBuilder[key] || sr.test < serialPrimaryBuilder[key].test) {
-                        serialPrimaryBuilder[key] = { initials: sr.initials || 'Unknown', test: sr.test };
+                    if (!serialGlobalBuilder[sr.serial] || sr.test < serialGlobalBuilder[sr.serial].test) {
+                        serialGlobalBuilder[sr.serial] = { initials: sr.initials || 'Unknown', test: sr.test, period: pk };
                     }
                 });
 
-                // Step 2: Build per-builder counts using primary builder assignment
-                // Each serial is attributed to ONE builder (from its earliest test)
+                // Step 2: Build per-builder counts using global primary builder
+                // Each serial is counted ONCE in the period of its earliest test
+                // and attributed to the builder from that earliest test.
+                // Failures from any test are tracked against the build period.
+                const periodMaps = {}; // period -> { initials -> { ... } }
+                periods.forEach(p => { periodMaps[p] = {}; });
+
+                sensorResults.forEach(sr => {
+                    if (sr.excluded) return;
+                    const global = serialGlobalBuilder[sr.serial];
+                    if (!global) return;
+                    // Place this serial in its BUILD period (earliest test), not the current row's period
+                    const buildPeriod = global.period;
+                    const initials = global.initials;
+                    if (!periodMaps[buildPeriod]) return;
+                    if (!periodMaps[buildPeriod][initials]) periodMaps[buildPeriod][initials] = {
+                        fl: 0, fh: 0, total: 0, tested: 0, rawCount: 0,
+                        _serials: new Set(), _failed: new Set(), _fl: new Set(), _fh: new Set()
+                    };
+                    const m = periodMaps[buildPeriod][initials];
+                    m.rawCount++;
+                    m._serials.add(sr.serial);
+                    if (sr.isFL) m._fl.add(sr.serial);
+                    if (sr.isFH) m._fh.add(sr.serial);
+                    if (sr.isFL || sr.isFH) m._failed.add(sr.serial);
+                });
+
+                // Resolve Sets to counts
                 periods.forEach(p => {
-                    const periodMap = {};
-                    sensorResults.forEach(sr => {
-                        if (sr.excluded) return;
-                        const pk = getDatePeriodKey(sr.timestamp, mode);
-                        if (pk !== p) return;
-                        // Use primary builder for this serial (from earliest test)
-                        const builderKey = `${pk}|||${sr.serial}`;
-                        const initials = serialPrimaryBuilder[builderKey]?.initials || (sr.initials || 'Unknown');
-                        if (!periodMap[initials]) periodMap[initials] = {
-                            fl: 0, fh: 0, total: 0, tested: 0, rawCount: 0,
-                            _serials: new Set(), _failed: new Set(), _fl: new Set(), _fh: new Set()
-                        };
-                        const m = periodMap[initials];
-                        m.rawCount++;
-                        m._serials.add(sr.serial);
-                        if (sr.isFL) m._fl.add(sr.serial);
-                        if (sr.isFH) m._fh.add(sr.serial);
-                        if (sr.isFL || sr.isFH) m._failed.add(sr.serial);
-                    });
-                    // Resolve Sets to counts
-                    Object.entries(periodMap).forEach(([initials, d]) => {
+                    Object.entries(periodMaps[p]).forEach(([initials, d]) => {
                         d.tested = d._serials.size;
                         d.total = d._failed.size;
                         d.fl = d._fl.size;
