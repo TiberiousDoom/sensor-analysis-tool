@@ -1832,13 +1832,14 @@ else if (typeof exports === 'object'){
     
     function renderMetrics() {
         const uniqueJobs = [...new Set(analysisData.map(a => a.job))];
-        const uniqueTests = [...new Set(analysisData.map(a => a.test))];
-        
-        // Use unique serials for overall counts (respecting dedup exclusions)
+        const uniqueTests = [...new Set(analysisData.map(a => a.test))].filter(t => t >= 1 && t <= 4);
+
+        // Use unique serials for overall counts (respecting dedup exclusions, tests 1-4 only)
         const allSerials = new Set();
         const failedSerials = new Set();
         sensorResults.forEach(sr => {
             if (sr.excluded) return;
+            if (sr.test < 1 || sr.test > 4) return;
             allSerials.add(sr.serial);
             if (sr.isFL || sr.isFH) failedSerials.add(sr.serial);
         });
