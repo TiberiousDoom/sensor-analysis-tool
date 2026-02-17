@@ -456,7 +456,7 @@
             <div class="schema-info">
                 <code>sensor_readings</code> (<br>
                 &nbsp;&nbsp;id, Job #, Serial Number, Channel,<br>
-                &nbsp;&nbsp;0, 5, 15, 30, 60, 90, 120, Test #, Timestamp<br>
+                &nbsp;&nbsp;0, 5, 15, 30, 60, 90, 120, Test #, Timestamp, Initials<br>
                 )
             </div>
             <p class="info-text" style="margin-top: 1rem;">
@@ -738,14 +738,15 @@
                         "90" REAL,
                         "120" REAL,
                         "Test #" INTEGER,
-                        "Timestamp" TEXT
+                        "Timestamp" TEXT,
+                        "Initials" TEXT
                     )
                 `);
 
                 // Prepare insert statement
                 const insertStmt = db.prepare(`
-                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp")
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp", "Initials")
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
 
                 let totalInserted = 0;
@@ -766,7 +767,8 @@
                                 row['90'] ?? null,
                                 row['120'] ?? null,
                                 row['Test #'] ?? row['Test'] ?? null,
-                                row['Timestamp'] || row['Date'] || row['Test Date'] || null
+                                row['Timestamp'] || row['Date'] || row['Test Date'] || null,
+                                row['Initials'] || row['Built By'] || row['Builder'] || ''
                             ]);
                             totalInserted++;
                         }
