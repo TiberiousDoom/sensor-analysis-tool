@@ -2480,10 +2480,21 @@ else if (typeof exports === 'object'){
         const ctx4 = document.getElementById('failByInitialsChart').getContext('2d');
 
         if (mode === 'cumulative') {
-            const initialsMap = {}; // initials -> { fl, fh, total, tested, _serials, _failed, _fl, _fh }
+            // Step 1: Determine primary builder for each serial (from earliest test)
+            const serialPrimaryBuilderCum = {}; // serial -> { initials, test }
             sensorResults.forEach(sr => {
                 if (sr.excluded) return;
-                const initials = sr.initials || 'Unknown';
+                if (!serialPrimaryBuilderCum[sr.serial] || sr.test < serialPrimaryBuilderCum[sr.serial].test) {
+                    serialPrimaryBuilderCum[sr.serial] = { initials: sr.initials || 'Unknown', test: sr.test };
+                }
+            });
+
+            // Step 2: Build per-builder counts using primary builder assignment
+            const initialsMap = {}; // initials -> { fl, fh, total, tested, ... }
+            sensorResults.forEach(sr => {
+                if (sr.excluded) return;
+                // Use primary builder for this serial (from earliest test)
+                const initials = serialPrimaryBuilderCum[sr.serial]?.initials || (sr.initials || 'Unknown');
                 if (!initialsMap[initials]) initialsMap[initials] = {
                     fl: 0, fh: 0, total: 0, tested: 0,
                     _serials: new Set(), _failed: new Set(), _fl: new Set(), _fh: new Set()
@@ -2545,7 +2556,7 @@ else if (typeof exports === 'object'){
                                         const name = initialsLabels[ctx[0].dataIndex];
                                         const d = initialsMap[name];
                                         const rate = d.tested > 0 ? (d.total / d.tested * 100).toFixed(1) : '0.0';
-                                        return `${d.total} failures out of ${d.tested} sensors tested (${rate}%)`;
+                                        return `${d.total} failures out of ${d.tested} unique sensors (${rate}%)`;
                                     }
                                 }
                             }
@@ -2592,18 +2603,37 @@ else if (typeof exports === 'object'){
                 // Collect all initials that have at least one failure
                 const allInitials = new Set();
                 const byPeriodInitials = {}; // key: "period|||initials" -> { fl, fh, total, tested }
+
+                // Step 1: Determine primary builder for each serial per period
+                // (use initials from the earliest test number for each serial)
+                const serialPrimaryBuilder = {}; // "period|||serial" -> { initials, test }
+                sensorResults.forEach(sr => {
+                    if (sr.excluded) return;
+                    const pk = getDatePeriodKey(sr.timestamp, mode);
+                    if (!pk) return;
+                    const key = `${pk}|||${sr.serial}`;
+                    if (!serialPrimaryBuilder[key] || sr.test < serialPrimaryBuilder[key].test) {
+                        serialPrimaryBuilder[key] = { initials: sr.initials || 'Unknown', test: sr.test };
+                    }
+                });
+
+                // Step 2: Build per-builder counts using primary builder assignment
+                // Each serial is attributed to ONE builder (from its earliest test)
                 periods.forEach(p => {
                     const periodMap = {};
                     sensorResults.forEach(sr => {
                         if (sr.excluded) return;
                         const pk = getDatePeriodKey(sr.timestamp, mode);
                         if (pk !== p) return;
-                        const initials = sr.initials || 'Unknown';
+                        // Use primary builder for this serial (from earliest test)
+                        const builderKey = `${pk}|||${sr.serial}`;
+                        const initials = serialPrimaryBuilder[builderKey]?.initials || (sr.initials || 'Unknown');
                         if (!periodMap[initials]) periodMap[initials] = {
-                            fl: 0, fh: 0, total: 0, tested: 0,
+                            fl: 0, fh: 0, total: 0, tested: 0, rawCount: 0,
                             _serials: new Set(), _failed: new Set(), _fl: new Set(), _fh: new Set()
                         };
                         const m = periodMap[initials];
+                        m.rawCount++;
                         m._serials.add(sr.serial);
                         if (sr.isFL) m._fl.add(sr.serial);
                         if (sr.isFH) m._fh.add(sr.serial);
@@ -2673,7 +2703,7 @@ else if (typeof exports === 'object'){
                                             const d = byPeriodInitials[`${p}|||${initials}`];
                                             if (!d) return '';
                                             const rate = d.tested > 0 ? (d.total / d.tested * 100).toFixed(1) : '0.0';
-                                            return `${d.total} failures out of ${d.tested} sensors tested (${rate}%)`;
+                                            return `${d.total} failures out of ${d.tested} unique sensors (${rate}%)`;
                                         }
                                     }
                                 }
