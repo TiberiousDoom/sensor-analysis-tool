@@ -2480,16 +2480,27 @@ else if (typeof exports === 'object'){
         const ctx4 = document.getElementById('failByInitialsChart').getContext('2d');
 
         if (mode === 'cumulative') {
-            const initialsMap = {}; // initials -> { fl, fh, total, tested }
+            const initialsMap = {}; // initials -> { fl, fh, total, tested, _serials, _failed, _fl, _fh }
             sensorResults.forEach(sr => {
                 if (sr.excluded) return;
                 const initials = sr.initials || 'Unknown';
-                if (!initialsMap[initials]) initialsMap[initials] = { fl: 0, fh: 0, total: 0, tested: 0 };
-                initialsMap[initials].tested++;
-                if (!sr.isFL && !sr.isFH) return;
-                if (sr.isFL) initialsMap[initials].fl++;
-                if (sr.isFH) initialsMap[initials].fh++;
-                initialsMap[initials].total++;
+                if (!initialsMap[initials]) initialsMap[initials] = {
+                    fl: 0, fh: 0, total: 0, tested: 0,
+                    _serials: new Set(), _failed: new Set(), _fl: new Set(), _fh: new Set()
+                };
+                const m = initialsMap[initials];
+                m._serials.add(sr.serial);
+                if (sr.isFL) m._fl.add(sr.serial);
+                if (sr.isFH) m._fh.add(sr.serial);
+                if (sr.isFL || sr.isFH) m._failed.add(sr.serial);
+            });
+            // Resolve Sets to counts
+            Object.values(initialsMap).forEach(m => {
+                m.tested = m._serials.size;
+                m.total = m._failed.size;
+                m.fl = m._fl.size;
+                m.fh = m._fh.size;
+                delete m._serials; delete m._failed; delete m._fl; delete m._fh;
             });
 
             const sortedInitials = Object.entries(initialsMap)
@@ -2588,14 +2599,23 @@ else if (typeof exports === 'object'){
                         const pk = getDatePeriodKey(sr.timestamp, mode);
                         if (pk !== p) return;
                         const initials = sr.initials || 'Unknown';
-                        if (!periodMap[initials]) periodMap[initials] = { fl: 0, fh: 0, total: 0, tested: 0 };
-                        periodMap[initials].tested++;
-                        if (!sr.isFL && !sr.isFH) return;
-                        if (sr.isFL) periodMap[initials].fl++;
-                        if (sr.isFH) periodMap[initials].fh++;
-                        periodMap[initials].total++;
+                        if (!periodMap[initials]) periodMap[initials] = {
+                            fl: 0, fh: 0, total: 0, tested: 0,
+                            _serials: new Set(), _failed: new Set(), _fl: new Set(), _fh: new Set()
+                        };
+                        const m = periodMap[initials];
+                        m._serials.add(sr.serial);
+                        if (sr.isFL) m._fl.add(sr.serial);
+                        if (sr.isFH) m._fh.add(sr.serial);
+                        if (sr.isFL || sr.isFH) m._failed.add(sr.serial);
                     });
+                    // Resolve Sets to counts
                     Object.entries(periodMap).forEach(([initials, d]) => {
+                        d.tested = d._serials.size;
+                        d.total = d._failed.size;
+                        d.fl = d._fl.size;
+                        d.fh = d._fh.size;
+                        delete d._serials; delete d._failed; delete d._fl; delete d._fh;
                         if (d.total > 0) allInitials.add(initials);
                         byPeriodInitials[`${p}|||${initials}`] = d;
                     });
