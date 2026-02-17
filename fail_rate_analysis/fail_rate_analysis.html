@@ -666,6 +666,10 @@
                         <div class="card-title">&#x1F4CA; Failed Sensor 120s Voltage Distribution</div>
                         <div class="chart-container"><canvas id="failVoltageHistogram"></canvas></div>
                     </div>
+                    <div class="card" style="margin-top: 1.5rem;">
+                        <div class="card-title">&#x1F464; Failures by Builder Initials</div>
+                        <div class="chart-container" style="height: 400px;"><canvas id="failByInitialsChart"></canvas></div>
+                    </div>
                     <div id="insightCallout" class="insight-callout hidden"></div>
                 </div>
 
@@ -1765,6 +1769,7 @@ else if (typeof exports === 'object'){
                         test: testNum,
                         serial,
                         timestamp: row['Timestamp'] || '',
+                        initials: row['Initials'] || '',
                         reading120,
                         status,
                         isFL: codes.includes('FL'),
@@ -2327,6 +2332,84 @@ else if (typeof exports === 'object'){
                         x: {
                             title: { display: true, text: '120s Voltage (V)' },
                             ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Chart 4: Failures by Builder Initials
+        if (charts.failByInitials) { charts.failByInitials.destroy(); delete charts.failByInitials; }
+
+        const initialsMap = {}; // initials -> { fl, fh, total, tested }
+        sensorResults.forEach(sr => {
+            if (sr.excluded) return;
+            const initials = sr.initials || 'Unknown';
+            if (!initialsMap[initials]) initialsMap[initials] = { fl: 0, fh: 0, total: 0, tested: 0 };
+            initialsMap[initials].tested++;
+            if (!sr.isFL && !sr.isFH) return;
+            if (sr.isFL) initialsMap[initials].fl++;
+            if (sr.isFH) initialsMap[initials].fh++;
+            initialsMap[initials].total++;
+        });
+
+        const ctx4 = document.getElementById('failByInitialsChart').getContext('2d');
+        const sortedInitials = Object.entries(initialsMap)
+            .sort((a, b) => b[1].total - a[1].total);
+
+        if (sortedInitials.length === 0 || sortedInitials.every(([, d]) => d.total === 0)) {
+            charts.failByInitials = new Chart(ctx4, {
+                type: 'bar',
+                data: { labels: ['No failures'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'No failure data by initials available.', color: '#f59e0b', font: { size: 13 } }
+                    },
+                    scales: { y: { display: false }, x: { display: false } }
+                }
+            });
+        } else {
+            const initialsLabels = sortedInitials.map(([name]) => name);
+            const flCounts = sortedInitials.map(([, d]) => d.fl);
+            const fhCounts = sortedInitials.map(([, d]) => d.fh);
+
+            charts.failByInitials = new Chart(ctx4, {
+                type: 'bar',
+                data: {
+                    labels: initialsLabels,
+                    datasets: [
+                        { label: 'FL', data: flCounts, backgroundColor: STATUS_COLORS['FL'] },
+                        { label: 'FH', data: fhCounts, backgroundColor: STATUS_COLORS['FH'] }
+                    ].filter(ds => ds.data.some(v => v > 0))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                afterBody: function(ctx) {
+                                    const name = initialsLabels[ctx[0].dataIndex];
+                                    const d = initialsMap[name];
+                                    const rate = d.tested > 0 ? (d.total / d.tested * 100).toFixed(1) : '0.0';
+                                    return `${d.total} failures out of ${d.tested} sensors tested (${rate}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            title: { display: true, text: 'Builder Initials' }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: { display: true, text: 'Failure Count' },
+                            ticks: { stepSize: 1 }
                         }
                     }
                 }
