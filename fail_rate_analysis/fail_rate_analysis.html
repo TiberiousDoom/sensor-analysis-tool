@@ -454,6 +454,78 @@
         }
         
         .tooltip-box strong { color: var(--primary); }
+
+        /* Legend popover */
+        .legend-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 6px;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--primary);
+            cursor: pointer;
+            vertical-align: middle;
+            margin-left: 0.75rem;
+            transition: background 0.15s;
+        }
+        .legend-btn:hover { background: rgba(102, 126, 234, 0.2); }
+        .legend-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            background: rgba(0,0,0,0.25);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .legend-overlay.show { opacity: 1; }
+        .legend-popover {
+            position: fixed;
+            z-index: 9999;
+            background: var(--card-light);
+            border: 1px solid var(--border-light);
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+            padding: 1.25rem 1.5rem;
+            max-width: 420px;
+            width: 90vw;
+            font-size: 0.85rem;
+        }
+        @media (prefers-color-scheme: dark) {
+            .legend-popover { background: var(--card-dark); border-color: var(--border-dark); }
+        }
+        .legend-popover h4 { margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--primary); }
+        .legend-criteria { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+        .legend-criteria-item { background: rgba(102,126,234,0.06); border-radius: 6px; padding: 0.4rem 0.6rem; text-align: center; }
+        .legend-criteria-item .label { font-size: 0.72rem; color: #888; display: block; }
+        .legend-criteria-item .value { font-weight: 700; font-size: 0.9rem; }
+        .legend-codes { display: flex; flex-direction: column; gap: 0.4rem; }
+        .legend-code-row { display: flex; align-items: center; gap: 0.6rem; }
+        .legend-code-badge {
+            display: inline-block;
+            min-width: 36px;
+            text-align: center;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.78rem;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .legend-code-desc { flex: 1; font-size: 0.8rem; color: #555; }
+        @media (prefers-color-scheme: dark) { .legend-code-desc { color: #aaa; } }
+        .legend-code-outcome {
+            font-size: 0.72rem;
+            font-weight: 700;
+            border-radius: 3px;
+            padding: 0.1rem 0.35rem;
+            flex-shrink: 0;
+        }
+        .legend-code-outcome.fail { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .legend-code-outcome.warn { background: rgba(245,158,11,0.15); color: #d97706; }
         
         /* Insight callout */
         .insight-callout {
@@ -632,8 +704,43 @@
             <div id="resultsSection" class="hidden">
                 <!-- Metrics -->
                 <div class="card">
-                    <div class="card-title">&#x1F4CA; Summary</div>
+                    <div class="card-title">&#x1F4CA; Summary <button class="legend-btn" id="legendBtn">&#x2139;&#xFE0F; Test Criteria</button></div>
                     <div class="metrics-grid" id="metricsGrid"></div>
+                </div>
+
+                <!-- Legend popover -->
+                <div class="legend-overlay hidden" id="legendOverlay"></div>
+                <div class="legend-popover hidden" id="legendPopover">
+                    <h4>Test Criteria &amp; Status Codes</h4>
+                    <div class="legend-criteria" id="legendCriteria"></div>
+                    <div class="legend-codes">
+                        <div class="legend-code-row">
+                            <span class="legend-code-badge" style="background:#ef4444;">FL</span>
+                            <span class="legend-code-desc">Failed Low (120s &lt; min voltage)</span>
+                            <span class="legend-code-outcome fail">FAIL</span>
+                        </div>
+                        <div class="legend-code-row">
+                            <span class="legend-code-badge" style="background:#dc2626;">FH</span>
+                            <span class="legend-code-desc">Failed High (120s &gt; max voltage)</span>
+                            <span class="legend-code-outcome fail">FAIL</span>
+                        </div>
+                        <div class="legend-code-row">
+                            <span class="legend-code-badge" style="background:#f59e0b;">OT-</span>
+                            <span class="legend-code-desc">Out of Tolerance Negative (&lt; min % change)</span>
+                            <span class="legend-code-outcome warn">PASS*</span>
+                        </div>
+                        <div class="legend-code-row">
+                            <span class="legend-code-badge" style="background:#eab308;">TT</span>
+                            <span class="legend-code-desc">Test-to-Test Variability (&gt; max std dev)</span>
+                            <span class="legend-code-outcome warn">PASS*</span>
+                        </div>
+                        <div class="legend-code-row">
+                            <span class="legend-code-badge" style="background:#fb923c;">OT+</span>
+                            <span class="legend-code-desc">Out of Tolerance Positive (&gt; max % change)</span>
+                            <span class="legend-code-outcome warn">PASS*</span>
+                        </div>
+                    </div>
+                    <p style="font-size:0.72rem; color:#888; margin:0.75rem 0 0; line-height:1.4;">* These codes flag anomalies but are not counted as hard failures in the fail rate calculations.</p>
                 </div>
                 
                 <!-- Tabs -->
@@ -2944,6 +3051,38 @@ else if (typeof exports === 'object'){
             });
         });
         
+        // Legend popover
+        const legendBtn = document.getElementById('legendBtn');
+        const legendPopover = document.getElementById('legendPopover');
+        const legendOverlay = document.getElementById('legendOverlay');
+        const legendCriteria = document.getElementById('legendCriteria');
+
+        function openLegend() {
+            const thresholdSet = document.getElementById('thresholdSet').value;
+            const t = THRESHOLDS[thresholdSet];
+            legendCriteria.innerHTML = `
+                <div class="legend-criteria-item"><span class="label">120s Voltage Range</span><span class="value">${t.min_120s}V – ${t.max_120s}V</span></div>
+                <div class="legend-criteria-item"><span class="label">% Change Range</span><span class="value">${t.min_pct_change}% to ${t.max_pct_change}%</span></div>
+                <div class="legend-criteria-item"><span class="label">Max Std Dev</span><span class="value">${t.max_std_dev}V</span></div>
+            `;
+            // Position near the button
+            const rect = legendBtn.getBoundingClientRect();
+            legendPopover.style.top = (rect.bottom + 8) + 'px';
+            legendPopover.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 440)) + 'px';
+            legendOverlay.classList.remove('hidden');
+            legendOverlay.classList.add('show');
+            legendPopover.classList.remove('hidden');
+        }
+
+        function closeLegend() {
+            legendOverlay.classList.add('hidden');
+            legendOverlay.classList.remove('show');
+            legendPopover.classList.add('hidden');
+        }
+
+        legendBtn.addEventListener('click', (e) => { e.stopPropagation(); openLegend(); });
+        legendOverlay.addEventListener('click', closeLegend);
+
         // Detail table filters
         document.getElementById('detailSearch').addEventListener('input', renderDetailTable);
         document.getElementById('failOnlyToggle').addEventListener('change', renderDetailTable);
