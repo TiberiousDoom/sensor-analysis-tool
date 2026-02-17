@@ -666,10 +666,6 @@
                         <div class="card-title">&#x1F4CA; Failed Sensor 120s Voltage Distribution</div>
                         <div class="chart-container"><canvas id="failVoltageHistogram"></canvas></div>
                     </div>
-                    <div class="card" style="margin-top: 1.5rem;">
-                        <div class="card-title">&#x1F50D; Failures by Serial Number (Top 25)</div>
-                        <div class="chart-container" style="height: 450px;"><canvas id="failByIdChart"></canvas></div>
-                    </div>
                     <div id="insightCallout" class="insight-callout hidden"></div>
                 </div>
 
@@ -2331,88 +2327,6 @@ else if (typeof exports === 'object'){
                         x: {
                             title: { display: true, text: '120s Voltage (V)' },
                             ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Chart 4: Failures by Serial Number (horizontal bar, top 25)
-        if (charts.failById) { charts.failById.destroy(); delete charts.failById; }
-
-        // Aggregate failure counts per serial across all tests
-        const serialFailMap = {}; // serial -> { fl, fh, total }
-        sensorResults.forEach(sr => {
-            if (sr.excluded) return;
-            if (!sr.isFL && !sr.isFH) return;
-            if (!serialFailMap[sr.serial]) serialFailMap[sr.serial] = { fl: 0, fh: 0, total: 0 };
-            if (sr.isFL) { serialFailMap[sr.serial].fl++; serialFailMap[sr.serial].total++; }
-            if (sr.isFH) { serialFailMap[sr.serial].fh++; serialFailMap[sr.serial].total++; }
-        });
-
-        const ctx4 = document.getElementById('failByIdChart').getContext('2d');
-        const sortedSerials = Object.entries(serialFailMap)
-            .sort((a, b) => b[1].total - a[1].total)
-            .slice(0, 25);
-
-        if (sortedSerials.length === 0) {
-            charts.failById = new Chart(ctx4, {
-                type: 'bar',
-                data: { labels: ['No failures'], datasets: [{ data: [0], backgroundColor: '#ccc' }] },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'No failed sensors to display.', color: '#f59e0b', font: { size: 13 } }
-                    },
-                    scales: { y: { display: false }, x: { display: false } }
-                }
-            });
-        } else {
-            const idLabels = sortedSerials.map(([serial]) => serial);
-            const flCounts = sortedSerials.map(([, d]) => d.fl);
-            const fhCounts = sortedSerials.map(([, d]) => d.fh);
-            // Dynamic height: at least 450px, grows with many serials
-            const chartHeight = Math.max(450, sortedSerials.length * 28);
-            ctx4.canvas.parentElement.style.height = chartHeight + 'px';
-
-            charts.failById = new Chart(ctx4, {
-                type: 'bar',
-                data: {
-                    labels: idLabels,
-                    datasets: [
-                        { label: 'FL', data: flCounts, backgroundColor: STATUS_COLORS['FL'] },
-                        { label: 'FH', data: fhCounts, backgroundColor: STATUS_COLORS['FH'] }
-                    ].filter(ds => ds.data.some(v => v > 0))
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { position: 'top' },
-                        tooltip: {
-                            callbacks: {
-                                afterBody: function(ctx) {
-                                    const serial = idLabels[ctx[0].dataIndex];
-                                    const d = serialFailMap[serial];
-                                    return `Total failures: ${d.total}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: true,
-                            beginAtZero: true,
-                            title: { display: true, text: 'Failure Count' },
-                            ticks: { stepSize: 1 }
-                        },
-                        y: {
-                            stacked: true,
-                            title: { display: true, text: 'Serial Number' },
-                            ticks: { font: { size: 11 } }
                         }
                     }
                 }
