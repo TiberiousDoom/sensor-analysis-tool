@@ -731,7 +731,7 @@
                         </div>
                         <div class="legend-code-row">
                             <span class="legend-code-badge" style="background:#eab308;">TT</span>
-                            <span class="legend-code-desc">Test-to-Test Variability (&gt; max std dev)</span>
+                            <span class="legend-code-desc">Test-to-Test Variability (&gt; max pairwise dev)</span>
                             <span class="legend-code-outcome warn">PASS*</span>
                         </div>
                         <div class="legend-code-row">
@@ -1447,14 +1447,14 @@ else if (typeof exports === 'object'){
             max_120s: 4.9,
             min_pct_change: -6.00,
             max_pct_change: 30.00,
-            max_std_dev: 0.3
+            max_pairwise_dev: 0.3
         },
         'High Range': {
             min_120s: 0.55,
             max_120s: 1.0,
             min_pct_change: 0.00,
             max_pct_change: 75.00,
-            max_std_dev: 0.5
+            max_pairwise_dev: 0.5
         }
     };
     
@@ -1608,7 +1608,16 @@ else if (typeof exports === 'object'){
         const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (values.length - 1);
         return Math.sqrt(variance);
     }
-    
+
+    function calculateMaxPairwiseDev(values) {
+        if (values.length < 2) return 0;
+        let maxDev = 0;
+        for (let i = 1; i < values.length; i++) {
+            maxDev = Math.max(maxDev, Math.abs(values[i] - values[i - 1]));
+        }
+        return maxDev;
+    }
+
     // Parse job filter string like "258, 260-270, HR"
     // Extract numeric portion from a job string (e.g. "HR 015.3" -> 15.3, "268.1" -> 268.1)
     function extractJobNumber(str) {
@@ -1806,10 +1815,10 @@ else if (typeof exports === 'object'){
                     return;
                 }
                 
-                // Step 3: Group by Serial Number within each Job to calculate TT (std dev)
+                // Step 3: Group by Serial Number within each Job to calculate TT (max pairwise deviation)
                 // Then determine status for each sensor-test using actual Test # column
-                
-                // Group by Job and Serial Number (for TT std dev calculation)
+
+                // Group by Job and Serial Number (for TT pairwise deviation calculation)
                 const jobSerialGroups = {};
                 filteredData.forEach(row => {
                     const job = String(row['Job #']).trim();
@@ -1819,14 +1828,14 @@ else if (typeof exports === 'object'){
                     jobSerialGroups[key].rows.push(row);
                 });
                 
-                // Pre-calculate TT flags per Job+Serial
+                // Pre-calculate TT flags per Job+Serial using max pairwise deviation
                 const ttFlags = {};
                 for (const [key, group] of Object.entries(jobSerialGroups)) {
                     const readings120 = group.rows
                         .map(r => r['120'])
                         .filter(v => v !== null && v !== undefined && !isNaN(v));
-                    const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
-                    ttFlags[key] = stdDev120 > thresholds.max_std_dev;
+                    const maxPairDev = calculateMaxPairwiseDev(readings120);
+                    ttFlags[key] = maxPairDev > thresholds.max_pairwise_dev;
                 }
                 
                 // For each row, determine status using the actual Test # column
@@ -3063,7 +3072,7 @@ else if (typeof exports === 'object'){
             legendCriteria.innerHTML = `
                 <div class="legend-criteria-item"><span class="label">120s Voltage Range</span><span class="value">${t.min_120s}V – ${t.max_120s}V</span></div>
                 <div class="legend-criteria-item"><span class="label">% Change Range</span><span class="value">${t.min_pct_change}% to ${t.max_pct_change}%</span></div>
-                <div class="legend-criteria-item"><span class="label">Max Std Dev</span><span class="value">${t.max_std_dev}V</span></div>
+                <div class="legend-criteria-item"><span class="label">Max Pairwise Dev</span><span class="value">${t.max_pairwise_dev}V</span></div>
             `;
             // Position near the button
             const rect = legendBtn.getBoundingClientRect();

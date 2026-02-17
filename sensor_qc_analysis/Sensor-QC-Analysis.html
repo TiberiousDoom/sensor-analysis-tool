@@ -921,7 +921,7 @@
                                 <tr><td><span class="status-pill status-FL">FL</span></td><td>Failed Low (120s &lt; min voltage)</td><td>FAIL</td></tr>
                                 <tr><td><span class="status-pill status-FH">FH</span></td><td>Failed High (120s &gt; max voltage)</td><td>FAIL</td></tr>
                                 <tr><td><span class="status-pill status-FT-">FT-</span></td><td>Failed Tolerance Negative (&lt; min % change)</td><td>FAIL</td></tr>
-                                <tr><td><span class="status-pill status-TT">TT</span></td><td>Test-to-Test Variability (&gt; max std dev)</td><td>PASS*</td></tr>
+                                <tr><td><span class="status-pill status-TT">TT</span></td><td>Test-to-Test Variability (&gt; max pairwise dev)</td><td>PASS*</td></tr>
                                 <tr><td><span class="status-pill status-OT+">OT+</span></td><td>Out of Tolerance Positive (&gt; max % change)</td><td>PASS*</td></tr>
                                 <tr><td><span class="status-pill status-PASS">PASS</span></td><td>All criteria met</td><td>PASS</td></tr>
                             </tbody>
@@ -1570,14 +1570,14 @@ else if (typeof exports === 'object'){
             max_120s: 4.9,
             min_pct_change: -6.00,
             max_pct_change: 30.00,
-            max_std_dev: 0.3
+            max_pairwise_dev: 0.3
         },
         'High Range': {
             min_120s: 0.55,
             max_120s: 1.0,
             min_pct_change: 0.00,
             max_pct_change: 75.00,
-            max_std_dev: 0.5
+            max_pairwise_dev: 0.5
         }
     };
     
@@ -1787,7 +1787,16 @@ else if (typeof exports === 'object'){
         const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (values.length - 1);
         return Math.sqrt(variance);
     }
-    
+
+    function calculateMaxPairwiseDev(values) {
+        if (values.length < 2) return 0;
+        let maxDev = 0;
+        for (let i = 1; i < values.length; i++) {
+            maxDev = Math.max(maxDev, Math.abs(values[i] - values[i - 1]));
+        }
+        return maxDev;
+    }
+
     function calculatePercentile(values, percentile) {
         if (values.length === 0) return null;
         const sorted = [...values].sort((a, b) => a - b);
@@ -1924,8 +1933,8 @@ else if (typeof exports === 'object'){
             
             if (readings120.length === 0) continue;
             
-            const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
-            
+            const maxPairDev120 = calculateMaxPairwiseDev(readings120);
+
             const serialRow = {
                 'Serial Number': serial,
                 'Channel': (group[2] || group[group.length - 1])['Channel'] || '',
@@ -1973,7 +1982,7 @@ else if (typeof exports === 'object'){
                 allFailureCodes.push(...failureCodes);
             });
             
-            if (stdDev120 > thresholds.max_std_dev) {
+            if (maxPairDev120 > thresholds.max_pairwise_dev) {
                 allFailureCodes.push('TT');
             }
             
@@ -2010,7 +2019,7 @@ else if (typeof exports === 'object'){
             }
             
             serialRow['Pass/Fail'] = finalStatus;
-            serialRow['120s(St.Dev.)'] = stdDev120;
+            serialRow['120s(MaxΔ)'] = maxPairDev120;
             results.push(serialRow);
         }
         
@@ -2021,14 +2030,14 @@ else if (typeof exports === 'object'){
         const anomalies = [];
         
         results.forEach(row => {
-            const stdDev = row['120s(St.Dev.)'];
-            if (stdDev > thresholds.max_std_dev * 2) {
+            const maxPairDev = row['120s(MaxΔ)'];
+            if (maxPairDev > thresholds.max_pairwise_dev * 2) {
                 anomalies.push({
                     serial: row['Serial Number'],
                     channel: row['Channel'],
                     type: 'High Variability',
                     severity: 'High',
-                    message: `Std Dev ${stdDev.toFixed(3)}V exceeds 2× threshold`
+                    message: `Max pairwise deviation ${maxPairDev.toFixed(3)}V exceeds 2× threshold`
                 });
             }
             
@@ -2249,7 +2258,7 @@ else if (typeof exports === 'object'){
             `Showing ${filtered.length} of ${analysisResults.length} sensors`;
         
         const headerRow = document.getElementById('tableHeader');
-        const columns = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)'];
+        const columns = ['Serial Number', 'Channel', 'Pass/Fail', '120s(MaxΔ)'];
 
         const maxTests = Math.max(...analysisResults.map(r => r.testCount || 1));
         for (let i = 1; i <= maxTests; i++) {
@@ -2279,7 +2288,7 @@ else if (typeof exports === 'object'){
                 row['Serial Number'],
                 row['Channel'],
                 statusDropdown,
-                row['120s(St.Dev.)'].toFixed(4)
+                row['120s(MaxΔ)'].toFixed(4)
             ];
             
             for (let i = 1; i <= maxTests; i++) {
@@ -2636,7 +2645,7 @@ else if (typeof exports === 'object'){
                     <tr><td>Threshold Set</td><td><strong>${thresholdSet}</strong></td></tr>
                     <tr><td>120s Voltage Range</td><td>${thresholds.min_120s}V - ${thresholds.max_120s}V</td></tr>
                     <tr><td>% Change Range</td><td>${thresholds.min_pct_change}% to ${thresholds.max_pct_change}%</td></tr>
-                    <tr><td>Max Std Dev</td><td>${thresholds.max_std_dev}V</td></tr>
+                    <tr><td>Max Pairwise Dev</td><td>${thresholds.max_pairwise_dev}V</td></tr>
                 </tbody>
             </table>
         `;
@@ -2730,7 +2739,7 @@ else if (typeof exports === 'object'){
     function exportCSV() {
         if (!analysisResults) return;
         
-        const headers = ['Serial Number', 'Channel', 'Pass/Fail', '120s(St.Dev.)'];
+        const headers = ['Serial Number', 'Channel', 'Pass/Fail', '120s(MaxΔ)'];
         const maxTests = Math.max(...analysisResults.map(r => r.testCount || 1));
         for (let i = 1; i <= maxTests; i++) {
             headers.push(`0s(T${i})`, `120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
@@ -2741,7 +2750,7 @@ else if (typeof exports === 'object'){
                 row['Serial Number'],
                 row['Channel'],
                 row['Pass/Fail'],
-                row['120s(St.Dev.)'].toFixed(4)
+                row['120s(MaxΔ)'].toFixed(4)
             ];
 
             for (let i = 1; i <= maxTests; i++) {
@@ -2782,7 +2791,7 @@ else if (typeof exports === 'object'){
             .join('');
 
         const failedSensors = analysisResults.filter(r => ['FL', 'FH'].includes(r['Pass/Fail']));
-        const failedRows = failedSensors.map(r => `<tr><td>${r['Serial Number']}</td><td>${r['Channel']}</td><td>${r['Pass/Fail']}</td><td>${r['120s(St.Dev.)'].toFixed(4)}</td></tr>`).join('');
+        const failedRows = failedSensors.map(r => `<tr><td>${r['Serial Number']}</td><td>${r['Channel']}</td><td>${r['Pass/Fail']}</td><td>${r['120s(MaxΔ)'].toFixed(4)}</td></tr>`).join('');
 
         const reportHTML = `
             <html><head><title>Job ${currentJob} Summary</title>
@@ -2821,7 +2830,7 @@ else if (typeof exports === 'object'){
             ${failedSensors.length > 0 ? `
             <h2>Failed Sensors</h2>
             <table class="failed-section">
-                <tr><th>Serial Number</th><th>Channel</th><th>Status</th><th>Std Dev</th></tr>
+                <tr><th>Serial Number</th><th>Channel</th><th>Status</th><th>Max Δ</th></tr>
                 ${failedRows}
             </table>
             ` : ''}
@@ -2919,7 +2928,7 @@ else if (typeof exports === 'object'){
                 if (readings120.length === 0) continue; // Skip sensors with no valid data
 
                 totalSensors++;
-                const stdDev120 = readings120.length > 1 ? calculateStdDev(readings120) : 0;
+                const maxPairDev120 = calculateMaxPairwiseDev(readings120);
                 let hasCriticalFailure = false;
 
                 // Check each test for this sensor and track per-test passes
@@ -3062,7 +3071,7 @@ else if (typeof exports === 'object'){
             return;
         }
         
-        const rows = failed.map(r => `<tr><td>${r['Serial Number']}</td><td>${r['Channel']}</td><td>${r['Pass/Fail']}</td><td>${r['120s(St.Dev.)'].toFixed(4)}</td></tr>`).join('');
+        const rows = failed.map(r => `<tr><td>${r['Serial Number']}</td><td>${r['Channel']}</td><td>${r['Pass/Fail']}</td><td>${r['120s(MaxΔ)'].toFixed(4)}</td></tr>`).join('');
         
         const reportHTML = `
             <html><head><title>Failed Sensors - Job ${currentJob}</title>
@@ -3071,7 +3080,7 @@ else if (typeof exports === 'object'){
             <h1>Failed Sensors Report - Job ${currentJob}</h1>
             <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
             <p><strong>Total Failed:</strong> ${failed.length} sensors</p>
-            <table><tr><th>Serial Number</th><th>Channel</th><th>Status</th><th>Std Dev</th></tr>${rows}</table>
+            <table><tr><th>Serial Number</th><th>Channel</th><th>Status</th><th>Max Δ</th></tr>${rows}</table>
             </body></html>
         `;
         
