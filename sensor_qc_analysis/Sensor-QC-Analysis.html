@@ -1908,7 +1908,17 @@ else if (typeof exports === 'object'){
         if (lower === upper) return sorted[lower];
         return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
     }
-    
+
+    function filterOutliersIQR(values) {
+        if (values.length < 4) return values;
+        const q1 = calculatePercentile(values, 25);
+        const q3 = calculatePercentile(values, 75);
+        const iqr = q3 - q1;
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+        return values.filter(v => v >= lowerBound && v <= upperBound);
+    }
+
     // ============================================================
     // DATABASE FUNCTIONS (Fixed)
     // ============================================================
@@ -1997,21 +2007,26 @@ else if (typeof exports === 'object'){
     // ============================================================
     
     function calculateMetrics(data) {
+        const MIN_DENOMINATOR = 0.001; // Minimum |V90 - V0| to avoid division by near-zero
+        const MAX_PCT_CHANGE = 1000;   // Cap at ±1000% to reject nonsensical outliers
+
         return data.map(row => {
             const v0 = row['0'];
             const v90 = row['90'];
             const v120 = row['120'];
-            
+
             let pctChange = null;
-            
+
             if (v0 !== null && v90 !== null && v120 !== null) {
                 const denominator = v90 - v0;
-                if (denominator !== 0) {
+                if (Math.abs(denominator) >= MIN_DENOMINATOR) {
                     const rawPctChange = ((v120 - v90) / denominator) * 100;
-                    pctChange = Math.round(rawPctChange * 1000) / 1000;
+                    if (Math.abs(rawPctChange) <= MAX_PCT_CHANGE) {
+                        pctChange = Math.round(rawPctChange * 1000) / 1000;
+                    }
                 }
             }
-            
+
             return { ...row, pct_change_90_120: pctChange };
         });
     }
@@ -2895,6 +2910,9 @@ else if (typeof exports === 'object'){
                 }
             });
 
+            // Filter outliers from %Chg using IQR method before averaging
+            const filteredPctChg = filterOutliersIQR(allPctChg);
+
             multiJobResults.set(jobNum, {
                 results,
                 jobData,
@@ -2908,7 +2926,7 @@ else if (typeof exports === 'object'){
                     testStats,
                     maxTests,
                     avg120s: all120s.length > 0 ? calculateMean(all120s) : null,
-                    avgPctChg: allPctChg.length > 0 ? calculateMean(allPctChg) : null
+                    avgPctChg: filteredPctChg.length > 0 ? calculateMean(filteredPctChg) : null
                 }
             });
         }
