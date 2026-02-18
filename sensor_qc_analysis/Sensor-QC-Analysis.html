@@ -3345,8 +3345,8 @@ else if (typeof exports === 'object'){
             });
 
             // 2. Heatmap (rendered as HTML table) in distribution chart area
-            const distCard = document.getElementById('distributionChart').parentElement;
             const distCanvas = document.getElementById('distributionChart');
+            const distCard = distCanvas.closest('.card');
             distCanvas.style.display = 'none';
 
             let heatmapDiv = document.getElementById('multiJobHeatmap');
