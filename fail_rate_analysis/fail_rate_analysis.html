@@ -2822,8 +2822,10 @@ else if (typeof exports === 'object'){
             });
             
             // Collect unique serials and unique failed serials from sensorResults
+            // (excluding sensors that were excluded due to prior test failures)
             sensorResults.forEach(sr => {
                 if (sr.job !== job) return;
+                if (sr.excluded) return;
                 jobSerials.add(sr.serial);
                 if (sr.isFL || sr.isFH) jobFailedSerials.add(sr.serial);
             });
@@ -2836,24 +2838,30 @@ else if (typeof exports === 'object'){
             html += '</tr>';
         });
         
-        // Footer row: total per test (unique serials)
+        // Footer row: total per test (unique serials, excluding prior-failed sensors)
         html += '<tr style="font-weight: 700;"><td class="heatmap-job-col" style="font-style: italic;">Total</td>';
+        const totalRowGlobalFailed = new Set();
         uniqueTests.forEach(t => {
             const testSerials = new Set();
             const testFailedSerials = new Set();
             sensorResults.forEach(sr => {
                 if (sr.test !== t) return;
+                if (sr.excluded) return;
                 testSerials.add(sr.serial);
-                if (sr.isFL || sr.isFH) testFailedSerials.add(sr.serial);
+                if ((sr.isFL || sr.isFH) && !totalRowGlobalFailed.has(sr.serial)) {
+                    testFailedSerials.add(sr.serial);
+                }
             });
+            testFailedSerials.forEach(s => totalRowGlobalFailed.add(s));
             const rate = testSerials.size > 0 ? (testFailedSerials.size / testSerials.size * 100).toFixed(1) : '—';
             const bg = rate !== '—' ? failRateColor(parseFloat(rate)) : 'transparent';
             html += `<td class="heatmap-cell" style="background:${bg}; font-style:italic;">${rate}${rate !== '—' ? '%' : ''}</td>`;
         });
-        // Overall total (unique serials across everything)
+        // Overall total (unique serials across everything, excluding prior-failed)
         const allSerials = new Set();
         const allFailedSerials = new Set();
         sensorResults.forEach(sr => {
+            if (sr.excluded) return;
             allSerials.add(sr.serial);
             if (sr.isFL || sr.isFH) allFailedSerials.add(sr.serial);
         });
