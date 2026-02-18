@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Sensor QC Analysis Dashboard for quality control testing, threshold analysis, and pass/fail status tracking of sensor data">
-    <title>Sensor Analysis Dashboard v2.1</title>
+    <title>Sensor Analysis Dashboard v2.2</title>
 
     <style>
         :root {
@@ -612,6 +612,102 @@
         
         .hidden { display: none !important; }
 
+        /* Multi-job chip/tag styles */
+        .job-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+            min-height: 0;
+        }
+        .job-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            animation: chipIn 0.15s ease-out;
+        }
+        @keyframes chipIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .job-chip .chip-remove {
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 0.85rem;
+            line-height: 1;
+        }
+        .job-chip .chip-remove:hover { opacity: 1; }
+        .tier-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+        .tier-single { background: var(--primary); color: white; }
+        .tier-few { background: var(--success); color: white; }
+        .tier-many { background: var(--warning); color: white; }
+        .tier-bulk { background: var(--danger); color: white; }
+
+        @media (prefers-color-scheme: dark) {
+            .job-chip { background: #5a6fd6; }
+        }
+
+        /* Multi-job comparison table styles */
+        .multi-job-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .multi-job-table th, .multi-job-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-light); text-align: left; }
+        .multi-job-table th { background: var(--bg-light); font-weight: 700; color: #555; position: sticky; top: 0; z-index: 10; }
+        .multi-job-table tr:hover { background: rgba(102, 126, 234, 0.05); }
+        .multi-job-table .job-group-header td {
+            background: rgba(102, 126, 234, 0.08);
+            font-weight: 700;
+            color: var(--primary);
+            border-top: 2px solid var(--primary);
+            padding: 6px 10px;
+        }
+        .multi-job-table .best-cell { color: var(--success); font-weight: 700; }
+        .multi-job-table .worst-cell { color: var(--danger); font-weight: 700; }
+        .multi-job-table .overall-row td {
+            font-weight: 700;
+            border-top: 3px solid var(--primary);
+            background: rgba(102, 126, 234, 0.05);
+        }
+        @media (prefers-color-scheme: dark) {
+            .multi-job-table th { background: #3d3d3d; color: #ccc; }
+            .multi-job-table .job-group-header td { background: rgba(102, 126, 234, 0.15); }
+            .multi-job-table .overall-row td { background: rgba(102, 126, 234, 0.1); }
+        }
+
+        /* Heatmap styles */
+        .heatmap-container { overflow-x: auto; }
+        .heatmap-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .heatmap-table th, .heatmap-table td { padding: 6px 8px; text-align: center; border: 1px solid var(--border-light); }
+        .heatmap-table th { background: var(--bg-light); font-weight: 600; font-size: 0.75rem; }
+        .heatmap-cell { color: white; font-weight: 700; font-size: 0.8rem; border-radius: 2px; }
+        @media (prefers-color-scheme: dark) {
+            .heatmap-table th { background: #3d3d3d; color: #ccc; }
+            .heatmap-table td { border-color: var(--border-dark); }
+        }
+
+        /* Multi-job metrics row */
+        .multi-metrics-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 0.5rem; }
+        .multi-metrics-table th, .multi-metrics-table td { padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border-light); }
+        .multi-metrics-table th { background: var(--bg-light); font-weight: 700; color: #555; }
+        .multi-metrics-table .highlight-best { background: rgba(16, 185, 129, 0.1); }
+        .multi-metrics-table .highlight-worst { background: rgba(239, 68, 68, 0.1); }
+        @media (prefers-color-scheme: dark) {
+            .multi-metrics-table th { background: #3d3d3d; color: #ccc; }
+        }
+
         /* Accessibility: Focus styles */
         .tab-btn:focus,
         .btn:focus,
@@ -733,16 +829,16 @@
             <div id="toastContainer" class="toast-container"></div>
             <a href="../index.html" class="home-btn">← Home</a>
             <div class="sidebar-header">
-                🔬 Sensor Analysis v2.1
+                🔬 Sensor Analysis v2.2
                 <span class="help-tooltip">
                     ❓
                     <div class="tooltip-content">
                         <strong>Workflow:</strong>
                         <ol>
                             <li>Upload CSV or .db file</li>
-                            <li>Enter job number</li>
+                            <li>Enter job(s): single, comma-separated, range, or "all"</li>
                             <li>Click Analyze</li>
-                            <li>Review results</li>
+                            <li>Review results (auto-adapts to job count)</li>
                             <li>Export as needed</li>
                         </ol>
                     </div>
@@ -783,13 +879,13 @@
             <div class="sidebar-section" id="analysisSection">
                 <h3>⚙️ Analysis Settings</h3>
                 <div class="form-group">
-                    <label for="jobNumber">Job Number</label>
-                    <input type="text" id="jobNumber" placeholder="Enter job number..."
-                           pattern="[0-9]+(\.[0-9]+)?"
-                           title="Enter a numeric job number (e.g., 258 or 258.1)"
+                    <label for="jobNumber">Job Number(s)</label>
+                    <input type="text" id="jobNumber" placeholder="e.g. 258, 260-265, all"
                            autocomplete="off"
                            aria-describedby="jobNumberHint">
-                    <div id="jobNumberHint" style="font-size: 0.75em; color: var(--info); margin-top: 4px;">Supports decimal sub-jobs (e.g., 258.1)</div>
+                    <div id="jobNumberHint" style="font-size: 0.75em; color: var(--info); margin-top: 4px;">Comma-separated, ranges (258-265), or "all"</div>
+                    <div id="jobChips" class="job-chips"></div>
+                    <div id="tierBadge"></div>
                 </div>
                 <div class="form-group">
                     <label for="thresholdSet">Threshold Set</label>
@@ -1612,6 +1708,12 @@ else if (typeof exports === 'object'){
     let charts = {};
     let sqlDb = null;
     let sqlEngine = null;
+
+    // Multi-job state
+    let multiJobMode = false;
+    let multiJobResults = new Map(); // jobNumber -> { results, jobData, stats }
+    let currentJobList = [];         // Array of job numbers being compared
+    let currentTier = 'single';      // 'single' | 'few' | 'many' | 'bulk'
     
     // ============================================================
     // INDEXEDDB FUNCTIONS (For persisting last database)
@@ -2241,7 +2343,13 @@ else if (typeof exports === 'object'){
     
     function renderTable() {
         if (!analysisResults) return;
-        
+
+        // Delegate to multi-job table rendering if in multi-job mode
+        if (multiJobMode && multiJobResults.size > 0) {
+            renderMultiJobTable(currentTier);
+            return;
+        }
+
         const searchText = document.getElementById('serialSearch').value.toLowerCase();
         const searchTerms = searchText.split(',').map(t => t.trim()).filter(t => t);
         
@@ -2652,23 +2760,803 @@ else if (typeof exports === 'object'){
     }
     
     // ============================================================
-    // MAIN ANALYSIS FUNCTION
+    // MULTI-JOB FUNCTIONS
     // ============================================================
-    
-    function runAnalysis() {
-        const jobInput = document.getElementById('jobNumber');
-        const jobNumber = jobInput.value.trim();
-        const thresholdSet = document.getElementById('thresholdSet').value;
 
-        if (!jobNumber) {
-            showAlert('⚠️ Please enter a job number', 'warning');
-            jobInput.focus();
+    function parseJobInput(inputStr) {
+        const str = inputStr.trim().toLowerCase();
+        if (!str) return [];
+
+        // Handle "all" or "*"
+        if (str === 'all' || str === '*') {
+            const allJobs = [...new Set(rawData.map(r => {
+                const wholeNum = parseInt(r['Job #'], 10);
+                return isNaN(wholeNum) ? null : wholeNum;
+            }).filter(j => j !== null))];
+            return allJobs.sort((a, b) => a - b).map(String);
+        }
+
+        const jobs = new Set();
+        const parts = str.split(',').map(p => p.trim()).filter(p => p);
+
+        for (const part of parts) {
+            // Check for range: "258-265"
+            const rangeMatch = part.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/);
+            if (rangeMatch) {
+                const start = parseInt(rangeMatch[1], 10);
+                const end = parseInt(rangeMatch[2], 10);
+                if (!isNaN(start) && !isNaN(end)) {
+                    const lo = Math.min(start, end);
+                    const hi = Math.max(start, end);
+                    // Safety limit: max 200 jobs in a range
+                    if (hi - lo > 200) continue;
+                    for (let j = lo; j <= hi; j++) {
+                        jobs.add(String(j));
+                    }
+                }
+            } else if (/^[0-9]+(\.[0-9]+)?$/.test(part)) {
+                jobs.add(part);
+            }
+        }
+
+        return [...jobs].sort((a, b) => parseFloat(a) - parseFloat(b));
+    }
+
+    function getDisplayTier(count) {
+        if (count <= 1) return 'single';
+        if (count <= 5) return 'few';
+        if (count <= 15) return 'many';
+        return 'bulk';
+    }
+
+    function renderJobChips(jobNumbers) {
+        const container = document.getElementById('jobChips');
+        const badge = document.getElementById('tierBadge');
+
+        if (jobNumbers.length <= 1) {
+            container.innerHTML = '';
+            badge.innerHTML = '';
             return;
         }
 
-        // Validate job number format (numbers with optional decimal)
-        if (!/^[0-9]+(\.[0-9]+)?$/.test(jobNumber)) {
-            showAlert('⚠️ Invalid job number format. Use numbers only (e.g., 258 or 258.1)', 'warning');
+        // Show chips (truncate display if too many)
+        const maxShow = 12;
+        const shown = jobNumbers.slice(0, maxShow);
+        const remaining = jobNumbers.length - maxShow;
+
+        container.innerHTML = shown.map(j =>
+            `<span class="job-chip">${j}<span class="chip-remove" onclick="removeJobChip('${j}')">&times;</span></span>`
+        ).join('') + (remaining > 0 ? `<span class="job-chip">+${remaining} more</span>` : '');
+
+        const tier = getDisplayTier(jobNumbers.length);
+        const tierLabels = {
+            few: 'Comparison Mode',
+            many: 'Aggregated Mode',
+            bulk: 'Trend Mode'
+        };
+        const tierClass = `tier-${tier}`;
+        badge.innerHTML = `<span class="tier-badge ${tierClass}">${jobNumbers.length} jobs — ${tierLabels[tier] || ''}</span>`;
+    }
+
+    function removeJobChip(jobNumber) {
+        const input = document.getElementById('jobNumber');
+        const jobs = parseJobInput(input.value).filter(j => j !== jobNumber);
+        input.value = jobs.join(', ');
+        renderJobChips(jobs);
+    }
+
+    function runMultiJobAnalysis(jobNumbers, thresholdSet) {
+        multiJobResults.clear();
+
+        for (const jobNum of jobNumbers) {
+            const jobData = getJobData(rawData, jobNum);
+            if (jobData.length === 0) continue;
+
+            const dataWithMetrics = calculateMetrics(jobData);
+            const results = determinePassFail(dataWithMetrics, thresholdSet);
+            applyStatusOverrides(results, jobNum);
+
+            // Calculate stats
+            const total = results.length;
+            const passed = results.filter(r => ['PASS', 'TT', 'OT+'].includes(r['Pass/Fail'])).length;
+            const failed = results.filter(r => ['FL', 'FH', 'FT-'].includes(r['Pass/Fail'])).length;
+            const counted = passed + failed;
+
+            // Per-test stats
+            const maxTests = Math.max(...results.map(r => r.testCount || 1), 1);
+            const testStats = {};
+            for (let t = 1; t <= maxTests; t++) {
+                let tPass = 0, tFail = 0, tTotal = 0;
+                results.forEach(r => {
+                    const st = r[`Status(T${t})`];
+                    if (st) {
+                        tTotal++;
+                        const primary = st.split(',')[0];
+                        if (primary === 'PASS') tPass++;
+                        else if (['FL', 'FH', 'FT-'].includes(primary)) tFail++;
+                        else tPass++; // TT, OT+ count as pass
+                    }
+                });
+                testStats[t] = { passed: tPass, failed: tFail, total: tTotal };
+            }
+
+            // Voltage stats
+            const all120s = [];
+            const allPctChg = [];
+            results.forEach(r => {
+                for (let t = 1; t <= (r.testCount || 1); t++) {
+                    const v = r[`120s(T${t})`];
+                    if (v !== null && v !== undefined && !isNaN(v)) all120s.push(v);
+                    const pct = r[`%Chg(T${t})`];
+                    if (pct) {
+                        const num = parseFloat(pct);
+                        if (!isNaN(num)) allPctChg.push(num);
+                    }
+                }
+            });
+
+            multiJobResults.set(jobNum, {
+                results,
+                jobData,
+                stats: {
+                    total,
+                    passed,
+                    failed,
+                    counted,
+                    passRate: counted > 0 ? (passed / counted * 100) : 0,
+                    failRate: counted > 0 ? (failed / counted * 100) : 0,
+                    testStats,
+                    maxTests,
+                    avg120s: all120s.length > 0 ? calculateMean(all120s) : null,
+                    avgPctChg: allPctChg.length > 0 ? calculateMean(allPctChg) : null
+                }
+            });
+        }
+    }
+
+    function renderMultiJobMetrics(tier) {
+        const grid = document.getElementById('metricsGrid');
+        const jobs = [...multiJobResults.entries()];
+        const thresholdSet = document.getElementById('thresholdSet').value;
+
+        if (tier === 'few') {
+            // Per-job metrics table + overall
+            const allPassed = jobs.reduce((s, [, d]) => s + d.stats.passed, 0);
+            const allFailed = jobs.reduce((s, [, d]) => s + d.stats.failed, 0);
+            const allCounted = allPassed + allFailed;
+            const allTotal = jobs.reduce((s, [, d]) => s + d.stats.total, 0);
+            const overallPassRate = allCounted > 0 ? (allPassed / allCounted * 100) : 0;
+
+            // Find best/worst
+            const passRates = jobs.map(([j, d]) => ({ job: j, rate: d.stats.passRate }));
+            const bestJob = passRates.reduce((a, b) => a.rate >= b.rate ? a : b).job;
+            const worstJob = passRates.reduce((a, b) => a.rate <= b.rate ? a : b).job;
+
+            let html = `<table class="multi-metrics-table">
+                <thead><tr><th>Job #</th><th>Sensors</th><th>Pass Rate</th><th>Fail Rate</th><th>Passed</th><th>Failed</th></tr></thead><tbody>`;
+            for (const [jobNum, data] of jobs) {
+                const isBest = jobNum === bestJob && jobs.length > 1;
+                const isWorst = jobNum === worstJob && jobs.length > 1 && bestJob !== worstJob;
+                html += `<tr class="${isBest ? 'highlight-best' : isWorst ? 'highlight-worst' : ''}">
+                    <td><strong>${jobNum}</strong></td>
+                    <td>${data.stats.total}</td>
+                    <td style="color: var(--success); font-weight:700;">${data.stats.passRate.toFixed(1)}%</td>
+                    <td style="color: var(--danger); font-weight:700;">${data.stats.failRate.toFixed(1)}%</td>
+                    <td>${data.stats.passed}</td>
+                    <td>${data.stats.failed}</td>
+                </tr>`;
+            }
+            html += `<tr class="overall-row" style="border-top:3px solid var(--primary); font-weight:700; background: rgba(102,126,234,0.05);">
+                <td>Overall</td><td>${allTotal}</td>
+                <td style="color: var(--success);">${overallPassRate.toFixed(1)}%</td>
+                <td style="color: var(--danger);">${allCounted > 0 ? ((allFailed / allCounted) * 100).toFixed(1) : '0.0'}%</td>
+                <td>${allPassed}</td><td>${allFailed}</td>
+            </tr></tbody></table>`;
+            grid.innerHTML = html;
+
+        } else if (tier === 'many' || tier === 'bulk') {
+            // Aggregated summary metrics
+            const passRates = jobs.map(([, d]) => d.stats.passRate);
+            const totalSensors = jobs.reduce((s, [, d]) => s + d.stats.total, 0);
+            const mean = calculateMean(passRates);
+            const stdDev = calculateStdDev(passRates);
+            const median = calculatePercentile(passRates, 50);
+            const min = Math.min(...passRates);
+            const max = Math.max(...passRates);
+
+            // Trend direction (simple linear)
+            let trendDir = 'Stable';
+            if (jobs.length >= 3) {
+                const n = passRates.length;
+                const xMean = (n - 1) / 2;
+                const yMean = mean;
+                let num = 0, den = 0;
+                passRates.forEach((y, i) => { num += (i - xMean) * (y - yMean); den += (i - xMean) ** 2; });
+                const slope = den !== 0 ? num / den : 0;
+                if (slope > 1) trendDir = 'Improving';
+                else if (slope < -1) trendDir = 'Declining';
+            }
+
+            grid.innerHTML = `
+                <div class="metric info"><div class="metric-label">Total Jobs</div><div class="metric-value">${jobs.length}</div></div>
+                <div class="metric"><div class="metric-label">Total Sensors</div><div class="metric-value">${totalSensors}</div></div>
+                <div class="metric success"><div class="metric-label">${tier === 'bulk' ? 'Mean' : 'Avg'} Pass Rate</div><div class="metric-value">${mean.toFixed(1)}%</div><div class="metric-delta">Median: ${median.toFixed(1)}%</div></div>
+                <div class="metric danger"><div class="metric-label">Pass Rate Range</div><div class="metric-value">${min.toFixed(1)}–${max.toFixed(1)}%</div><div class="metric-delta">Std Dev: ${stdDev.toFixed(1)}%</div></div>
+                ${tier === 'bulk' ? `<div class="metric"><div class="metric-label">Trend</div><div class="metric-value" style="font-size: 1rem;">${trendDir}</div></div>` : ''}
+            `;
+        }
+    }
+
+    function renderMultiJobTable(tier) {
+        const headerRow = document.getElementById('tableHeader');
+        const tbody = document.getElementById('tableBody');
+        const filterInfo = document.getElementById('filterInfo');
+        const jobs = [...multiJobResults.entries()];
+
+        if (tier === 'few') {
+            // Full sensor table with Job # column prepended, grouped by job
+            const searchText = document.getElementById('serialSearch').value.toLowerCase();
+            const searchTerms = searchText.split(',').map(t => t.trim()).filter(t => t);
+
+            // Determine max test count across all jobs
+            let globalMaxTests = 1;
+            for (const [, data] of jobs) {
+                const mt = Math.max(...data.results.map(r => r.testCount || 1));
+                globalMaxTests = Math.max(globalMaxTests, mt);
+            }
+
+            const columns = ['Job #', 'Serial Number', 'Channel', 'Pass/Fail', '120s(MaxΔ)'];
+            for (let i = 1; i <= globalMaxTests; i++) {
+                columns.push(`0s(T${i})`, `120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
+            }
+            headerRow.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
+
+            let totalShown = 0;
+            let totalAll = 0;
+            let rowsHTML = '';
+
+            for (const [jobNum, data] of jobs) {
+                let filtered = data.results.filter(r => activeFilters.has(r['Pass/Fail']));
+                totalAll += data.results.length;
+
+                if (searchTerms.length > 0) {
+                    filtered = filtered.filter(r => {
+                        const serial = r['Serial Number'].toLowerCase();
+                        return searchTerms.some(term => serial.includes(term));
+                    });
+                }
+                totalShown += filtered.length;
+
+                // Job group header
+                rowsHTML += `<tr class="job-group-header"><td colspan="${columns.length}">Job ${jobNum} — ${data.results.length} sensors (${data.stats.passRate.toFixed(1)}% pass)</td></tr>`;
+
+                rowsHTML += filtered.map(row => {
+                    const status = row['Pass/Fail'];
+                    let rowClass = '';
+                    if (['FL', 'FH', 'FT-'].includes(status)) rowClass = 'row-fail';
+                    else if (status === 'PASS') rowClass = 'row-pass';
+                    else if (['TT', 'OT+'].includes(status)) rowClass = 'row-warning';
+
+                    const statusPill = `<span class="status-pill status-${status}">${status}</span>`;
+                    const cells = [jobNum, row['Serial Number'], row['Channel'], statusPill, row['120s(MaxΔ)'].toFixed(4)];
+                    for (let i = 1; i <= globalMaxTests; i++) {
+                        const v0 = row[`0s(T${i})`];
+                        const v120 = row[`120s(T${i})`];
+                        const pctChg = row[`%Chg(T${i})`];
+                        const tStatus = row[`Status(T${i})`];
+                        cells.push(
+                            v0 !== undefined && v0 !== null ? v0.toFixed(2) : '—',
+                            v120 !== undefined && v120 !== null ? v120.toFixed(2) : '—',
+                            pctChg || '—',
+                            tStatus ? `<span class="status-pill status-${tStatus.split(',')[0]}">${tStatus}</span>` : '—'
+                        );
+                    }
+                    return `<tr class="${rowClass}">${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
+                }).join('');
+            }
+
+            tbody.innerHTML = rowsHTML;
+            filterInfo.textContent = `Showing ${totalShown} of ${totalAll} sensors across ${jobs.length} jobs`;
+
+        } else {
+            // Many/Bulk: Job-level summary table
+            headerRow.innerHTML = '<th>Job #</th><th>Sensors</th><th>T1 Pass %</th><th>T2 Pass %</th><th>T3 Pass %</th><th>Overall Pass %</th><th>Avg 120s V</th><th>Avg %Chg</th>';
+
+            const allStats = jobs.map(([jobNum, data]) => ({
+                jobNum,
+                stats: data.stats
+            }));
+
+            // Find best/worst overall pass rates
+            const rates = allStats.map(s => s.stats.passRate);
+            const bestRate = Math.max(...rates);
+            const worstRate = Math.min(...rates);
+
+            tbody.innerHTML = allStats.map(({ jobNum, stats }) => {
+                const isBest = stats.passRate === bestRate && jobs.length > 1;
+                const isWorst = stats.passRate === worstRate && jobs.length > 1 && bestRate !== worstRate;
+                const t1 = stats.testStats[1];
+                const t2 = stats.testStats[2];
+                const t3 = stats.testStats[3];
+                return `<tr>
+                    <td><strong>${jobNum}</strong></td>
+                    <td>${stats.total}</td>
+                    <td>${t1 ? (t1.total > 0 ? (t1.passed / t1.total * 100).toFixed(1) + '%' : '—') : '—'}</td>
+                    <td>${t2 ? (t2.total > 0 ? (t2.passed / t2.total * 100).toFixed(1) + '%' : '—') : '—'}</td>
+                    <td>${t3 ? (t3.total > 0 ? (t3.passed / t3.total * 100).toFixed(1) + '%' : '—') : '—'}</td>
+                    <td class="${isBest ? 'best-cell' : isWorst ? 'worst-cell' : ''}" style="font-weight:700;">${stats.passRate.toFixed(1)}%</td>
+                    <td>${stats.avg120s !== null ? stats.avg120s.toFixed(3) + 'V' : '—'}</td>
+                    <td>${stats.avgPctChg !== null ? stats.avgPctChg.toFixed(1) + '%' : '—'}</td>
+                </tr>`;
+            }).join('');
+
+            // Add overall row
+            const totalSensors = allStats.reduce((s, a) => s + a.stats.total, 0);
+            const totalPassed = allStats.reduce((s, a) => s + a.stats.passed, 0);
+            const totalCounted = allStats.reduce((s, a) => s + a.stats.counted, 0);
+            const overallRate = totalCounted > 0 ? (totalPassed / totalCounted * 100) : 0;
+            tbody.innerHTML += `<tr class="overall-row"><td><strong>Overall</strong></td><td>${totalSensors}</td><td colspan="3"></td><td style="font-weight:700;">${overallRate.toFixed(1)}%</td><td colspan="2"></td></tr>`;
+
+            filterInfo.textContent = `${jobs.length} jobs, ${totalSensors} total sensors`;
+        }
+    }
+
+    function renderMultiJobCharts(tier) {
+        const thresholdSet = document.getElementById('thresholdSet').value;
+        const thresholds = THRESHOLDS[thresholdSet];
+
+        // Destroy existing
+        Object.values(charts).forEach(chart => chart?.destroy());
+        charts = {};
+
+        const jobs = [...multiJobResults.entries()];
+        const JOB_COLORS = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#06b6d4', '#e11d48', '#a855f7', '#22c55e', '#eab308'];
+
+        if (tier === 'few') {
+            // Overlaid trend charts per job
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            const trendDatasets = [];
+            jobs.forEach(([jobNum, data], idx) => {
+                const color = JOB_COLORS[idx % JOB_COLORS.length];
+                // Group by serial to get tests
+                const grouped = {};
+                data.jobData.forEach(row => {
+                    const serial = row['Serial Number'];
+                    if (!grouped[serial]) grouped[serial] = [];
+                    grouped[serial].push(row);
+                });
+                // Average across all sensors for test 1 (main test)
+                const allRows = data.jobData;
+                const timeSeriesData = TIME_POINTS.map(tp => {
+                    const readings = allRows.map(r => r[tp]).filter(v => v !== null && !isNaN(v));
+                    return readings.length > 0 ? calculateMean(readings) : null;
+                });
+                trendDatasets.push({
+                    label: `Job ${jobNum} (n=${data.results.length})`,
+                    data: timeSeriesData,
+                    borderColor: color,
+                    backgroundColor: color,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.1
+                });
+            });
+
+            charts.trend = new Chart(trendCtx, {
+                type: 'line',
+                data: { labels: TIME_POINTS.map(t => t + 's'), datasets: trendDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' } },
+                    scales: {
+                        y: { min: 0, max: 5, title: { display: true, text: 'Voltage (V)' } },
+                        x: { title: { display: true, text: 'Time' } }
+                    }
+                }
+            });
+
+            // Distribution: grouped bars per job
+            const distCtx = document.getElementById('distributionChart').getContext('2d');
+            const bins = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+            const binLabels = bins.slice(0, -1).map((b, i) => `${b}-${bins[i+1]}V`);
+            const distDatasets = [];
+            jobs.forEach(([jobNum, data], idx) => {
+                const color = JOB_COLORS[idx % JOB_COLORS.length];
+                const histogram = new Array(bins.length - 1).fill(0);
+                data.results.forEach(row => {
+                    for (let t = 1; t <= (row.testCount || 1); t++) {
+                        const v = row[`120s(T${t})`];
+                        if (v !== null && v !== undefined && !isNaN(v)) {
+                            for (let i = 0; i < bins.length - 1; i++) {
+                                if (v >= bins[i] && v < bins[i + 1]) { histogram[i]++; break; }
+                            }
+                        }
+                    }
+                });
+                distDatasets.push({
+                    label: `Job ${jobNum}`,
+                    data: histogram,
+                    backgroundColor: color + '99',
+                    borderColor: color,
+                    borderWidth: 1
+                });
+            });
+
+            charts.distribution = new Chart(distCtx, {
+                type: 'bar',
+                data: { labels: binLabels, datasets: distDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' } },
+                    scales: {
+                        y: { title: { display: true, text: 'Count' } },
+                        x: { title: { display: true, text: '120s Voltage' } }
+                    }
+                }
+            });
+
+            // Status by test: grouped stacked bars
+            const statusCtx = document.getElementById('statusByTestChart').getContext('2d');
+            const allStatuses = ['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+'];
+            const statusLabels = [];
+            const statusDatasets = {};
+            allStatuses.forEach(s => { statusDatasets[s] = []; });
+
+            jobs.forEach(([jobNum, data]) => {
+                const maxT = data.stats.maxTests;
+                for (let t = 1; t <= maxT; t++) {
+                    statusLabels.push(`J${jobNum} T${t}`);
+                    const counts = {};
+                    allStatuses.forEach(s => counts[s] = 0);
+                    data.results.forEach(row => {
+                        const st = row[`Status(T${t})`];
+                        if (st) {
+                            const primary = st.split(',')[0];
+                            if (counts[primary] !== undefined) counts[primary]++;
+                        }
+                    });
+                    allStatuses.forEach(s => statusDatasets[s].push(counts[s]));
+                }
+            });
+
+            const sDatasets = allStatuses.map(s => ({
+                label: s,
+                data: statusDatasets[s],
+                backgroundColor: STATUS_COLORS[s],
+                borderWidth: 0
+            })).filter(ds => ds.data.some(v => v > 0));
+
+            charts.statusByTest = new Chart(statusCtx, {
+                type: 'bar',
+                data: { labels: statusLabels, datasets: sDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' } },
+                    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Count' } } }
+                }
+            });
+
+            // Stacked horizontal bar per job (replacing pie)
+            const pieCtx = document.getElementById('pieChart').getContext('2d');
+            const hLabels = jobs.map(([j]) => `Job ${j}`);
+            const hDatasets = allStatuses.map(s => ({
+                label: s,
+                data: jobs.map(([, d]) => {
+                    return d.results.filter(r => r['Pass/Fail'] === s).length;
+                }),
+                backgroundColor: STATUS_COLORS[s]
+            })).filter(ds => ds.data.some(v => v > 0));
+
+            charts.pie = new Chart(pieCtx, {
+                type: 'bar',
+                data: { labels: hLabels, datasets: hDatasets },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' } },
+                    scales: { x: { stacked: true, title: { display: true, text: 'Count' } }, y: { stacked: true } }
+                }
+            });
+
+            // Status summary
+            const allResults = jobs.flatMap(([, d]) => d.results);
+            const total = allResults.length;
+            const statusCounts = {};
+            allResults.forEach(r => { statusCounts[r['Pass/Fail']] = (statusCounts[r['Pass/Fail']] || 0) + 1; });
+            const pieLabels = Object.keys(statusCounts).sort((a, b) => (STATUS_PRIORITY[a] || 99) - (STATUS_PRIORITY[b] || 99));
+            document.getElementById('statusSummary').innerHTML = pieLabels.map(status => {
+                const count = statusCounts[status];
+                const pct = (count / total * 100).toFixed(1);
+                return `<div class="status-summary-item"><div class="left"><span class="status-pill status-${status}">${status}</span></div><div><span class="count">${count}</span> <span class="pct">(${pct}%)</span></div></div>`;
+            }).join('');
+
+        } else {
+            // Many/Bulk: trend line + heatmap + histogram/outlier
+
+            // 1. Pass Rate Trend line chart
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            const sortedJobs = [...jobs].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+            const jobLabels = sortedJobs.map(([j]) => j);
+            const passRates = sortedJobs.map(([, d]) => d.stats.passRate);
+
+            const trendDatasets = [{
+                label: 'Overall Pass Rate',
+                data: passRates,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 2,
+                pointRadius: 4,
+                fill: true,
+                tension: 0.2
+            }];
+
+            // Add per-test lines if available
+            const maxTestAcross = Math.max(...sortedJobs.map(([, d]) => d.stats.maxTests));
+            for (let t = 1; t <= Math.min(maxTestAcross, 3); t++) {
+                trendDatasets.push({
+                    label: `T${t} Pass Rate`,
+                    data: sortedJobs.map(([, d]) => {
+                        const ts = d.stats.testStats[t];
+                        return ts && ts.total > 0 ? (ts.passed / ts.total * 100) : null;
+                    }),
+                    borderColor: TEST_COLORS[(t - 1) % TEST_COLORS.length],
+                    borderWidth: 1.5,
+                    pointRadius: 3,
+                    borderDash: [5, 3],
+                    tension: 0.2
+                });
+            }
+
+            // Moving average for bulk
+            if (tier === 'bulk' && passRates.length >= 5) {
+                const windowSize = Math.min(5, Math.floor(passRates.length / 3));
+                const ma = passRates.map((_, i) => {
+                    if (i < windowSize - 1) return null;
+                    const slice = passRates.slice(i - windowSize + 1, i + 1);
+                    return calculateMean(slice);
+                });
+                trendDatasets.push({
+                    label: `${windowSize}-Job Moving Avg`,
+                    data: ma,
+                    borderColor: '#ef4444',
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    borderDash: [],
+                    tension: 0.3
+                });
+            }
+
+            charts.trend = new Chart(trendCtx, {
+                type: 'line',
+                data: { labels: jobLabels, datasets: trendDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' }, title: { display: true, text: 'Pass Rate Across Jobs' } },
+                    scales: {
+                        y: { min: 0, max: 100, title: { display: true, text: 'Pass Rate (%)' } },
+                        x: { title: { display: true, text: 'Job #' } }
+                    }
+                }
+            });
+
+            // 2. Heatmap (rendered as HTML table) in distribution chart area
+            const distCard = document.getElementById('distributionChart').parentElement;
+            const distCanvas = document.getElementById('distributionChart');
+            distCanvas.style.display = 'none';
+
+            let heatmapDiv = document.getElementById('multiJobHeatmap');
+            if (!heatmapDiv) {
+                heatmapDiv = document.createElement('div');
+                heatmapDiv.id = 'multiJobHeatmap';
+                heatmapDiv.className = 'heatmap-container';
+                distCanvas.parentElement.appendChild(heatmapDiv);
+            }
+
+            const heatJobs = sortedJobs.slice(0, 40); // limit rows for readability
+            const maxT = Math.max(...heatJobs.map(([, d]) => d.stats.maxTests));
+            let heatHTML = '<table class="heatmap-table"><thead><tr><th>Job #</th>';
+            for (let t = 1; t <= maxT; t++) heatHTML += `<th>T${t}</th>`;
+            heatHTML += '<th>Overall</th></tr></thead><tbody>';
+
+            heatJobs.forEach(([jobNum, data]) => {
+                heatHTML += `<tr><td><strong>${jobNum}</strong></td>`;
+                for (let t = 1; t <= maxT; t++) {
+                    const ts = data.stats.testStats[t];
+                    if (ts && ts.total > 0) {
+                        const rate = (ts.passed / ts.total * 100);
+                        const color = rate >= 90 ? '#10b981' : rate >= 70 ? '#f59e0b' : '#ef4444';
+                        heatHTML += `<td class="heatmap-cell" style="background:${color};">${rate.toFixed(0)}%</td>`;
+                    } else {
+                        heatHTML += '<td>—</td>';
+                    }
+                }
+                const overallColor = data.stats.passRate >= 90 ? '#10b981' : data.stats.passRate >= 70 ? '#f59e0b' : '#ef4444';
+                heatHTML += `<td class="heatmap-cell" style="background:${overallColor};">${data.stats.passRate.toFixed(0)}%</td></tr>`;
+            });
+            heatHTML += '</tbody></table>';
+            heatmapDiv.innerHTML = heatHTML;
+            distCard.querySelector('.card-title').textContent = 'Pass Rate Heatmap';
+
+            // 3. Status by test → Fail code distribution (stacked bar across jobs)
+            const statusCtx = document.getElementById('statusByTestChart').getContext('2d');
+            const failStatuses = ['FL', 'FH', 'FT-', 'TT', 'OT+'];
+            const failDatasets = failStatuses.map(s => ({
+                label: s,
+                data: sortedJobs.map(([, d]) => d.results.filter(r => r['Pass/Fail'] === s).length),
+                backgroundColor: STATUS_COLORS[s]
+            })).filter(ds => ds.data.some(v => v > 0));
+
+            charts.statusByTest = new Chart(statusCtx, {
+                type: 'bar',
+                data: { labels: jobLabels, datasets: failDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' }, title: { display: true, text: 'Failure Distribution Across Jobs' } },
+                    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Count' } } }
+                }
+            });
+
+            // 4. Pie chart area → histogram of pass rates (many) or outlier scatter (bulk)
+            const pieCtx = document.getElementById('pieChart').getContext('2d');
+            document.getElementById('statusSummary').innerHTML = '';
+
+            if (tier === 'bulk') {
+                // Scatter plot with outlier highlighting
+                const mean = calculateMean(passRates);
+                const stdDev = calculateStdDev(passRates);
+                const threshold2sd = stdDev * 2;
+
+                const normalPoints = [];
+                const outlierPoints = [];
+                sortedJobs.forEach(([jobNum, data], idx) => {
+                    const point = { x: idx, y: data.stats.passRate };
+                    if (Math.abs(data.stats.passRate - mean) > threshold2sd) {
+                        outlierPoints.push(point);
+                    } else {
+                        normalPoints.push(point);
+                    }
+                });
+
+                charts.pie = new Chart(pieCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            { label: 'Normal', data: normalPoints, backgroundColor: '#667eea', pointRadius: 5 },
+                            { label: 'Outlier (>2σ)', data: outlierPoints, backgroundColor: '#ef4444', pointRadius: 7, pointStyle: 'triangle' }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true },
+                            title: { display: true, text: 'Pass Rate Outliers' },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => {
+                                        const idx = ctx.raw.x;
+                                        return `Job ${sortedJobs[idx][0]}: ${ctx.raw.y.toFixed(1)}%`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { min: 0, max: 100, title: { display: true, text: 'Pass Rate (%)' } },
+                            x: { display: false }
+                        }
+                    }
+                });
+                document.getElementById('statusSummary').innerHTML = `
+                    <div class="status-summary-item"><div class="left">Mean</div><div class="count">${mean.toFixed(1)}%</div></div>
+                    <div class="status-summary-item"><div class="left">Std Dev</div><div class="count">${stdDev.toFixed(1)}%</div></div>
+                    <div class="status-summary-item"><div class="left">Outliers</div><div class="count">${outlierPoints.length}</div></div>
+                `;
+            } else {
+                // Histogram of pass rates
+                const histBins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100.1];
+                const histLabels = histBins.slice(0, -1).map((b, i) => `${b}-${Math.min(histBins[i+1], 100)}%`);
+                const histogram = new Array(histBins.length - 1).fill(0);
+                passRates.forEach(r => {
+                    for (let i = 0; i < histBins.length - 1; i++) {
+                        if (r >= histBins[i] && r < histBins[i + 1]) { histogram[i]++; break; }
+                    }
+                });
+
+                charts.pie = new Chart(pieCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: histLabels,
+                        datasets: [{
+                            label: 'Jobs',
+                            data: histogram,
+                            backgroundColor: histBins.slice(0, -1).map((b) => b >= 80 ? '#10b981' : b >= 50 ? '#f59e0b' : '#ef4444'),
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, title: { display: true, text: 'Pass Rate Distribution' } },
+                        scales: {
+                            y: { title: { display: true, text: 'Number of Jobs' } },
+                            x: { title: { display: true, text: 'Pass Rate Range' } }
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    function renderMultiJobAnomalies(tier) {
+        const section = document.getElementById('anomalySection');
+        const list = document.getElementById('anomalyList');
+        const preview = document.getElementById('anomalyPreview');
+        const jobs = [...multiJobResults.entries()];
+
+        if (tier === 'few') {
+            const allAnomalies = [];
+            const thresholdSet = document.getElementById('thresholdSet').value;
+            const thresholds = THRESHOLDS[thresholdSet];
+            jobs.forEach(([jobNum, data]) => {
+                const anomalies = detectAnomalies(data.results, thresholds);
+                anomalies.forEach(a => { a.jobNum = jobNum; });
+                allAnomalies.push(...anomalies);
+            });
+
+            if (allAnomalies.length === 0) { section.classList.add('hidden'); return; }
+            section.classList.remove('hidden');
+            preview.textContent = `(${allAnomalies.length} across ${jobs.length} jobs)`;
+            list.innerHTML = allAnomalies.map(a => `
+                <div class="anomaly-item anomaly-${a.severity.toLowerCase()}">
+                    <strong>Job ${a.jobNum} — ${a.serial}</strong> (Channel: ${a.channel}) — ${a.type}: ${a.message}
+                </div>
+            `).join('');
+        } else {
+            // Aggregated anomaly summary
+            const issues = [];
+            const highFailJobs = jobs.filter(([, d]) => d.stats.failRate > 20);
+            if (highFailJobs.length > 0) {
+                issues.push(`<div class="anomaly-item anomaly-high"><strong>${highFailJobs.length} job(s)</strong> have >20% fail rate: ${highFailJobs.map(([j]) => j).join(', ')}</div>`);
+            }
+
+            const passRates = jobs.map(([, d]) => d.stats.passRate);
+            const mean = calculateMean(passRates);
+            const stdDev = calculateStdDev(passRates);
+            const outliers = jobs.filter(([, d]) => Math.abs(d.stats.passRate - mean) > stdDev * 2);
+            if (outliers.length > 0) {
+                issues.push(`<div class="anomaly-item anomaly-medium"><strong>${outliers.length} job(s)</strong> are statistical outliers (>2σ): ${outliers.map(([j, d]) => `${j} (${d.stats.passRate.toFixed(1)}%)`).join(', ')}</div>`);
+            }
+
+            if (issues.length === 0) { section.classList.add('hidden'); return; }
+            section.classList.remove('hidden');
+            preview.textContent = `(${issues.length} issues)`;
+            list.innerHTML = issues.join('');
+        }
+    }
+
+    // ============================================================
+    // MAIN ANALYSIS FUNCTION
+    // ============================================================
+
+    function resetMultiJobView() {
+        // Reset heatmap if present
+        const heatmapDiv = document.getElementById('multiJobHeatmap');
+        if (heatmapDiv) heatmapDiv.remove();
+        const distCanvas = document.getElementById('distributionChart');
+        if (distCanvas) distCanvas.style.display = '';
+        // Reset chart titles
+        const distCard = distCanvas?.closest('.card');
+        if (distCard) {
+            const title = distCard.querySelector('.card-title');
+            if (title) title.textContent = '📊 120s Distribution';
+        }
+    }
+
+    function runAnalysis() {
+        const jobInput = document.getElementById('jobNumber');
+        const inputStr = jobInput.value.trim();
+        const thresholdSet = document.getElementById('thresholdSet').value;
+
+        if (!inputStr) {
+            showAlert('⚠️ Please enter a job number', 'warning');
             jobInput.focus();
             return;
         }
@@ -2677,53 +3565,115 @@ else if (typeof exports === 'object'){
             showAlert('⚠️ Please load data first', 'warning');
             return;
         }
-        
-        showLoading('Analyzing data...');
-        
+
+        // Parse job input (supports multi-job syntax)
+        const jobNumbers = parseJobInput(inputStr);
+
+        if (jobNumbers.length === 0) {
+            showAlert('⚠️ No valid job numbers found in input', 'warning');
+            jobInput.focus();
+            return;
+        }
+
+        // Update chips and tier badge
+        renderJobChips(jobNumbers);
+        resetMultiJobView();
+
+        const tier = getDisplayTier(jobNumbers.length);
+        currentTier = tier;
+        currentJobList = jobNumbers;
+
+        showLoading(`Analyzing ${jobNumbers.length} job(s)...`);
+
         setTimeout(() => {
             try {
-                const jobData = getJobData(rawData, jobNumber);
-                
-                if (jobData.length === 0) {
-                    hideLoading();
-                    showAlert(`❌ No data found for Job # ${jobNumber}`, 'danger');
-                    return;
-                }
-                
-                const dataWithMetrics = calculateMetrics(jobData);
-                analysisResults = determinePassFail(dataWithMetrics, thresholdSet);
-                currentJob = jobNumber;
-                currentJobData = jobData;
+                if (jobNumbers.length === 1) {
+                    // ========== SINGLE JOB MODE (original behavior) ==========
+                    multiJobMode = false;
+                    const jobNumber = jobNumbers[0];
 
-                // Apply any saved status overrides from previous sessions
-                applyStatusOverrides(analysisResults, jobNumber);
+                    const jobData = getJobData(rawData, jobNumber);
+                    if (jobData.length === 0) {
+                        hideLoading();
+                        showAlert(`❌ No data found for Job # ${jobNumber}`, 'danger');
+                        return;
+                    }
 
-                if (analysisResults.length === 0) {
+                    const dataWithMetrics = calculateMetrics(jobData);
+                    analysisResults = determinePassFail(dataWithMetrics, thresholdSet);
+                    currentJob = jobNumber;
+                    currentJobData = jobData;
+
+                    applyStatusOverrides(analysisResults, jobNumber);
+
+                    if (analysisResults.length === 0) {
+                        hideLoading();
+                        showAlert('❌ No valid sensor readings found', 'danger');
+                        return;
+                    }
+
+                    const welcomeScreen = document.getElementById('welcomeScreen');
+                    if (welcomeScreen) welcomeScreen.classList.add('hidden');
+                    document.getElementById('resultsSection').classList.remove('hidden');
+
+                    renderMetrics(analysisResults, thresholdSet);
+                    renderStatusFilters(analysisResults);
+                    activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+']);
+                    renderTable();
+                    renderCharts(analysisResults, jobData, thresholdSet);
+                    renderThresholdInfo(thresholdSet);
+
+                    const anomalies = detectAnomalies(analysisResults, THRESHOLDS[thresholdSet]);
+                    renderAnomalies(anomalies);
+
+                    updateJobHistory(jobNumber);
+                    enableExportButtons(true);
+
                     hideLoading();
-                    showAlert('❌ No valid sensor readings found', 'danger');
-                    return;
+                    showAlert(`✅ Analyzed ${analysisResults.length} sensors from ${jobData.length} records`, 'success');
+
+                } else {
+                    // ========== MULTI-JOB MODE ==========
+                    multiJobMode = true;
+
+                    runMultiJobAnalysis(jobNumbers, thresholdSet);
+
+                    if (multiJobResults.size === 0) {
+                        hideLoading();
+                        showAlert('❌ No data found for any of the specified jobs', 'danger');
+                        return;
+                    }
+
+                    // Set currentJob to first job for compatibility
+                    const firstEntry = [...multiJobResults.entries()][0];
+                    currentJob = firstEntry[0];
+                    currentJobData = firstEntry[1].jobData;
+                    // Combine all results for filter/export compatibility
+                    analysisResults = [...multiJobResults.values()].flatMap(d => d.results);
+
+                    const welcomeScreen = document.getElementById('welcomeScreen');
+                    if (welcomeScreen) welcomeScreen.classList.add('hidden');
+                    document.getElementById('resultsSection').classList.remove('hidden');
+
+                    // Adaptive rendering based on tier
+                    renderMultiJobMetrics(tier);
+                    renderStatusFilters(analysisResults);
+                    activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+']);
+                    renderMultiJobTable(tier);
+                    renderMultiJobCharts(tier);
+                    renderThresholdInfo(thresholdSet);
+                    renderMultiJobAnomalies(tier);
+
+                    // Update history for primary job
+                    updateJobHistory(currentJob);
+                    enableExportButtons(true);
+
+                    const totalSensors = [...multiJobResults.values()].reduce((s, d) => s + d.stats.total, 0);
+                    const totalRecords = [...multiJobResults.values()].reduce((s, d) => s + d.jobData.length, 0);
+
+                    hideLoading();
+                    showAlert(`✅ Analyzed ${multiJobResults.size} jobs: ${totalSensors} sensors from ${totalRecords} records (${tier} mode)`, 'success');
                 }
-                
-                const welcomeScreen = document.getElementById('welcomeScreen');
-                if (welcomeScreen) welcomeScreen.classList.add('hidden');
-                document.getElementById('resultsSection').classList.remove('hidden');
-                
-                renderMetrics(analysisResults, thresholdSet);
-                renderStatusFilters(analysisResults);
-                activeFilters = new Set(['PASS', 'FL', 'FH', 'FT-', 'TT', 'OT+']);
-                renderTable();
-                renderCharts(analysisResults, jobData, thresholdSet);
-                renderThresholdInfo(thresholdSet);
-                
-                const anomalies = detectAnomalies(analysisResults, THRESHOLDS[thresholdSet]);
-                renderAnomalies(anomalies);
-                
-                updateJobHistory(jobNumber);
-                enableExportButtons(true);
-                
-                hideLoading();
-                showAlert(`✅ Analyzed ${analysisResults.length} sensors from ${jobData.length} records`, 'success');
-                
             } catch (err) {
                 hideLoading();
                 showAlert(`❌ Analysis error: ${err.message}`, 'danger');
@@ -2738,35 +3688,61 @@ else if (typeof exports === 'object'){
     
     function exportCSV() {
         if (!analysisResults) return;
-        
-        const headers = ['Serial Number', 'Channel', 'Pass/Fail', '120s(MaxΔ)'];
+
+        if (multiJobMode && (currentTier === 'many' || currentTier === 'bulk')) {
+            // Export job-level summary for many/bulk tiers
+            const headers = ['Job #', 'Sensors', 'T1 Pass %', 'T2 Pass %', 'T3 Pass %', 'Overall Pass %', 'Avg 120s V', 'Avg %Chg'];
+            const rows = [...multiJobResults.entries()].map(([jobNum, data]) => {
+                const s = data.stats;
+                const t1 = s.testStats[1], t2 = s.testStats[2], t3 = s.testStats[3];
+                return [
+                    jobNum, s.total,
+                    t1 && t1.total > 0 ? (t1.passed / t1.total * 100).toFixed(1) : '',
+                    t2 && t2.total > 0 ? (t2.passed / t2.total * 100).toFixed(1) : '',
+                    t3 && t3.total > 0 ? (t3.passed / t3.total * 100).toFixed(1) : '',
+                    s.passRate.toFixed(1),
+                    s.avg120s !== null ? s.avg120s.toFixed(3) : '',
+                    s.avgPctChg !== null ? s.avgPctChg.toFixed(1) : ''
+                ].map(v => `"${v}"`).join(',');
+            });
+            const csv = [headers.join(','), ...rows].join('\n');
+            downloadFile(csv, `multi_job_comparison_${currentJobList.length}jobs.csv`, 'text/csv');
+            return;
+        }
+
+        // Single or few-job: sensor-level export
+        const hasJobCol = multiJobMode;
+        const headers = hasJobCol ? ['Job #', 'Serial Number', 'Channel', 'Pass/Fail', '120s(MaxΔ)'] : ['Serial Number', 'Channel', 'Pass/Fail', '120s(MaxΔ)'];
         const maxTests = Math.max(...analysisResults.map(r => r.testCount || 1));
         for (let i = 1; i <= maxTests; i++) {
             headers.push(`0s(T${i})`, `120s(T${i})`, `%Chg(T${i})`, `Status(T${i})`);
         }
 
-        const rows = analysisResults.map(row => {
-            const values = [
-                row['Serial Number'],
-                row['Channel'],
-                row['Pass/Fail'],
-                row['120s(MaxΔ)'].toFixed(4)
-            ];
-
-            for (let i = 1; i <= maxTests; i++) {
-                values.push(
-                    row[`0s(T${i})`] ?? '',
-                    row[`120s(T${i})`] ?? '',
-                    row[`%Chg(T${i})`] ?? '',
-                    row[`Status(T${i})`] ?? ''
-                );
+        let allRows;
+        if (multiJobMode) {
+            allRows = [];
+            for (const [jobNum, data] of multiJobResults.entries()) {
+                data.results.forEach(row => {
+                    const values = [jobNum, row['Serial Number'], row['Channel'], row['Pass/Fail'], row['120s(MaxΔ)'].toFixed(4)];
+                    for (let i = 1; i <= maxTests; i++) {
+                        values.push(row[`0s(T${i})`] ?? '', row[`120s(T${i})`] ?? '', row[`%Chg(T${i})`] ?? '', row[`Status(T${i})`] ?? '');
+                    }
+                    allRows.push(values.map(v => `"${v}"`).join(','));
+                });
             }
+        } else {
+            allRows = analysisResults.map(row => {
+                const values = [row['Serial Number'], row['Channel'], row['Pass/Fail'], row['120s(MaxΔ)'].toFixed(4)];
+                for (let i = 1; i <= maxTests; i++) {
+                    values.push(row[`0s(T${i})`] ?? '', row[`120s(T${i})`] ?? '', row[`%Chg(T${i})`] ?? '', row[`Status(T${i})`] ?? '');
+                }
+                return values.map(v => `"${v}"`).join(',');
+            });
+        }
 
-            return values.map(v => `"${v}"`).join(',');
-        });
-        
-        const csv = [headers.join(','), ...rows].join('\n');
-        downloadFile(csv, `job_${currentJob}_analysis.csv`, 'text/csv');
+        const csv = [headers.join(','), ...allRows].join('\n');
+        const filename = multiJobMode ? `multi_job_${currentJobList.length}jobs_analysis.csv` : `job_${currentJob}_analysis.csv`;
+        downloadFile(csv, filename, 'text/csv');
     }
     
     function exportPDF() {
