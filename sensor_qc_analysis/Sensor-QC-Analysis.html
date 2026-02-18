@@ -2982,10 +2982,13 @@ else if (typeof exports === 'object'){
                 totalSensors: totalSensors,
                 t1PassPct: t1PassPct,
                 t1Passed: t1Passed,
+                t1Total: t1Total,
                 t2PassPct: t2PassPct,
                 t2Passed: t2Passed,
+                t2Total: t2Total,
                 t3PassPct: t3PassPct,
                 t3Passed: t3Passed,
+                t3Total: t3Total,
                 totalPassPct: totalPassPct,
                 totalPassed: totalPassed
             };
@@ -2997,14 +3000,16 @@ else if (typeof exports === 'object'){
         // Calculate cumulative totals for pass percentages
         const totalSensorsSum = jobsToShow.reduce((sum, j) => sum + j.totalSensors, 0);
         const totalT1Passed = jobsToShow.reduce((sum, j) => sum + j.t1Passed, 0);
-        const totalT1Count = jobsToShow.reduce((sum, j) => sum + (j.t1Passed > 0 || j.t1PassPct < 100 ? 1 : 0), 0);
+        const totalT1Tested = jobsToShow.reduce((sum, j) => sum + j.t1Total, 0);
         const totalT2Passed = jobsToShow.reduce((sum, j) => sum + j.t2Passed, 0);
+        const totalT2Tested = jobsToShow.reduce((sum, j) => sum + j.t2Total, 0);
         const totalT3Passed = jobsToShow.reduce((sum, j) => sum + j.t3Passed, 0);
+        const totalT3Tested = jobsToShow.reduce((sum, j) => sum + j.t3Total, 0);
         const totalOverallPassed = jobsToShow.reduce((sum, j) => sum + j.totalPassed, 0);
-        const avgT1PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t1PassPct, 0) / jobsToShow.length : 0;
-        const avgT2PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t2PassPct, 0) / jobsToShow.length : 0;
-        const avgT3PassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.t3PassPct, 0) / jobsToShow.length : 0;
-        const avgTotalPassPct = jobsToShow.length > 0 ? jobsToShow.reduce((sum, j) => sum + j.totalPassPct, 0) / jobsToShow.length : 0;
+        const weightedT1PassPct = totalT1Tested > 0 ? (totalT1Passed / totalT1Tested * 100) : 0;
+        const weightedT2PassPct = totalT2Tested > 0 ? (totalT2Passed / totalT2Tested * 100) : 0;
+        const weightedT3PassPct = totalT3Tested > 0 ? (totalT3Passed / totalT3Tested * 100) : 0;
+        const weightedTotalPassPct = totalSensorsSum > 0 ? (totalOverallPassed / totalSensorsSum * 100) : 0;
 
         // Generate table rows for each job
         const jobRows = jobsToShow.map(job => `
@@ -3046,10 +3051,10 @@ else if (typeof exports === 'object'){
                 <tr class="cumulative-row">
                     <td>Overall:</td>
                     <td>${totalSensorsSum}</td>
-                    <td>${avgT1PassPct.toFixed(1)}% (${totalT1Passed})</td>
-                    <td>${avgT2PassPct.toFixed(1)}% (${totalT2Passed})</td>
-                    <td>${avgT3PassPct.toFixed(1)}% (${totalT3Passed})</td>
-                    <td>${avgTotalPassPct.toFixed(1)}% (${totalOverallPassed})</td>
+                    <td>${weightedT1PassPct.toFixed(1)}% (${totalT1Passed})</td>
+                    <td>${weightedT2PassPct.toFixed(1)}% (${totalT2Passed})</td>
+                    <td>${weightedT3PassPct.toFixed(1)}% (${totalT3Passed})</td>
+                    <td>${weightedTotalPassPct.toFixed(1)}% (${totalOverallPassed})</td>
                 </tr>
             </table>
             </body></html>
