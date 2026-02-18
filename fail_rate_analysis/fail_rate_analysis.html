@@ -2809,10 +2809,12 @@ else if (typeof exports === 'object'){
                 if (cell) {
                     const rate = cell.failRate;
                     const bg = failRateColor(rate);
-                    html += `<td class="heatmap-cell" style="background:${bg}" 
-                        data-job="${job}" data-test="${t}" 
-                        data-rate="${rate}" data-failed="${cell.failed}" 
-                        data-total="${cell.total}" data-fl="${cell.fl}" data-fh="${cell.fh}"
+                    const evaluated = cell.passed + cell.failed;
+                    html += `<td class="heatmap-cell" style="background:${bg}"
+                        data-job="${job}" data-test="${t}"
+                        data-rate="${rate}" data-failed="${cell.failed}"
+                        data-total="${cell.total}" data-evaluated="${evaluated}"
+                        data-fl="${cell.fl}" data-fh="${cell.fh}"
                         data-dm="${cell.dm}">${rate}%</td>`;
                 } else {
                     html += '<td style="color:#aaa; text-align:center;">—</td>';
@@ -2872,10 +2874,13 @@ else if (typeof exports === 'object'){
     function showTooltip(e) {
         const tip = document.getElementById('tooltip');
         const cell = e.target;
+        const dm = parseInt(cell.dataset.dm) || 0;
+        const evaluated = parseInt(cell.dataset.evaluated) || 0;
+        const dmNote = dm > 0 ? ` (${dm} DM excluded)` : '';
         tip.innerHTML = `
             <strong>Job ${cell.dataset.job} — Test ${cell.dataset.test}</strong><br>
-            Fail Rate: ${cell.dataset.rate}%<br>
-            Failed: ${cell.dataset.failed} of ${cell.dataset.total} sensors<br>
+            Fail Rate: ${cell.dataset.failed} of ${evaluated} evaluated — ${cell.dataset.rate}%${dmNote}<br>
+            Total Sensors: ${cell.dataset.total}<br>
             FL: ${cell.dataset.fl} | FH: ${cell.dataset.fh} | DM: ${cell.dataset.dm}
         `;
         tip.classList.remove('hidden');
