@@ -2839,7 +2839,7 @@ else if (typeof exports === 'object'){
         });
         
         // Footer row: total per test (unique serials, excluding prior-failed sensors)
-        html += '<tr style="font-weight: 700;"><td class="heatmap-job-col" style="font-style: italic;">Total</td>';
+        html += '<tr style="font-weight: 700;"><td class="heatmap-job-col" style="font-style: italic;">Overall</td>';
         const totalRowGlobalFailed = new Set();
         uniqueTests.forEach(t => {
             const testSerials = new Set();
