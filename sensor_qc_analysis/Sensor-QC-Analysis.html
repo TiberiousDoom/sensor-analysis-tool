@@ -3283,10 +3283,10 @@ else if (typeof exports === 'object'){
                 label: 'Overall Pass Rate',
                 data: passRates,
                 borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                backgroundColor: '#667eea',
                 borderWidth: 2,
                 pointRadius: 4,
-                fill: true,
+                fill: false,
                 tension: 0.2
             }];
 
@@ -3326,6 +3326,11 @@ else if (typeof exports === 'object'){
                 });
             }
 
+            // Dynamic Y-axis: zoom into the data range for better readability
+            const allTrendValues = trendDatasets.flatMap(ds => ds.data).filter(v => v !== null && !isNaN(v));
+            const minRate = allTrendValues.length > 0 ? Math.min(...allTrendValues) : 0;
+            const trendYMin = Math.max(0, Math.floor(minRate / 5) * 5 - 5);
+
             charts.trend = new Chart(trendCtx, {
                 type: 'line',
                 data: { labels: jobLabels, datasets: trendDatasets },
@@ -3333,7 +3338,7 @@ else if (typeof exports === 'object'){
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: true, position: 'top' }, title: { display: true, text: 'Pass Rate Across Jobs' } },
                     scales: {
-                        y: { min: 0, max: 100, title: { display: true, text: 'Pass Rate (%)' } },
+                        y: { min: trendYMin, max: 100, title: { display: true, text: 'Pass Rate (%)' } },
                         x: { title: { display: true, text: 'Job #' } }
                     }
                 }
@@ -3377,12 +3382,16 @@ else if (typeof exports === 'object'){
             heatmapDiv.innerHTML = heatHTML;
             distCard.querySelector('.card-title').textContent = 'Pass Rate Heatmap';
 
-            // 3. Status by test → Fail code distribution (stacked bar across jobs)
+            // 3. Status by test → Fail rate distribution (stacked bar across jobs, as %)
             const statusCtx = document.getElementById('statusByTestChart').getContext('2d');
             const failStatuses = ['FL', 'FH', 'FT-', 'TT', 'OT+'];
             const failDatasets = failStatuses.map(s => ({
                 label: s,
-                data: sortedJobs.map(([, d]) => d.results.filter(r => r['Pass/Fail'] === s).length),
+                data: sortedJobs.map(([, d]) => {
+                    const count = d.results.filter(r => r['Pass/Fail'] === s).length;
+                    const total = d.stats.counted || d.results.length;
+                    return total > 0 ? parseFloat((count / total * 100).toFixed(2)) : 0;
+                }),
                 backgroundColor: STATUS_COLORS[s]
             })).filter(ds => ds.data.some(v => v > 0));
 
@@ -3391,8 +3400,21 @@ else if (typeof exports === 'object'){
                 data: { labels: jobLabels, datasets: failDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' }, title: { display: true, text: 'Failure Distribution Across Jobs' } },
-                    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Count' } } }
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        title: { display: true, text: 'Fail Rate by Status Across Jobs' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, title: { display: true, text: 'Fail Rate (%)' },
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
                 }
             });
 
@@ -3476,11 +3498,23 @@ else if (typeof exports === 'object'){
                         responsive: true, maintainAspectRatio: false,
                         plugins: { legend: { display: false }, title: { display: true, text: 'Pass Rate Distribution' } },
                         scales: {
-                            y: { title: { display: true, text: 'Number of Jobs' } },
+                            y: { beginAtZero: true, title: { display: true, text: 'Number of Jobs' }, ticks: { stepSize: 1 } },
                             x: { title: { display: true, text: 'Pass Rate Range' } }
                         }
                     }
                 });
+
+                // Add overall status summary for many tier
+                const allResults = jobs.flatMap(([, d]) => d.results);
+                const totalResults = allResults.length;
+                const statusCounts = {};
+                allResults.forEach(r => { statusCounts[r['Pass/Fail']] = (statusCounts[r['Pass/Fail']] || 0) + 1; });
+                const summaryLabels = Object.keys(statusCounts).sort((a, b) => (STATUS_PRIORITY[a] || 99) - (STATUS_PRIORITY[b] || 99));
+                document.getElementById('statusSummary').innerHTML = summaryLabels.map(status => {
+                    const count = statusCounts[status];
+                    const pct = (count / totalResults * 100).toFixed(1);
+                    return `<div class="status-summary-item"><div class="left"><span class="status-pill status-${status}">${status}</span></div><div><span class="count">${count}</span> <span class="pct">(${pct}%)</span></div></div>`;
+                }).join('');
             }
         }
     }
