@@ -2551,9 +2551,10 @@ else if (typeof exports === 'object'){
             
             const timeSeriesData = TIME_POINTS.map(tp => {
                 const readings = testData.map(r => r[tp]).filter(v => v !== null && !isNaN(v));
-                return readings.length > 0 ? calculateMean(readings) : null;
-            });
-            
+                const mean = readings.length > 0 ? calculateMean(readings) : null;
+                return mean !== null ? { x: Number(tp), y: mean } : null;
+            }).filter(p => p !== null);
+
             trendDatasets.push({
                 label: `Test ${t} (n=${testData.length})`,
                 data: timeSeriesData,
@@ -2564,11 +2565,10 @@ else if (typeof exports === 'object'){
                 tension: 0.1
             });
         }
-        
+
         charts.trend = new Chart(trendCtx, {
             type: 'line',
             data: {
-                labels: TIME_POINTS.map(t => t + 's'),
                 datasets: trendDatasets
             },
             options: {
@@ -2580,7 +2580,19 @@ else if (typeof exports === 'object'){
                 },
                 scales: {
                     y: { min: 0, max: 5, title: { display: true, text: 'Voltage (V)' } },
-                    x: { title: { display: true, text: 'Time' } }
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        max: 120,
+                        ticks: {
+                            stepSize: 5,
+                            callback: function(value) {
+                                if ([0, 5, 15, 30, 60, 90, 120].includes(value)) return value + 's';
+                                return null;
+                            }
+                        },
+                        title: { display: true, text: 'Time' }
+                    }
                 }
             }
         });
@@ -3152,8 +3164,9 @@ else if (typeof exports === 'object'){
                 const allRows = data.jobData;
                 const timeSeriesData = TIME_POINTS.map(tp => {
                     const readings = allRows.map(r => r[tp]).filter(v => v !== null && !isNaN(v));
-                    return readings.length > 0 ? calculateMean(readings) : null;
-                });
+                    const mean = readings.length > 0 ? calculateMean(readings) : null;
+                    return mean !== null ? { x: Number(tp), y: mean } : null;
+                }).filter(p => p !== null);
                 trendDatasets.push({
                     label: `Job ${jobNum} (n=${data.results.length})`,
                     data: timeSeriesData,
@@ -3167,13 +3180,25 @@ else if (typeof exports === 'object'){
 
             charts.trend = new Chart(trendCtx, {
                 type: 'line',
-                data: { labels: TIME_POINTS.map(t => t + 's'), datasets: trendDatasets },
+                data: { datasets: trendDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: true, position: 'top' } },
                     scales: {
                         y: { min: 0, max: 5, title: { display: true, text: 'Voltage (V)' } },
-                        x: { title: { display: true, text: 'Time' } }
+                        x: {
+                            type: 'linear',
+                            min: 0,
+                            max: 120,
+                            ticks: {
+                                stepSize: 5,
+                                callback: function(value) {
+                                    if ([0, 5, 15, 30, 60, 90, 120].includes(value)) return value + 's';
+                                    return null;
+                                }
+                            },
+                            title: { display: true, text: 'Time' }
+                        }
                     }
                 }
             });
