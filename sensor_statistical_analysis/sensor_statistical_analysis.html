@@ -105,7 +105,7 @@
         /* Drop Zones */
         .drop-zones {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 2fr 1fr;
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -611,6 +611,83 @@
             background: var(--bg-tertiary);
         }
 
+        /* Editable Build Table */
+        .build-table-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .build-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .build-table-actions {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .build-btn {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .build-btn:hover { background: var(--border-color); color: var(--text-primary); }
+        .build-btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+        .build-btn-danger:hover { background: var(--accent-rose); color: white; }
+        .build-table-container {
+            max-height: 320px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .build-table-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #editableBuildTable td input,
+        #editableBuildTable td select {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.3rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #editableBuildTable td input:focus,
+        #editableBuildTable td select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+        }
+        #editableBuildTable td { padding: 0.3rem 0.4rem; }
+        #editableBuildTable .row-delete-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+        #editableBuildTable .row-delete-btn:hover { color: var(--accent-rose); background: rgba(244, 63, 94, 0.1); }
+
         /* Loading Spinner */
         .loading {
             display: flex;
@@ -777,14 +854,45 @@
         </header>
 
         <!-- Drop Zones -->
-        <div class="drop-zones" role="region" aria-label="File upload area">
-            <div class="drop-zone" id="buildDataZone" role="button" tabindex="0" aria-label="Upload build data file with design parameters">
-                <div class="drop-zone-icon" aria-hidden="true">📋</div>
-                <div class="drop-zone-title">Build Data</div>
-                <div class="drop-zone-subtitle">Design parameters (CSV, XLSX, TXT)</div>
-                <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;">Recommended: under 10MB</div>
-                <div class="drop-zone-status" id="buildDataStatus" role="status" aria-live="polite"></div>
-                <input type="file" id="buildDataFile" accept=".csv,.xlsx,.xls,.txt" aria-label="Build data file input">
+        <div class="drop-zones" role="region" aria-label="Data input area">
+            <div class="build-table-panel" id="buildDataPanel">
+                <div class="build-table-header">
+                    <div>
+                        <div class="drop-zone-title" style="text-align: left;">📋 Build Data</div>
+                        <div class="drop-zone-subtitle" style="text-align: left;">Design parameters — edit directly or import JSON</div>
+                    </div>
+                    <div class="build-table-actions">
+                        <button class="build-btn build-btn-sm" onclick="addBuildRow()" title="Add row">+ Row</button>
+                        <button class="build-btn build-btn-sm build-btn-danger" onclick="removeLastBuildRow()" title="Remove last row">- Row</button>
+                        <button class="build-btn build-btn-sm" onclick="document.getElementById('buildJsonImport').click()" title="Import JSON">Import</button>
+                        <button class="build-btn build-btn-sm" onclick="exportBuildJson()" title="Export JSON">Export</button>
+                        <button class="build-btn build-btn-sm build-btn-danger" onclick="clearBuildTable()" title="Clear all rows">Clear</button>
+                        <input type="file" id="buildJsonImport" accept=".json" style="display:none;">
+                    </div>
+                </div>
+                <div class="build-table-container">
+                    <table class="data-table" id="editableBuildTable">
+                        <thead>
+                            <tr>
+                                <th>Cell ID</th>
+                                <th>Carbon Ratio</th>
+                                <th>Working SA</th>
+                                <th>Counter SA</th>
+                                <th>Reference SA</th>
+                                <th>Mixed</th>
+                                <th>Sealed</th>
+                                <th>O-Ring</th>
+                                <th>Filter Flow</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="editableBuildBody"></tbody>
+                    </table>
+                </div>
+                <div class="build-table-footer">
+                    <div class="drop-zone-status" id="buildDataStatus" role="status" aria-live="polite"></div>
+                    <button class="build-btn" onclick="processBuildTable()" style="background: var(--accent-emerald); font-weight: 600;">Apply Build Data</button>
+                </div>
             </div>
             <div class="drop-zone" id="sensorDataZone" role="button" tabindex="0" aria-label="Upload sensor response time series data">
                 <div class="drop-zone-icon" aria-hidden="true">📈</div>
@@ -1310,10 +1418,9 @@
             '#22d3ee', '#4ade80', '#facc15', '#fb7185', '#a78bfa'
         ];
 
-        // Initialize drop zones
+        // Initialize drop zones (sensor data only; build data uses editable table)
         function initDropZones() {
             const zones = [
-                { zone: 'buildDataZone', input: 'buildDataFile', handler: handleBuildData },
                 { zone: 'sensorDataZone', input: 'sensorDataFile', handler: handleSensorData }
             ];
 
@@ -1340,6 +1447,257 @@
                     if (file) handler(file, dropZone);
                 });
             });
+        }
+
+        // ============================================
+        // EDITABLE BUILD DATA TABLE
+        // ============================================
+        function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+        const BUILD_COLUMNS = ['Cell ID', 'Carbon Ratio', 'Working SA', 'Counter SA', 'Reference SA', 'Mixed', 'Sealed', 'O-Ring', 'Filter Flow'];
+        const BUILD_DEFAULTS = { 'Cell ID': '', 'Carbon Ratio': '1', 'Working SA': '0', 'Counter SA': '0', 'Reference SA': '0', 'Mixed': 'N/A', 'Sealed': 'N/A', 'O-Ring': 'N/A', 'Filter Flow': '0' };
+        const BUILD_SELECT_OPTIONS = {
+            'Mixed': ['N/A', 'FlackTek', 'Hand'],
+            'Sealed': ['N/A', 'Snap', 'Screw'],
+            'O-Ring': ['N/A', 'Round', 'Square']
+        };
+
+        function createBuildRowHTML(values) {
+            const cells = BUILD_COLUMNS.map(col => {
+                const val = values[col] !== undefined ? values[col] : BUILD_DEFAULTS[col];
+                if (BUILD_SELECT_OPTIONS[col]) {
+                    const opts = BUILD_SELECT_OPTIONS[col].map(o =>
+                        `<option value="${o}"${o === val ? ' selected' : ''}>${o}</option>`
+                    ).join('');
+                    return `<td><select data-col="${col}">${opts}</select></td>`;
+                }
+                const inputType = ['Carbon Ratio', 'Working SA', 'Counter SA', 'Reference SA', 'Filter Flow'].includes(col) ? 'text' : 'text';
+                return `<td><input type="${inputType}" data-col="${col}" value="${val}"></td>`;
+            }).join('');
+            return `<tr>${cells}<td><button class="row-delete-btn" onclick="this.closest('tr').remove(); saveBuildToStorage();" title="Delete row">&times;</button></td></tr>`;
+        }
+
+        function addBuildRow(values) {
+            const tbody = document.getElementById('editableBuildBody');
+            const rowValues = values || {};
+            tbody.insertAdjacentHTML('beforeend', createBuildRowHTML(rowValues));
+            saveBuildToStorage();
+        }
+
+        function removeLastBuildRow() {
+            const tbody = document.getElementById('editableBuildBody');
+            if (tbody.lastElementChild) {
+                tbody.lastElementChild.remove();
+                saveBuildToStorage();
+            }
+        }
+
+        function clearBuildTable() {
+            if (!confirm('Clear all build data rows?')) return;
+            document.getElementById('editableBuildBody').innerHTML = '';
+            saveBuildToStorage();
+            document.getElementById('buildDataStatus').textContent = '';
+        }
+
+        function getBuildTableData() {
+            const rows = [];
+            document.querySelectorAll('#editableBuildBody tr').forEach(tr => {
+                const row = {};
+                tr.querySelectorAll('input, select').forEach(el => {
+                    row[el.dataset.col] = el.value;
+                });
+                if (row['Cell ID'] && row['Cell ID'].trim()) rows.push(row);
+            });
+            return rows;
+        }
+
+        function saveBuildToStorage() {
+            try {
+                const data = getBuildTableData();
+                localStorage.setItem('sensorBuildData', JSON.stringify(data));
+            } catch (e) {
+                console.warn('Could not save build data to localStorage:', e);
+            }
+        }
+
+        function loadBuildFromStorage() {
+            try {
+                const saved = localStorage.getItem('sensorBuildData');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    if (Array.isArray(data) && data.length > 0) {
+                        const tbody = document.getElementById('editableBuildBody');
+                        tbody.innerHTML = '';
+                        data.forEach(row => addBuildRow(row));
+                        document.getElementById('buildDataStatus').textContent = `${data.length} rows loaded from storage`;
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not load build data from localStorage:', e);
+            }
+            return false;
+        }
+
+        function exportBuildJson() {
+            const data = getBuildTableData();
+            if (data.length === 0) { alert('No build data to export.'); return; }
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'build_data.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function initBuildJsonImport() {
+            document.getElementById('buildJsonImport').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if (!Array.isArray(data)) throw new Error('JSON must be an array of objects');
+                        const tbody = document.getElementById('editableBuildBody');
+                        tbody.innerHTML = '';
+                        data.forEach(row => addBuildRow(row));
+                        document.getElementById('buildDataStatus').textContent = `Imported ${data.length} rows from JSON`;
+                        saveBuildToStorage();
+                    } catch (err) {
+                        alert('Invalid JSON file: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            });
+        }
+
+        function processBuildTable() {
+            const tableRows = getBuildTableData();
+            if (tableRows.length === 0) {
+                document.getElementById('buildDataStatus').textContent = 'No rows with Cell ID to process.';
+                return;
+            }
+
+            const headers = BUILD_COLUMNS;
+            const rows = tableRows.map(r => headers.map(h => r[h] || ''));
+
+            const colIndices = {
+                cellId: 0,
+                carbonRatio: 1,
+                agRatio: -1,
+                mixed: 5,
+                sealed: 6,
+                oRing: 7,
+                filterFlow: 8,
+                traceType: -1,
+                refLocation: -1,
+                workingSA: 2,
+                counterSA: 3,
+                referenceSA: 4
+            };
+
+            const hasDirectCarbonRatio = true;
+
+            buildData = {
+                headers,
+                rows,
+                columnIndices: colIndices,
+                sensors: rows.map(r => String(r[colIndices.cellId]).trim()),
+                traceTypes: rows.map(r => {
+                    const raw = r[colIndices.carbonRatio];
+                    if (raw === undefined || raw === null || raw === '') return 'None';
+                    const val = String(raw).trim().toLowerCase();
+                    if (val === '' || val === 'nan' || val === 'undefined' || val === 'null' || val === 'none') return 'None';
+                    return String(raw).trim();
+                }),
+                refLocations: rows.map(() => 'None'),
+                workingSA: rows.map(r => parseFloat(r[colIndices.workingSA]) || 0),
+                counterSA: rows.map(r => parseFloat(r[colIndices.counterSA]) || 0),
+                referenceSA: rows.map(r => parseFloat(r[colIndices.referenceSA]) || 0)
+            };
+
+            // Calculate ratios
+            buildData.wcRatio = buildData.workingSA.map((w, i) =>
+                buildData.counterSA[i] > 0 ? w / buildData.counterSA[i] : 0);
+            buildData.wrRatio = buildData.workingSA.map((w, i) =>
+                buildData.referenceSA[i] > 0 ? w / buildData.referenceSA[i] : 0);
+            buildData.totalSA = buildData.workingSA.map((w, i) =>
+                w + buildData.counterSA[i] + buildData.referenceSA[i]);
+
+            // Trace material variables
+            buildData.traceCarbon = buildData.traceTypes.map(t => {
+                const val = String(t).trim();
+                const numVal = parseFloat(val);
+                if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) return numVal;
+                const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                if (ratioMatch) {
+                    const carbon = parseFloat(ratioMatch[1]);
+                    const silver = parseFloat(ratioMatch[2]);
+                    const total = carbon + silver;
+                    return total > 0 ? carbon / total : 0;
+                }
+                return val.toLowerCase().includes('carbon') ? 1 : 0;
+            });
+            buildData.traceSilver = buildData.traceTypes.map(t => {
+                const val = String(t).trim();
+                const numVal = parseFloat(val);
+                if (!isNaN(numVal) && val.match(/^-?\d*\.?\d+$/)) return 1 - numVal;
+                const ratioMatch = val.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);
+                if (ratioMatch) {
+                    const carbon = parseFloat(ratioMatch[1]);
+                    const silver = parseFloat(ratioMatch[2]);
+                    const total = carbon + silver;
+                    return total > 0 ? silver / total : 0;
+                }
+                return val.toLowerCase().includes('silver') ? 1 : 0;
+            });
+            buildData.refSide = buildData.refLocations.map(() => 0);
+
+            // Mixed method
+            buildData.mixedMethod = rows.map(r => {
+                const raw = r[colIndices.mixed];
+                if (!raw || raw === '') return 'N/A';
+                const val = String(raw).trim();
+                if (val.toLowerCase() === 'n/a' || val.toLowerCase() === 'na' || val.toLowerCase() === 'none') return 'N/A';
+                return val;
+            });
+            buildData.isMixedFlackTek = buildData.mixedMethod.map(m => m.toLowerCase().includes('flacktek') ? 1 : 0);
+            buildData.isMixedHand = buildData.mixedMethod.map(m => m.toLowerCase().includes('hand') ? 1 : 0);
+
+            // Sealed method
+            buildData.sealedMethod = rows.map(r => {
+                const raw = r[colIndices.sealed];
+                if (!raw || raw === '') return 'N/A';
+                const val = String(raw).trim();
+                if (val.toLowerCase() === 'n/a' || val.toLowerCase() === 'na' || val.toLowerCase() === 'none') return 'N/A';
+                return val;
+            });
+            buildData.isSealedSnap = buildData.sealedMethod.map(s => s.toLowerCase().includes('snap') ? 1 : 0);
+
+            // O-ring type
+            buildData.oRingType = rows.map(r => {
+                const raw = r[colIndices.oRing];
+                if (!raw || raw === '') return 'N/A';
+                const val = String(raw).trim();
+                if (val.toLowerCase() === 'n/a' || val.toLowerCase() === 'na' || val.toLowerCase() === 'none') return 'N/A';
+                return val;
+            });
+            buildData.isOringSquare = buildData.oRingType.map(o => o.toLowerCase().includes('square') ? 1 : 0);
+            buildData.isOringRound = buildData.oRingType.map(o => o.toLowerCase().includes('round') ? 1 : 0);
+
+            // Filter Flow
+            buildData.filterFlow = rows.map(r => parseFloat(r[colIndices.filterFlow]) || 0);
+
+            const status = document.getElementById('buildDataStatus');
+            status.textContent = `✓ Applied ${rows.length} sensors`;
+
+            updateBuildDataTable();
+            saveBuildToStorage();
+            checkDataReady();
         }
 
         // Parse file (CSV, XLSX, TXT)
@@ -3857,8 +4215,14 @@
 
         // Initialize
         initDropZones();
+        initBuildJsonImport();
+        loadBuildFromStorage();
         loadSettingsFromLocalStorage();
         addKeyboardSupport();
+
+        // Auto-save build table on edits
+        document.getElementById('editableBuildTable').addEventListener('change', saveBuildToStorage);
+        document.getElementById('editableBuildTable').addEventListener('input', debounce(saveBuildToStorage, 500));
         
         // ============================================
         // TEST DATA GENERATION AND DIAGNOSTICS
@@ -3999,7 +4363,6 @@
             
             // Update UI
             document.getElementById('buildDataStatus').textContent = `✓ Test: ${testSensors.length} sensors`;
-            document.getElementById('buildDataZone').classList.add('loaded');
             document.getElementById('sensorDataStatus').textContent = `✓ Test: ${testSensors.length} sensors, ${timePoints} time points`;
             document.getElementById('sensorDataZone').classList.add('loaded');
             document.getElementById('settingsPanel').classList.add('visible');
