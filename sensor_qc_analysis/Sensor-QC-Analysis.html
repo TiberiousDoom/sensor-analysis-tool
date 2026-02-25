@@ -3932,6 +3932,21 @@ else if (typeof exports === 'object'){
         const jobsToShow = jobsToInclude.map(wholeJobNum => {
             const jobData = jobGroups[wholeJobNum];
 
+            // Load status overrides for this job group.
+            // Overrides may be stored under the whole job number or any sub-job variant
+            // (e.g., "258", "258.1", "258.2"), so collect all unique Job # values in this group.
+            const jobVariants = new Set();
+            jobVariants.add(String(wholeJobNum));
+            jobData.forEach(row => {
+                const jobNum = String(row['Job #']).trim();
+                if (jobNum) jobVariants.add(jobNum);
+            });
+            const combinedOverrides = {};
+            for (const variant of jobVariants) {
+                const overrides = loadStatusOverrides(variant);
+                Object.assign(combinedOverrides, overrides);
+            }
+
             // Group by Serial Number to count unique sensors
             const sensorGroups = {};
             jobData.forEach(row => {
@@ -3995,7 +4010,15 @@ else if (typeof exports === 'object'){
                     }
                 });
 
-                if (!hasCriticalFailure) {
+                // Apply user status overrides — if the user manually changed
+                // this sensor's Pass/Fail in the dashboard, honor that override
+                const overriddenStatus = combinedOverrides[serial];
+                if (overriddenStatus) {
+                    if (['PASS', 'TT', 'OT+'].includes(overriddenStatus)) {
+                        totalPassed++;
+                    }
+                    // else: user overrode to a fail status — don't count as passed
+                } else if (!hasCriticalFailure) {
                     totalPassed++;
                 }
             }
