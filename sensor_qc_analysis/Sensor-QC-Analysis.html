@@ -580,6 +580,8 @@
         .anomaly-item { padding: 0.4rem 0.75rem; border-radius: 4px; margin-bottom: 0.25rem; font-size: 0.85rem; }
         .anomaly-high { background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--danger); }
         .anomaly-medium { background: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning); }
+        .anomaly-view-link { display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; color: var(--primary); cursor: pointer; text-decoration: underline; }
+        .anomaly-view-link:hover { color: var(--secondary); }
 
         /* Collapsible sections */
         .collapsible-header .card-title { margin-bottom: 0; }
@@ -2503,13 +2505,22 @@ else if (typeof exports === 'object'){
 
         section.classList.remove('hidden');
         preview.textContent = `(${anomalies.length} detected)`;
+        const uniqueSerials = [...new Set(anomalies.map(a => a.serial))];
         list.innerHTML = anomalies.map(a => `
             <div class="anomaly-item anomaly-${a.severity.toLowerCase()}">
                 <strong>${a.serial}</strong> (Channel: ${a.channel}) — ${a.type}: ${a.message}
             </div>
-        `).join('');
+        `).join('') + `<a class="anomaly-view-link" onclick="viewAnomaliesInTable('${uniqueSerials.join(',')}')">View anomalies in data table</a>`;
     }
     
+    function viewAnomaliesInTable(serialsCsv) {
+        const searchInput = document.getElementById('serialSearch');
+        searchInput.value = serialsCsv;
+        switchTab('dataTable');
+        renderTable();
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     function renderCharts(results, jobData, thresholdSet) {
         const thresholds = THRESHOLDS[thresholdSet];
         
@@ -3586,11 +3597,12 @@ else if (typeof exports === 'object'){
             if (allAnomalies.length === 0) { section.classList.add('hidden'); return; }
             section.classList.remove('hidden');
             preview.textContent = `(${allAnomalies.length} across ${jobs.length} jobs)`;
+            const uniqueSerials = [...new Set(allAnomalies.map(a => a.serial))];
             list.innerHTML = allAnomalies.map(a => `
                 <div class="anomaly-item anomaly-${a.severity.toLowerCase()}">
                     <strong>Job ${a.jobNum} — ${a.serial}</strong> (Channel: ${a.channel}) — ${a.type}: ${a.message}
                 </div>
-            `).join('');
+            `).join('') + `<a class="anomaly-view-link" onclick="viewAnomaliesInTable('${uniqueSerials.join(',')}')">View anomalies in data table</a>`;
         } else {
             // Aggregated anomaly summary
             const issues = [];
