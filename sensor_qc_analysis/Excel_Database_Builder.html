@@ -392,6 +392,55 @@
         .sheet-selector input[type="checkbox"] {
             accent-color: var(--accent);
         }
+
+        /* Existing Database Section */
+        .existing-db-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-light);
+        }
+        .existing-db-upload {
+            border: 2px dashed var(--border-light);
+            border-radius: 10px;
+            padding: 1.25rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(245, 158, 11, 0.05);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .existing-db-upload:hover {
+            border-color: var(--warning);
+            background: rgba(245, 158, 11, 0.1);
+        }
+        .existing-db-upload.dragover {
+            border-color: var(--warning);
+            background: rgba(245, 158, 11, 0.15);
+        }
+        .existing-db-loaded {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+        }
+        .existing-db-loaded .db-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .existing-db-loaded .db-name {
+            font-weight: 500;
+            color: var(--warning);
+        }
+        .existing-db-loaded .db-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
@@ -423,7 +472,20 @@
 
             <div id="fileList" class="file-list"></div>
 
+            <div class="existing-db-section">
+                <div class="card-title" style="font-size: 1rem;">📂 Append to Existing Database <span style="font-size: 0.75em; color: var(--text-secondary); font-weight: normal;">(optional)</span></div>
+                <div class="existing-db-upload" id="existingDbArea" role="button" tabindex="0" aria-label="Load existing database file">
+                    Drop a .db file here or click to load an existing database
+                </div>
+                <input type="file" id="existingDbInput" accept=".db" hidden aria-label="Existing database file input">
+                <div id="existingDbStatus" class="hidden"></div>
+            </div>
+
             <div id="summarySection" class="summary hidden">
+                <div class="summary-item" id="existingRowsItem" style="display: none;">
+                    <div class="summary-value" id="existingRows" style="color: var(--warning);">0</div>
+                    <div class="summary-label">Existing Rows</div>
+                </div>
                 <div class="summary-item">
                     <div class="summary-value" id="totalFiles">0</div>
                     <div class="summary-label">Files</div>
@@ -434,7 +496,7 @@
                 </div>
                 <div class="summary-item">
                     <div class="summary-value" id="totalRows">0</div>
-                    <div class="summary-label">Total Rows</div>
+                    <div class="summary-label">New Rows</div>
                 </div>
             </div>
 
@@ -488,6 +550,9 @@
         // State
         const builderFiles = [];
         let sqlEngine = null;
+        let existingDbBytes = null;  // Uint8Array of loaded .db file
+        let existingDbName = null;   // Original filename
+        let existingDbRowCount = 0;
 
         // DOM Elements
         const uploadArea = document.getElementById('uploadArea');
@@ -659,7 +724,7 @@
         function renderFileList() {
             if (builderFiles.length === 0) {
                 fileList.innerHTML = '';
-                summarySection.classList.add('hidden');
+                updateSummary();
                 return;
             }
 
@@ -674,14 +739,32 @@
                 </div>
             `).join('');
 
-            // Update summary
+            updateSummary();
+        }
+
+        function updateSummary() {
             const totalFiles = builderFiles.length;
             const totalSheets = builderFiles.reduce((sum, f) => sum + f.sheets.length, 0);
-            const totalRows = builderFiles.reduce((sum, f) => sum + f.totalRows, 0);
+            const newRows = builderFiles.reduce((sum, f) => sum + f.totalRows, 0);
+            const hasExisting = existingDbBytes !== null;
+
+            if (totalFiles === 0 && !hasExisting) {
+                summarySection.classList.add('hidden');
+                return;
+            }
 
             document.getElementById('totalFiles').textContent = totalFiles;
             document.getElementById('totalSheets').textContent = totalSheets;
-            document.getElementById('totalRows').textContent = totalRows;
+            document.getElementById('totalRows').textContent = newRows;
+
+            const existingItem = document.getElementById('existingRowsItem');
+            if (hasExisting) {
+                existingItem.style.display = '';
+                document.getElementById('existingRows').textContent = existingDbRowCount;
+            } else {
+                existingItem.style.display = 'none';
+            }
+
             summarySection.classList.remove('hidden');
         }
 
@@ -710,6 +793,99 @@
             clearBtn.disabled = !hasFiles;
         }
 
+        // ============================================
+        // EXISTING DATABASE (APPEND MODE)
+        // ============================================
+        const existingDbArea = document.getElementById('existingDbArea');
+        const existingDbInput = document.getElementById('existingDbInput');
+        const existingDbStatus = document.getElementById('existingDbStatus');
+
+        existingDbArea.addEventListener('click', () => existingDbInput.click());
+        existingDbArea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); existingDbInput.click(); }
+        });
+        existingDbArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            existingDbArea.classList.add('dragover');
+        });
+        existingDbArea.addEventListener('dragleave', () => existingDbArea.classList.remove('dragover'));
+        existingDbArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            existingDbArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.db')) loadExistingDatabase(file);
+            else showAlert('Please drop a .db file', 'warning');
+        });
+        existingDbInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) loadExistingDatabase(file);
+            existingDbInput.value = '';
+        });
+
+        async function loadExistingDatabase(file) {
+            showLoading('Loading existing database...');
+            try {
+                const SQL = await loadSqlEngine();
+                const buffer = await file.arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+                const db = new SQL.Database(bytes);
+
+                // Validate: must have sensor_readings table
+                const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='sensor_readings'");
+                if (tables.length === 0 || tables[0].values.length === 0) {
+                    db.close();
+                    hideLoading();
+                    showAlert('Database does not contain a sensor_readings table', 'danger');
+                    return;
+                }
+
+                // Get stats
+                const countResult = db.exec("SELECT COUNT(*) FROM sensor_readings");
+                const rowCount = countResult[0].values[0][0];
+                const jobsResult = db.exec('SELECT DISTINCT "Job #" FROM sensor_readings WHERE "Job #" IS NOT NULL AND "Job #" != ""');
+                const jobNumbers = jobsResult.length > 0 ? jobsResult[0].values.map(r => r[0]) : [];
+
+                db.close();
+
+                // Store the raw bytes for cloning later
+                existingDbBytes = bytes;
+                existingDbName = file.name;
+                existingDbRowCount = rowCount;
+
+                // Update UI
+                existingDbArea.style.display = 'none';
+                existingDbStatus.classList.remove('hidden');
+                existingDbStatus.innerHTML = `
+                    <div class="existing-db-loaded">
+                        <div class="db-info">
+                            <span class="db-name">📂 ${file.name}</span>
+                            <span class="db-meta">${rowCount} existing rows • ${jobNumbers.length} job(s): ${jobNumbers.slice(0, 5).join(', ')}${jobNumbers.length > 5 ? '...' : ''}</span>
+                        </div>
+                        <button class="remove-btn" onclick="removeExistingDatabase()" title="Remove existing database" aria-label="Remove existing database">✕</button>
+                    </div>
+                `;
+
+                hideLoading();
+                updateSummary();
+                showAlert(`Loaded existing database: ${rowCount} rows from ${file.name}`, 'success');
+            } catch (err) {
+                hideLoading();
+                showAlert(`Error loading database: ${err.message}`, 'danger');
+                console.error('Database load error:', err);
+            }
+        }
+
+        function removeExistingDatabase() {
+            existingDbBytes = null;
+            existingDbName = null;
+            existingDbRowCount = 0;
+            existingDbArea.style.display = '';
+            existingDbStatus.classList.add('hidden');
+            existingDbStatus.innerHTML = '';
+            updateSummary();
+            showAlert('Existing database removed', 'info');
+        }
+
         // Compile database
         async function compileDatabase() {
             if (builderFiles.length === 0) {
@@ -721,27 +897,33 @@
 
             try {
                 const SQL = await loadSqlEngine();
-                const db = new SQL.Database();
+                let db;
+                const isAppend = existingDbBytes !== null;
 
-                // Create the sensor_readings table
-                db.run(`
-                    CREATE TABLE sensor_readings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        "Job #" TEXT,
-                        "Serial Number" TEXT,
-                        "Channel" TEXT,
-                        "0" REAL,
-                        "5" REAL,
-                        "15" REAL,
-                        "30" REAL,
-                        "60" REAL,
-                        "90" REAL,
-                        "120" REAL,
-                        "Test #" INTEGER,
-                        "Timestamp" TEXT,
-                        "Initials" TEXT
-                    )
-                `);
+                if (isAppend) {
+                    // Clone the existing database from stored bytes
+                    db = new SQL.Database(new Uint8Array(existingDbBytes));
+                } else {
+                    db = new SQL.Database();
+                    db.run(`
+                        CREATE TABLE sensor_readings (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            "Job #" TEXT,
+                            "Serial Number" TEXT,
+                            "Channel" TEXT,
+                            "0" REAL,
+                            "5" REAL,
+                            "15" REAL,
+                            "30" REAL,
+                            "60" REAL,
+                            "90" REAL,
+                            "120" REAL,
+                            "Test #" INTEGER,
+                            "Timestamp" TEXT,
+                            "Initials" TEXT
+                        )
+                    `);
+                }
 
                 // Prepare insert statement
                 const insertStmt = db.prepare(`
@@ -777,13 +959,33 @@
 
                 insertStmt.free();
 
+                // Check for duplicates when appending
+                let duplicateWarning = '';
+                if (isAppend) {
+                    const dupResult = db.exec(`
+                        SELECT "Job #", "Serial Number", "Test #", COUNT(*) as cnt
+                        FROM sensor_readings
+                        GROUP BY "Job #", "Serial Number", "Test #"
+                        HAVING cnt > 1
+                    `);
+                    if (dupResult.length > 0 && dupResult[0].values.length > 0) {
+                        const dupCount = dupResult[0].values.length;
+                        duplicateWarning = ` (${dupCount} duplicate Serial/Test/Job combinations detected)`;
+                    }
+                }
+
                 // Export the database
                 const binaryArray = db.export();
                 const blob = new Blob([binaryArray], { type: 'application/x-sqlite3' });
 
-                // Generate filename with timestamp
-                const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                const filename = `sensor_data_${timestamp}.db`;
+                // Filename: reuse original name when appending, otherwise timestamp
+                let filename;
+                if (isAppend && existingDbName) {
+                    filename = existingDbName;
+                } else {
+                    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                    filename = `sensor_data_${timestamp}.db`;
+                }
 
                 // Download
                 const url = URL.createObjectURL(blob);
@@ -798,7 +1000,12 @@
                 db.close();
                 hideLoading();
 
-                showAlert(`Database compiled: ${totalInserted} records from ${builderFiles.length} files saved to ${filename}`, 'success');
+                if (isAppend) {
+                    const totalRows = existingDbRowCount + totalInserted;
+                    showAlert(`Database updated: ${totalInserted} new records appended to ${existingDbRowCount} existing (${totalRows} total) → ${filename}${duplicateWarning}`, 'success');
+                } else {
+                    showAlert(`Database compiled: ${totalInserted} records from ${builderFiles.length} files saved to ${filename}`, 'success');
+                }
 
             } catch (err) {
                 hideLoading();
