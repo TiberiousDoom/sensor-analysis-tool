@@ -500,6 +500,11 @@
                 </div>
             </div>
 
+            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; cursor: pointer; font-size: 0.9rem; color: var(--text-secondary, #b0b0b0);">
+                <input type="checkbox" id="skipDuplicates" checked style="width: 1rem; height: 1rem; cursor: pointer;">
+                Skip duplicate rows (matching Serial Number + Test # + Job #)
+            </label>
+
             <div class="button-group">
                 <button class="btn btn-primary" id="compileBtn" disabled>
                     🔨 Compile Database
@@ -932,14 +937,40 @@
                 `);
 
                 let totalInserted = 0;
+                let skippedCount = 0;
+                const skipDups = document.getElementById('skipDuplicates').checked;
+
+                // Build set of existing keys for dedup
+                const existingKeys = new Set();
+                if (skipDups) {
+                    const existing = db.exec(`SELECT "Serial Number", "Test #", "Job #" FROM sensor_readings`);
+                    if (existing.length > 0) {
+                        for (const row of existing[0].values) {
+                            existingKeys.add(`${row[0]}|${row[1]}|${row[2]}`);
+                        }
+                    }
+                }
 
                 // Insert all data from all files and sheets
                 for (const file of builderFiles) {
                     for (const sheet of file.sheets) {
                         for (const row of sheet.data) {
+                            const serialNum = row['Serial Number'] || row['Serial#'] || row['Serial'] || '';
+                            const testNum = row['Test #'] ?? row['Test'] ?? '';
+                            const jobNum = row['Job #'] || row['Job Number'] || '';
+
+                            if (skipDups) {
+                                const key = `${serialNum}|${testNum}|${jobNum}`;
+                                if (existingKeys.has(key)) {
+                                    skippedCount++;
+                                    continue;
+                                }
+                                existingKeys.add(key);
+                            }
+
                             insertStmt.run([
-                                row['Job #'] || row['Job Number'] || '',
-                                row['Serial Number'] || row['Serial#'] || row['Serial'] || '',
+                                jobNum,
+                                serialNum,
                                 row['Channel'] || '',
                                 row['0'] ?? null,
                                 row['5'] ?? null,
@@ -948,7 +979,7 @@
                                 row['60'] ?? null,
                                 row['90'] ?? null,
                                 row['120'] ?? null,
-                                row['Test #'] ?? row['Test'] ?? null,
+                                testNum,
                                 row['Timestamp'] || row['Date'] || row['Test Date'] || null,
                                 row['Initials'] || row['Built By'] || row['Builder'] || ''
                             ]);
@@ -958,21 +989,6 @@
                 }
 
                 insertStmt.free();
-
-                // Check for duplicates when appending
-                let duplicateWarning = '';
-                if (isAppend) {
-                    const dupResult = db.exec(`
-                        SELECT "Job #", "Serial Number", "Test #", COUNT(*) as cnt
-                        FROM sensor_readings
-                        GROUP BY "Job #", "Serial Number", "Test #"
-                        HAVING cnt > 1
-                    `);
-                    if (dupResult.length > 0 && dupResult[0].values.length > 0) {
-                        const dupCount = dupResult[0].values.length;
-                        duplicateWarning = ` (${dupCount} duplicate Serial/Test/Job combinations detected)`;
-                    }
-                }
 
                 // Export the database
                 const binaryArray = db.export();
@@ -1000,11 +1016,12 @@
                 db.close();
                 hideLoading();
 
+                const skippedMsg = skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : '';
                 if (isAppend) {
                     const totalRows = existingDbRowCount + totalInserted;
-                    showAlert(`Database updated: ${totalInserted} new records appended to ${existingDbRowCount} existing (${totalRows} total) → ${filename}${duplicateWarning}`, 'success');
+                    showAlert(`Database updated: ${totalInserted} new records appended to ${existingDbRowCount} existing (${totalRows} total) → ${filename}${skippedMsg}`, 'success');
                 } else {
-                    showAlert(`Database compiled: ${totalInserted} records from ${builderFiles.length} files saved to ${filename}`, 'success');
+                    showAlert(`Database compiled: ${totalInserted} records from ${builderFiles.length} files saved to ${filename}${skippedMsg}`, 'success');
                 }
 
             } catch (err) {
