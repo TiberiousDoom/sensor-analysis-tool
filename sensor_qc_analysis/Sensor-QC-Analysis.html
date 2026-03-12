@@ -2667,7 +2667,17 @@ else if (typeof exports === 'object'){
                     legend: {
                         display: true,
                         position: 'top',
-                        labels: { boxWidth: 12, padding: 8 }
+                        labels: {
+                            boxWidth: 12,
+                            padding: 8,
+                            generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({
+                                text: ds.label,
+                                fillStyle: `rgba(16, 185, 129, ${testColors[i] || '0.5'})`,
+                                strokeStyle: 'transparent',
+                                lineWidth: 0,
+                                datasetIndex: i
+                            }))
+                        }
                     }
                 },
                 scales: {
