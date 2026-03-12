@@ -3262,44 +3262,56 @@ else if (typeof exports === 'object'){
                 }
             });
 
-            // Status by test: grouped stacked bars
+            // Status by test: grouped bars showing pass rate % per test across jobs
             const statusCtx = document.getElementById('statusByTestChart').getContext('2d');
-            const allStatuses = ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'FAIL'];
-            const statusLabels = [];
-            const statusDatasets = {};
-            allStatuses.forEach(s => { statusDatasets[s] = []; });
+            const jobLabels = jobs.map(([jobNum]) => `Job ${jobNum}`);
+            const testColors = { 1: '#667eea', 2: '#10b981', 3: '#f59e0b' };
+            const maxTAll = Math.max(...jobs.map(([, d]) => d.stats.maxTests));
+            const testDatasets = [];
 
-            jobs.forEach(([jobNum, data]) => {
-                const maxT = data.stats.maxTests;
-                for (let t = 1; t <= maxT; t++) {
-                    statusLabels.push(`J${jobNum} T${t}`);
-                    const counts = {};
-                    allStatuses.forEach(s => counts[s] = 0);
-                    data.results.forEach(row => {
-                        const st = row[`Status(T${t})`];
-                        if (st) {
-                            const primary = st.split(',')[0];
-                            if (counts[primary] !== undefined) counts[primary]++;
-                        }
-                    });
-                    allStatuses.forEach(s => statusDatasets[s].push(counts[s]));
-                }
-            });
-
-            const sDatasets = allStatuses.map(s => ({
-                label: s,
-                data: statusDatasets[s],
-                backgroundColor: STATUS_COLORS[s],
-                borderWidth: 0
-            })).filter(ds => ds.data.some(v => v > 0));
+            for (let t = 1; t <= maxTAll; t++) {
+                testDatasets.push({
+                    label: `T${t}`,
+                    data: jobs.map(([, data]) => {
+                        let total = 0, passed = 0;
+                        data.results.forEach(row => {
+                            const st = row[`Status(T${t})`];
+                            if (st) {
+                                total++;
+                                const primary = st.split(',')[0];
+                                if (primary === 'PASS' || primary === 'TT' || primary === 'OT+') passed++;
+                            }
+                        });
+                        return total > 0 ? parseFloat((passed / total * 100).toFixed(1)) : null;
+                    }),
+                    backgroundColor: testColors[t] || '#8b5cf6',
+                    borderWidth: 0
+                });
+            }
 
             charts.statusByTest = new Chart(statusCtx, {
                 type: 'bar',
-                data: { labels: statusLabels, datasets: sDatasets },
+                data: { labels: jobLabels, datasets: testDatasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' } },
-                    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Count' } } }
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        title: { display: true, text: 'Pass Rate by Test Across Jobs' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.raw !== null ? `${ctx.dataset.label}: ${ctx.raw}%` : ''
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: false },
+                        y: {
+                            stacked: false,
+                            min: 0, max: 100,
+                            title: { display: true, text: 'Pass Rate (%)' },
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
                 }
             });
 
