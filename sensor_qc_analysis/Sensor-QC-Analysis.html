@@ -1924,6 +1924,23 @@ else if (typeof exports === 'object'){
         return values.filter(v => v >= lowerBound && v <= upperBound);
     }
 
+    function sortRowsByTestNumber(rows) {
+        const hasTestNum = rows.some(r => r['Test #'] != null && !isNaN(r['Test #']));
+        if (hasTestNum) {
+            rows.sort((a, b) => {
+                const aNum = (a['Test #'] != null && !isNaN(a['Test #'])) ? a['Test #'] : Infinity;
+                const bNum = (b['Test #'] != null && !isNaN(b['Test #'])) ? b['Test #'] : Infinity;
+                return aNum - bNum;
+            });
+        }
+    }
+
+    function getTestNumber(row, index) {
+        const t = row['Test #'];
+        if (t != null && !isNaN(t) && t >= 1) return Math.floor(t);
+        return index + 1;
+    }
+
     // ============================================================
     // DATABASE FUNCTIONS (Fixed)
     // ============================================================
@@ -2067,8 +2084,9 @@ else if (typeof exports === 'object'){
             
             const allFailureCodes = [];
             
+            sortRowsByTestNumber(group);
             group.forEach((row, testIdx) => {
-                const testNum = testIdx + 1;
+                const testNum = getTestNumber(row, testIdx);
                 const testPrefix = `T${testNum}`;
                 
                 serialRow[`0s(${testPrefix})`] = row['0'];
@@ -2121,7 +2139,7 @@ else if (typeof exports === 'object'){
                 
                 // Check if any test passed (by checking Status columns)
                 const hasAnyPass = group.some((row, idx) => {
-                    const testNum = idx + 1;
+                    const testNum = getTestNumber(row, idx);
                     const testStatus = serialRow[`Status(T${testNum})`];
                     return testStatus === 'PASS';
                 });
@@ -2545,8 +2563,9 @@ else if (typeof exports === 'object'){
         
         // Assign test numbers and group readings
         for (const [serial, tests] of Object.entries(grouped)) {
+            sortRowsByTestNumber(tests);
             tests.forEach((test, idx) => {
-                const testNum = idx + 1;
+                const testNum = getTestNumber(test, idx);
                 if (!testGroups[testNum]) testGroups[testNum] = [];
                 testGroups[testNum].push(test);
             });
@@ -4015,6 +4034,7 @@ else if (typeof exports === 'object'){
                 let hasCriticalFailure = false;
 
                 // Check each test for this sensor and track per-test passes
+                sortRowsByTestNumber(sensorRows);
                 sensorRows.forEach((row, testIdx) => {
                     const v120 = row['120'];
                     const pctChange = row.pct_change_90_120;
@@ -4037,14 +4057,15 @@ else if (typeof exports === 'object'){
                         }
                     }
 
-                    // Track per-test passes (testIdx 0 = T1, 1 = T2, 2 = T3)
-                    if (testIdx === 0) {
+                    // Track per-test passes using actual test number
+                    const testNum = getTestNumber(row, testIdx);
+                    if (testNum === 1) {
                         t1Total++;
                         if (testPassed) t1Passed++;
-                    } else if (testIdx === 1) {
+                    } else if (testNum === 2) {
                         t2Total++;
                         if (testPassed) t2Passed++;
-                    } else if (testIdx === 2) {
+                    } else if (testNum === 3) {
                         t3Total++;
                         if (testPassed) t3Passed++;
                     }
@@ -4107,10 +4128,10 @@ else if (typeof exports === 'object'){
             <tr>
                 <td>${job.jobNumber}</td>
                 <td>${job.totalSensors}</td>
-                <td>${job.t1PassPct.toFixed(1)}% (${job.t1Passed})</td>
-                <td>${job.t2PassPct.toFixed(1)}% (${job.t2Passed})</td>
-                <td>${job.t3PassPct.toFixed(1)}% (${job.t3Passed})</td>
-                <td>${job.totalPassPct.toFixed(1)}% (${job.totalPassed})</td>
+                <td>${job.t1PassPct.toFixed(1)}% <span class="count">(${job.t1Passed}/${job.t1Total})</span></td>
+                <td>${job.t2PassPct.toFixed(1)}% <span class="count">(${job.t2Passed}/${job.t2Total})</span></td>
+                <td>${job.t3PassPct.toFixed(1)}% <span class="count">(${job.t3Passed}/${job.t3Total})</span></td>
+                <td>${job.totalPassPct.toFixed(1)}% <span class="count">(${job.totalPassed}/${job.totalSensors})</span></td>
             </tr>
         `).join('');
 
@@ -4125,6 +4146,7 @@ else if (typeof exports === 'object'){
                 .cumulative-row{border-top:3px solid #333;font-weight:bold;background:#f9f9f9}
                 .pass{color:#10b981}
                 .fail{color:#ef4444}
+                .count{font-size:0.75em;color:#888}
             </style>
             </head><body>
             <h1>Job Analysis Comparison</h1>
@@ -4142,10 +4164,10 @@ else if (typeof exports === 'object'){
                 <tr class="cumulative-row">
                     <td>Overall:</td>
                     <td>${totalSensorsSum}</td>
-                    <td>${weightedT1PassPct.toFixed(1)}% (${totalT1Passed})</td>
-                    <td>${weightedT2PassPct.toFixed(1)}% (${totalT2Passed})</td>
-                    <td>${weightedT3PassPct.toFixed(1)}% (${totalT3Passed})</td>
-                    <td>${weightedTotalPassPct.toFixed(1)}% (${totalOverallPassed})</td>
+                    <td>${weightedT1PassPct.toFixed(1)}% <span class="count">(${totalT1Passed}/${totalT1Tested})</span></td>
+                    <td>${weightedT2PassPct.toFixed(1)}% <span class="count">(${totalT2Passed}/${totalT2Tested})</span></td>
+                    <td>${weightedT3PassPct.toFixed(1)}% <span class="count">(${totalT3Passed}/${totalT3Tested})</span></td>
+                    <td>${weightedTotalPassPct.toFixed(1)}% <span class="count">(${totalOverallPassed}/${totalSensorsSum})</span></td>
                 </tr>
             </table>
             </body></html>
