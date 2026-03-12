@@ -3315,25 +3315,38 @@ else if (typeof exports === 'object'){
                 }
             });
 
-            // Stacked horizontal bar per job (replacing pie)
+            // Stacked horizontal bar per job (percentage)
             const pieCtx = document.getElementById('pieChart').getContext('2d');
-            const hLabels = jobs.map(([j]) => `Job ${j}`);
+            const allStatuses = ['PASS', 'FL', 'FH', 'OT-', 'TT', 'OT+', 'FAIL'];
             const hDatasets = allStatuses.map(s => ({
                 label: s,
                 data: jobs.map(([, d]) => {
-                    return d.results.filter(r => r['Pass/Fail'] === s).length;
+                    const total = d.results.length;
+                    if (total === 0) return 0;
+                    const count = d.results.filter(r => r['Pass/Fail'] === s).length;
+                    return parseFloat((count / total * 100).toFixed(1));
                 }),
                 backgroundColor: STATUS_COLORS[s]
             })).filter(ds => ds.data.some(v => v > 0));
 
             charts.pie = new Chart(pieCtx, {
                 type: 'bar',
-                data: { labels: hLabels, datasets: hDatasets },
+                data: { labels: jobLabels, datasets: hDatasets },
                 options: {
                     indexAxis: 'y',
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top' } },
-                    scales: { x: { stacked: true, title: { display: true, text: 'Count' } }, y: { stacked: true } }
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${ctx.raw}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, min: 0, max: 100, title: { display: true, text: 'Status (%)' }, ticks: { callback: v => v + '%' } },
+                        y: { stacked: true }
+                    }
                 }
             });
 
