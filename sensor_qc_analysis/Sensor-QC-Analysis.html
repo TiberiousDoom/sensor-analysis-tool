@@ -693,7 +693,7 @@
         }
 
         /* Heatmap styles */
-        .heatmap-container { overflow-x: auto; overflow-y: auto; max-height: 100%; }
+        .heatmap-container { overflow-x: auto; overflow-y: auto; max-height: 500px; }
         .heatmap-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
         .heatmap-table th, .heatmap-table td { padding: 6px 8px; text-align: center; border: 1px solid var(--border-light); }
         .heatmap-table th { background: var(--bg-light); font-weight: 600; font-size: 0.75rem; }
@@ -2515,6 +2515,14 @@ else if (typeof exports === 'object'){
 
         // Update status filters to reflect any count changes
         renderStatusFilters(analysisResults);
+
+        // Update charts to reflect the status change
+        if (currentJobData) {
+            renderCharts(analysisResults, currentJobData, thresholdSet);
+        }
+
+        // Update sidebar job history stats
+        updateJobHistory(currentJob);
     }
 
     function saveStatusOverride(jobNumber, serialNumber, status) {
@@ -2945,8 +2953,8 @@ else if (typeof exports === 'object'){
                 trendDatasets.push({
                     label: `Test ${t}`,
                     data: points,
-                    backgroundColor: TEST_COLORS[t - 1] || TEST_COLORS[0],
-                    borderColor: TEST_COLORS[t - 1] || TEST_COLORS[0],
+                    backgroundColor: (TEST_COLORS[t - 1] || TEST_COLORS[0]) + '80',
+                    borderColor: (TEST_COLORS[t - 1] || TEST_COLORS[0]) + '80',
                     pointRadius: 4,
                     showLine: false
                 });
@@ -3015,8 +3023,8 @@ else if (typeof exports === 'object'){
             const corrDatasets = Object.entries(correlationData).map(([status, points]) => ({
                 label: status,
                 data: points,
-                backgroundColor: STATUS_COLORS[status] || '#999',
-                borderColor: STATUS_COLORS[status] || '#999',
+                backgroundColor: (STATUS_COLORS[status] || '#999') + '80',
+                borderColor: (STATUS_COLORS[status] || '#999') + '80',
                 pointRadius: 4,
                 showLine: false
             }));
@@ -3738,7 +3746,7 @@ else if (typeof exports === 'object'){
                 distCanvas.parentElement.appendChild(heatmapDiv);
             }
 
-            const heatJobs = sortedJobs.slice(0, 40); // limit rows for readability
+            const heatJobs = sortedJobs;
             const maxT = Math.max(...heatJobs.map(([, d]) => d.stats.maxTests));
             let heatHTML = '<table class="heatmap-table"><thead><tr><th>Job #</th>';
             for (let t = 1; t <= maxT; t++) heatHTML += `<th>T${t}</th>`;
@@ -3897,6 +3905,233 @@ else if (typeof exports === 'object'){
                     return `<div class="status-summary-item"><div class="left"><span class="status-pill status-${status}">${status}</span></div><div><span class="count">${count}</span> <span class="pct">(${pct}%)</span></div></div>`;
                 }).join('');
             }
+        }
+
+        // ========================================
+        // Baseline charts (shared across all tiers)
+        // ========================================
+        const allResults = jobs.flatMap(([, d]) => d.results);
+        const allJobData = jobs.flatMap(([, d]) => d.jobData);
+        const maxTests = Math.max(...allResults.map(r => r.testCount || 1), 1);
+
+        // 0s Baseline Distribution (Histogram)
+        const baselineDistCtx = document.getElementById('baselineDistChart');
+        if (baselineDistCtx) {
+            const ctx = baselineDistCtx.getContext('2d');
+            const baselineBins = [0, 0.10, 0.20, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80, 0.90, 1.0];
+            const baselineBinLabels = baselineBins.slice(0, -1).map((b, i) => `${b.toFixed(2)}-${baselineBins[i+1].toFixed(2)}V`);
+
+            const baselineHistByTest = {};
+            for (let t = 1; t <= maxTests; t++) {
+                baselineHistByTest[t] = new Array(baselineBins.length - 1).fill(0);
+            }
+
+            allResults.forEach(row => {
+                for (let t = 1; t <= (row.testCount || 1); t++) {
+                    const v0 = row[`0s(T${t})`];
+                    if (v0 !== null && v0 !== undefined && !isNaN(v0)) {
+                        for (let i = 0; i < baselineBins.length - 1; i++) {
+                            if (v0 >= baselineBins[i] && v0 < baselineBins[i + 1]) {
+                                baselineHistByTest[t][i]++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+
+            const getBaselineBarColor = (binIndex, alpha) => {
+                const midpoint = (baselineBins[binIndex] + baselineBins[binIndex + 1]) / 2;
+                if (midpoint < thresholds.min_0s || midpoint > thresholds.max_0s) return `rgba(6, 182, 212, ${alpha})`;
+                return `rgba(16, 185, 129, ${alpha})`;
+            };
+
+            const baselineTestColors = ['0.9', '0.6', '0.35'];
+            const baselineDatasets = [];
+            for (let t = 1; t <= maxTests; t++) {
+                baselineDatasets.push({
+                    label: `Test ${t}`,
+                    data: baselineHistByTest[t],
+                    backgroundColor: baselineBins.slice(0, -1).map((_, i) => getBaselineBarColor(i, baselineTestColors[t-1] || '0.5')),
+                    borderWidth: 0
+                });
+            }
+
+            charts.baselineDist = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: baselineBinLabels, datasets: baselineDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true, position: 'top',
+                            labels: {
+                                boxWidth: 12, padding: 8,
+                                generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({
+                                    text: ds.label,
+                                    fillStyle: `rgba(16, 185, 129, ${baselineTestColors[i] || '0.5'})`,
+                                    strokeStyle: 'transparent', lineWidth: 0, datasetIndex: i
+                                }))
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { title: { display: true, text: 'Count' } },
+                        x: { title: { display: true, text: '0s Baseline Voltage' } }
+                    }
+                }
+            });
+        }
+
+        // 0s Baseline Trend (Scatter)
+        const baselineTrendCtx = document.getElementById('baselineTrendChart');
+        if (baselineTrendCtx) {
+            const ctx = baselineTrendCtx.getContext('2d');
+            const blTrendDatasets = [];
+
+            for (let t = 1; t <= maxTests; t++) {
+                const points = [];
+                allResults.forEach((row, idx) => {
+                    if (t <= (row.testCount || 1)) {
+                        const v0 = row[`0s(T${t})`];
+                        if (v0 !== null && v0 !== undefined && !isNaN(v0)) {
+                            points.push({ x: idx, y: v0 });
+                        }
+                    }
+                });
+                blTrendDatasets.push({
+                    label: `Test ${t}`,
+                    data: points,
+                    backgroundColor: (TEST_COLORS[t - 1] || TEST_COLORS[0]) + '80',
+                    borderColor: (TEST_COLORS[t - 1] || TEST_COLORS[0]) + '80',
+                    pointRadius: 4,
+                    showLine: false
+                });
+            }
+
+            blTrendDatasets.push({
+                label: `BL Min (${thresholds.min_0s}V)`,
+                data: [{ x: 0, y: thresholds.min_0s }, { x: allResults.length - 1, y: thresholds.min_0s }],
+                borderColor: 'rgba(6, 182, 212, 0.6)',
+                borderDash: [6, 4],
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+                fill: false
+            });
+            blTrendDatasets.push({
+                label: `BL Max (${thresholds.max_0s}V)`,
+                data: [{ x: 0, y: thresholds.max_0s }, { x: allResults.length - 1, y: thresholds.max_0s }],
+                borderColor: 'rgba(6, 182, 212, 0.6)',
+                borderDash: [6, 4],
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+                fill: false
+            });
+
+            charts.baselineTrend = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets: blTrendDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { boxWidth: 12, padding: 8 } }
+                    },
+                    scales: {
+                        x: { type: 'linear', title: { display: true, text: 'Sensor Index' } },
+                        y: { title: { display: true, text: '0s Voltage (V)' } }
+                    }
+                }
+            });
+        }
+
+        // 0s vs % Change Correlation (Scatter)
+        const baselineCorrCtx = document.getElementById('baselineCorrelationChart');
+        if (baselineCorrCtx) {
+            const ctx = baselineCorrCtx.getContext('2d');
+            const correlationData = {};
+
+            allResults.forEach(row => {
+                for (let t = 1; t <= (row.testCount || 1); t++) {
+                    const v0 = row[`0s(T${t})`];
+                    const pctChgStr = row[`%Chg(T${t})`];
+                    const pctChg = pctChgStr ? parseFloat(pctChgStr) : null;
+                    const status = (row[`Status(T${t})`] || row['Pass/Fail']).split(',')[0];
+                    if (v0 != null && !isNaN(v0) && pctChg != null && !isNaN(pctChg)) {
+                        if (!correlationData[status]) correlationData[status] = [];
+                        correlationData[status].push({ x: v0, y: pctChg });
+                    }
+                }
+            });
+
+            const corrDatasets = Object.entries(correlationData).map(([status, points]) => ({
+                label: status,
+                data: points,
+                backgroundColor: (STATUS_COLORS[status] || '#999') + '80',
+                borderColor: (STATUS_COLORS[status] || '#999') + '80',
+                pointRadius: 4,
+                showLine: false
+            }));
+
+            corrDatasets.push({
+                label: `BL Min (${thresholds.min_0s}V)`,
+                data: [{ x: thresholds.min_0s, y: thresholds.min_pct_change - 5 }, { x: thresholds.min_0s, y: thresholds.max_pct_change + 5 }],
+                borderColor: 'rgba(6, 182, 212, 0.6)',
+                borderDash: [6, 4],
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+                fill: false
+            });
+            corrDatasets.push({
+                label: `BL Max (${thresholds.max_0s}V)`,
+                data: [{ x: thresholds.max_0s, y: thresholds.min_pct_change - 5 }, { x: thresholds.max_0s, y: thresholds.max_pct_change + 5 }],
+                borderColor: 'rgba(6, 182, 212, 0.6)',
+                borderDash: [6, 4],
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+                fill: false
+            });
+            corrDatasets.push({
+                label: `Min %Chg (${thresholds.min_pct_change}%)`,
+                data: [{ x: 0, y: thresholds.min_pct_change }, { x: 1.0, y: thresholds.min_pct_change }],
+                borderColor: 'rgba(239, 68, 68, 0.5)',
+                borderDash: [6, 4],
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+                fill: false
+            });
+            corrDatasets.push({
+                label: `Max %Chg (${thresholds.max_pct_change}%)`,
+                data: [{ x: 0, y: thresholds.max_pct_change }, { x: 1.0, y: thresholds.max_pct_change }],
+                borderColor: 'rgba(239, 68, 68, 0.5)',
+                borderDash: [6, 4],
+                borderWidth: 2,
+                pointRadius: 0,
+                showLine: true,
+                fill: false
+            });
+
+            charts.baselineCorrelation = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets: corrDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { boxWidth: 12, padding: 8 } }
+                    },
+                    scales: {
+                        x: { type: 'linear', title: { display: true, text: '0s Baseline (V)' } },
+                        y: { title: { display: true, text: '% Change (90s→120s)' } }
+                    }
+                }
+            });
         }
     }
 
