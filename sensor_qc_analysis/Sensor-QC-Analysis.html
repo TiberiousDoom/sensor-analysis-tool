@@ -2515,6 +2515,14 @@ else if (typeof exports === 'object'){
 
         // Update status filters to reflect any count changes
         renderStatusFilters(analysisResults);
+
+        // Update charts to reflect the status change
+        if (currentJobData) {
+            renderCharts(analysisResults, currentJobData, thresholdSet);
+        }
+
+        // Update sidebar job history stats
+        updateJobHistory(currentJob);
     }
 
     function saveStatusOverride(jobNumber, serialNumber, status) {
