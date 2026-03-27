@@ -340,6 +340,44 @@
             display: none !important;
         }
 
+        /* Export Format Selector */
+        .format-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .format-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-light);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .format-option:hover {
+            border-color: var(--accent);
+        }
+
+        .format-option input[type="radio"] {
+            accent-color: var(--accent);
+            width: 1rem;
+            height: 1rem;
+            cursor: pointer;
+        }
+
+        .format-option:has(input:checked) {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--text-primary);
+        }
+
         /* Accessibility: Focus styles */
         .btn:focus,
         input:focus,
@@ -505,9 +543,21 @@
                 Skip duplicate rows (matching Serial Number + Test # + Job #)
             </label>
 
+            <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Export Format</div>
+            <div class="format-selector">
+                <label class="format-option">
+                    <input type="radio" name="exportFormat" value="db" checked>
+                    SQLite Database (.db)
+                </label>
+                <label class="format-option">
+                    <input type="radio" name="exportFormat" value="csv">
+                    CSV File (.csv)
+                </label>
+            </div>
+
             <div class="button-group">
                 <button class="btn btn-primary" id="compileBtn" disabled>
-                    🔨 Compile Database
+                    🔨 Compile & Export
                 </button>
                 <button class="btn btn-secondary" id="clearBtn" disabled>
                     🗑️ Clear All
@@ -891,11 +941,159 @@
             showAlert('Existing database removed', 'info');
         }
 
+        // Get selected export format
+        function getExportFormat() {
+            return document.querySelector('input[name="exportFormat"]:checked').value;
+        }
+
+        // Extract rows from files with dedup logic, returns { rows, skippedCount }
+        function extractRows(existingKeys, skipDups) {
+            const rows = [];
+            let skippedCount = 0;
+
+            for (const file of builderFiles) {
+                for (const sheet of file.sheets) {
+                    for (const row of sheet.data) {
+                        const serialNum = row['Serial Number'] || row['Serial#'] || row['Serial'] || '';
+                        const testNum = row['Test #'] ?? row['Test'] ?? '';
+                        const jobNum = row['Job #'] || row['Job Number'] || '';
+
+                        if (skipDups) {
+                            const key = `${serialNum}|${testNum}|${jobNum}`;
+                            if (existingKeys.has(key)) {
+                                skippedCount++;
+                                continue;
+                            }
+                            existingKeys.add(key);
+                        }
+
+                        rows.push([
+                            jobNum,
+                            serialNum,
+                            row['Channel'] || '',
+                            row['0'] ?? null,
+                            row['5'] ?? null,
+                            row['15'] ?? null,
+                            row['30'] ?? null,
+                            row['60'] ?? null,
+                            row['90'] ?? null,
+                            row['120'] ?? null,
+                            testNum,
+                            row['Timestamp'] || row['Date'] || row['Test Date'] || null,
+                            row['Initials'] || row['Built By'] || row['Builder'] || ''
+                        ]);
+                    }
+                }
+            }
+
+            return { rows, skippedCount };
+        }
+
+        // Escape a value for CSV (RFC 4180)
+        function csvEscape(value) {
+            if (value === null || value === undefined) return '';
+            const str = String(value);
+            if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        // Export as CSV
+        async function exportCsv() {
+            showLoading('Compiling CSV...');
+
+            try {
+                const CSV_COLUMNS = ['Job #', 'Serial Number', 'Channel', '0', '5', '15', '30', '60', '90', '120', 'Test #', 'Timestamp', 'Initials'];
+                const skipDups = document.getElementById('skipDuplicates').checked;
+                const existingKeys = new Set();
+
+                // If appending to existing DB, load existing keys for dedup
+                let existingRows = [];
+                if (existingDbBytes !== null) {
+                    const SQL = await loadSqlEngine();
+                    const db = new SQL.Database(new Uint8Array(existingDbBytes));
+
+                    if (skipDups) {
+                        const existing = db.exec(`SELECT "Serial Number", "Test #", "Job #" FROM sensor_readings`);
+                        if (existing.length > 0) {
+                            for (const row of existing[0].values) {
+                                existingKeys.add(`${row[0]}|${row[1]}|${row[2]}`);
+                            }
+                        }
+                    }
+
+                    // Include existing DB rows in CSV output
+                    const allData = db.exec(`SELECT "Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp", "Initials" FROM sensor_readings`);
+                    if (allData.length > 0) {
+                        existingRows = allData[0].values;
+                    }
+
+                    db.close();
+                }
+
+                const { rows: newRows, skippedCount } = extractRows(existingKeys, skipDups);
+
+                // Build CSV content
+                const lines = [CSV_COLUMNS.map(csvEscape).join(',')];
+
+                for (const row of existingRows) {
+                    lines.push(row.map(csvEscape).join(','));
+                }
+                for (const row of newRows) {
+                    lines.push(row.map(csvEscape).join(','));
+                }
+
+                const csvContent = lines.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+                // Filename
+                let filename;
+                if (existingDbBytes !== null && existingDbName) {
+                    filename = existingDbName.replace(/\.db$/i, '') + '.csv';
+                } else {
+                    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                    filename = `sensor_data_${timestamp}.csv`;
+                }
+
+                // Download
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                hideLoading();
+
+                const totalInserted = newRows.length;
+                const skippedMsg = skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : '';
+                const isAppend = existingDbBytes !== null;
+                if (isAppend) {
+                    const totalRows = existingRows.length + totalInserted;
+                    showAlert(`CSV exported: ${totalInserted} new records + ${existingRows.length} existing (${totalRows} total) → ${filename}${skippedMsg}`, 'success');
+                } else {
+                    showAlert(`CSV exported: ${totalInserted} records from ${builderFiles.length} files saved to ${filename}${skippedMsg}`, 'success');
+                }
+
+            } catch (err) {
+                hideLoading();
+                showAlert(`Error exporting CSV: ${err.message}`, 'danger');
+                console.error('CSV export error:', err);
+            }
+        }
+
         // Compile database
         async function compileDatabase() {
             if (builderFiles.length === 0) {
                 showAlert('No files to compile', 'warning');
                 return;
+            }
+
+            if (getExportFormat() === 'csv') {
+                return exportCsv();
             }
 
             showLoading('Compiling database...');
@@ -930,14 +1128,6 @@
                     `);
                 }
 
-                // Prepare insert statement
-                const insertStmt = db.prepare(`
-                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp", "Initials")
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `);
-
-                let totalInserted = 0;
-                let skippedCount = 0;
                 const skipDups = document.getElementById('skipDuplicates').checked;
 
                 // Build set of existing keys for dedup
@@ -951,41 +1141,16 @@
                     }
                 }
 
-                // Insert all data from all files and sheets
-                for (const file of builderFiles) {
-                    for (const sheet of file.sheets) {
-                        for (const row of sheet.data) {
-                            const serialNum = row['Serial Number'] || row['Serial#'] || row['Serial'] || '';
-                            const testNum = row['Test #'] ?? row['Test'] ?? '';
-                            const jobNum = row['Job #'] || row['Job Number'] || '';
+                const { rows, skippedCount } = extractRows(existingKeys, skipDups);
 
-                            if (skipDups) {
-                                const key = `${serialNum}|${testNum}|${jobNum}`;
-                                if (existingKeys.has(key)) {
-                                    skippedCount++;
-                                    continue;
-                                }
-                                existingKeys.add(key);
-                            }
+                // Prepare insert statement
+                const insertStmt = db.prepare(`
+                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp", "Initials")
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
 
-                            insertStmt.run([
-                                jobNum,
-                                serialNum,
-                                row['Channel'] || '',
-                                row['0'] ?? null,
-                                row['5'] ?? null,
-                                row['15'] ?? null,
-                                row['30'] ?? null,
-                                row['60'] ?? null,
-                                row['90'] ?? null,
-                                row['120'] ?? null,
-                                testNum,
-                                row['Timestamp'] || row['Date'] || row['Test Date'] || null,
-                                row['Initials'] || row['Built By'] || row['Builder'] || ''
-                            ]);
-                            totalInserted++;
-                        }
-                    }
+                for (const row of rows) {
+                    insertStmt.run(row);
                 }
 
                 insertStmt.free();
@@ -1016,6 +1181,7 @@
                 db.close();
                 hideLoading();
 
+                const totalInserted = rows.length;
                 const skippedMsg = skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : '';
                 if (isAppend) {
                     const totalRows = existingDbRowCount + totalInserted;
