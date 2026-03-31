@@ -1021,6 +1021,29 @@
                                 }
                             }
 
+                            // Inject Test # from sheet name (e.g. "Potted Test 1" → 1) when missing
+                            const testNumMatch = sheetName.match(/Potted\s+Test\s+(\d+)/i);
+                            if (testNumMatch) {
+                                const testNum = parseInt(testNumMatch[1], 10);
+                                const testCfg = HEADER_CONFIG['Test #'];
+                                const testNames = ['Test #', ...testCfg.fallbacks];
+                                const sheetHasTestNum = testNames.some(n => rawHeaders.includes(n));
+
+                                if (!sheetHasTestNum) {
+                                    for (const row of processedData) {
+                                        row['Test #'] = testNum;
+                                    }
+                                    rawHeaders.push('Test #');
+                                } else {
+                                    for (const row of processedData) {
+                                        const existing = testNames.find(n => row[n] !== undefined && row[n] !== '' && row[n] !== null);
+                                        if (!existing) {
+                                            row['Test #'] = testNum;
+                                        }
+                                    }
+                                }
+                            }
+
                             sheets.push({
                                 name: sheetName,
                                 data: processedData,
