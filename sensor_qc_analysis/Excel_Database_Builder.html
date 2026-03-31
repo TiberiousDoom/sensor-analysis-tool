@@ -398,6 +398,80 @@
             opacity: 1;
         }
 
+        /* Header Selection Chips */
+        .header-selector-section {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+        .header-selector-title {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 0.75rem;
+        }
+        .header-selector-title span {
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            font-weight: normal;
+        }
+        .header-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .header-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            color: var(--text-primary);
+        }
+        .header-chip:hover {
+            border-color: var(--accent);
+        }
+        .header-chip.critical {
+            border-left: 3px solid var(--warning);
+        }
+        .header-chip.disabled-chip {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .header-chip input[type="checkbox"] {
+            accent-color: var(--accent);
+            cursor: pointer;
+            width: 0.9rem;
+            height: 0.9rem;
+        }
+        .header-chip.disabled-chip input[type="checkbox"] {
+            cursor: not-allowed;
+        }
+        .header-selector-buttons {
+            margin-top: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .header-selector-buttons .btn {
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8rem;
+        }
+        .header-warning {
+            padding: 0.5rem 0.75rem;
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid var(--warning);
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+            color: var(--warning);
+        }
+
         /* Screen reader only */
         .sr-only {
             position: absolute;
@@ -510,6 +584,17 @@
 
             <div id="fileList" class="file-list"></div>
 
+            <div id="headerSelectorSection" class="header-selector-section hidden">
+                <div class="header-selector-title">Column Selection <span>(uncheck columns to exclude from output)</span></div>
+                <div id="headerWarning" class="header-warning hidden"></div>
+                <div id="headerCheckboxes" class="header-chips"></div>
+                <div class="header-selector-buttons">
+                    <button class="btn btn-secondary" onclick="selectAllHeaders()">Select All</button>
+                    <button class="btn btn-secondary" onclick="selectNoneHeaders()">Select None</button>
+                    <button class="btn btn-secondary" onclick="selectDefaultHeaders()">Reset Default</button>
+                </div>
+            </div>
+
             <div class="existing-db-section">
                 <div class="card-title" style="font-size: 1rem;">📂 Append to Existing Database <span style="font-size: 0.75em; color: var(--text-secondary); font-weight: normal;">(optional)</span></div>
                 <div class="existing-db-upload" id="existingDbArea" role="button" tabindex="0" aria-label="Load existing database file">
@@ -570,7 +655,7 @@
             <p class="info-text" style="margin-bottom: 1rem;">
                 The compiled database creates a <code>sensor_readings</code> table compatible with the Sensor Analysis Tool:
             </p>
-            <div class="schema-info">
+            <div class="schema-info" id="schemaDisplay">
                 <code>sensor_readings</code> (<br>
                 &nbsp;&nbsp;id, Job #, Serial Number, Channel,<br>
                 &nbsp;&nbsp;0, 5, 15, 30, 60, 90, 120, Test #, Timestamp, Initials<br>
@@ -620,8 +705,32 @@
         const loadingOverlay = document.getElementById('loadingOverlay');
         const loadingText = document.getElementById('loadingText');
 
-        // Time point columns (numeric)
-        const TIME_POINTS = ['0', '5', '15', '30', '60', '90', '120'];
+        // Centralized header configuration
+        const HEADER_CONFIG = {
+            'Job #':         { fallbacks: ['Job Number'], type: 'TEXT', critical: true },
+            'Serial Number': { fallbacks: ['Serial#', 'Serial'], type: 'TEXT', critical: true },
+            'Channel':       { fallbacks: [], type: 'TEXT', critical: true },
+            '0':             { fallbacks: [], type: 'REAL' },
+            '5':             { fallbacks: [], type: 'REAL' },
+            '15':            { fallbacks: [], type: 'REAL' },
+            '30':            { fallbacks: [], type: 'REAL' },
+            '60':            { fallbacks: [], type: 'REAL' },
+            '90':            { fallbacks: [], type: 'REAL' },
+            '120':           { fallbacks: [], type: 'REAL' },
+            'Test #':        { fallbacks: ['Test'], type: 'INTEGER', critical: true },
+            'Timestamp':     { fallbacks: ['Date', 'Test Date'], type: 'TEXT' },
+            'Initials':      { fallbacks: ['Built By', 'Builder'], type: 'TEXT' }
+        };
+
+        // Derive time point columns from config
+        const TIME_POINTS = Object.entries(HEADER_CONFIG)
+            .filter(([_, cfg]) => cfg.type === 'REAL')
+            .map(([name]) => name);
+
+        // Header selection state
+        let discoveredHeaders = new Set();
+        let selectedHeaders = new Map();
+        let existingDbColumns = null;  // columns from loaded .db (for append constraint)
 
         // Alert helper
         function showAlert(message, type = 'info') {
@@ -638,6 +747,156 @@
 
         function hideLoading() {
             loadingOverlay.classList.remove('show');
+        }
+
+        // Resolve a raw header name to its canonical name via HEADER_CONFIG fallbacks
+        function resolveCanonicalName(rawHeader) {
+            if (HEADER_CONFIG[rawHeader]) return rawHeader;
+            for (const [canonical, cfg] of Object.entries(HEADER_CONFIG)) {
+                if (cfg.fallbacks.includes(rawHeader)) return canonical;
+            }
+            return null;
+        }
+
+        // Scan all builderFiles and update discoveredHeaders + selectedHeaders
+        function updateDiscoveredHeaders() {
+            const previousSelections = new Map(selectedHeaders);
+            discoveredHeaders.clear();
+
+            for (const file of builderFiles) {
+                for (const sheet of file.sheets) {
+                    if (!sheet.rawHeaders) continue;
+                    for (const h of sheet.rawHeaders) {
+                        const canonical = resolveCanonicalName(h);
+                        discoveredHeaders.add(canonical || h);
+                    }
+                }
+            }
+
+            // Initialize selection state, preserving previous choices
+            selectedHeaders.clear();
+            for (const h of discoveredHeaders) {
+                if (previousSelections.has(h)) {
+                    selectedHeaders.set(h, previousSelections.get(h));
+                } else {
+                    // Known headers default ON, unknown default OFF
+                    selectedHeaders.set(h, !!HEADER_CONFIG[h]);
+                }
+            }
+
+            renderHeaderSelector();
+        }
+
+        // Get ordered list of active (selected) column names
+        function getActiveColumns() {
+            const allOrdered = [
+                ...Object.keys(HEADER_CONFIG).filter(h => discoveredHeaders.has(h)),
+                ...[...discoveredHeaders].filter(h => !HEADER_CONFIG[h])
+            ];
+            return allOrdered.filter(h => selectedHeaders.get(h));
+        }
+
+        // Render the header selector UI
+        function renderHeaderSelector() {
+            const section = document.getElementById('headerSelectorSection');
+            const container = document.getElementById('headerCheckboxes');
+
+            if (discoveredHeaders.size === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+
+            const orderedHeaders = [
+                ...Object.keys(HEADER_CONFIG).filter(h => discoveredHeaders.has(h)),
+                ...[...discoveredHeaders].filter(h => !HEADER_CONFIG[h])
+            ];
+
+            container.innerHTML = orderedHeaders.map(h => {
+                const cfg = HEADER_CONFIG[h];
+                const checked = selectedHeaders.get(h) ? 'checked' : '';
+                const criticalClass = cfg && cfg.critical ? 'critical' : '';
+                const isConstrained = existingDbColumns && !existingDbColumns.includes(h);
+                const disabledClass = isConstrained ? 'disabled-chip' : '';
+                const disabledAttr = isConstrained ? 'disabled' : '';
+                const label = cfg ? h : h + ' (custom)';
+                const escapedName = h.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `<label class="header-chip ${criticalClass} ${disabledClass}" title="${cfg && cfg.critical ? 'Critical for Sensor QC Analysis' : ''}">
+                    <input type="checkbox" ${checked} ${disabledAttr} onchange="toggleHeader('${escapedName}', this.checked)">
+                    ${label}
+                </label>`;
+            }).join('');
+
+            updateHeaderWarning();
+            updateSchemaDisplay();
+        }
+
+        function toggleHeader(name, checked) {
+            selectedHeaders.set(name, checked);
+            updateHeaderWarning();
+            updateSchemaDisplay();
+        }
+
+        function updateHeaderWarning() {
+            const warningEl = document.getElementById('headerWarning');
+            const criticalNames = Object.entries(HEADER_CONFIG)
+                .filter(([_, cfg]) => cfg.critical)
+                .map(([name]) => name);
+
+            const missingCritical = criticalNames.filter(h =>
+                discoveredHeaders.has(h) && !selectedHeaders.get(h)
+            );
+
+            if (missingCritical.length > 0) {
+                warningEl.classList.remove('hidden');
+                let msg = 'Warning: Excluding ' + missingCritical.join(', ') + ' may break the Sensor QC Analysis tool.';
+                const dedupKeys = ['Serial Number', 'Test #', 'Job #'];
+                const missingDedup = missingCritical.filter(h => dedupKeys.includes(h));
+                if (missingDedup.length > 0) {
+                    msg += ' Deduplication depends on Serial Number + Test # + Job #.';
+                }
+                warningEl.textContent = msg;
+            } else {
+                warningEl.classList.add('hidden');
+            }
+        }
+
+        function updateSchemaDisplay() {
+            const el = document.getElementById('schemaDisplay');
+            if (!el) return;
+            const activeCols = getActiveColumns();
+            if (activeCols.length === 0 && discoveredHeaders.size > 0) {
+                el.innerHTML = '<code>sensor_readings</code> (no columns selected)';
+            } else if (activeCols.length > 0) {
+                el.innerHTML = '<code>sensor_readings</code> (<br>&nbsp;&nbsp;id, ' + activeCols.join(', ') + '<br>)';
+            }
+        }
+
+        function selectAllHeaders() {
+            for (const h of discoveredHeaders) {
+                if (!existingDbColumns || existingDbColumns.includes(h)) {
+                    selectedHeaders.set(h, true);
+                }
+            }
+            renderHeaderSelector();
+        }
+
+        function selectNoneHeaders() {
+            for (const h of discoveredHeaders) {
+                if (!existingDbColumns || existingDbColumns.includes(h)) {
+                    selectedHeaders.set(h, false);
+                }
+            }
+            renderHeaderSelector();
+        }
+
+        function selectDefaultHeaders() {
+            for (const h of discoveredHeaders) {
+                if (existingDbColumns && !existingDbColumns.includes(h)) continue;
+                selectedHeaders.set(h, !!HEADER_CONFIG[h]);
+            }
+            renderHeaderSelector();
         }
 
         // Initialize SQL.js
@@ -679,6 +938,11 @@
                         const worksheet = workbook.Sheets[targetSheetName];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
+                        // Collect raw headers from the sheet
+                        const rawHeaders = jsonData.length > 0
+                            ? Object.keys(jsonData[0]).map(h => h.trim())
+                            : [];
+
                         if (jsonData.length > 0) {
                             // Process data to match expected format
                             const TIMESTAMP_COLUMNS = ['Timestamp', 'Date', 'Test Date'];
@@ -710,7 +974,8 @@
                             sheets.push({
                                 name: targetSheetName,
                                 data: processedData,
-                                rows: processedData.length
+                                rows: processedData.length,
+                                rawHeaders: rawHeaders
                             });
                         }
 
@@ -771,6 +1036,7 @@
                 showAlert(`Added ${successful.length} file(s)`, 'success');
             }
 
+            updateDiscoveredHeaders();
             renderFileList();
             updateButtons();
         }
@@ -829,6 +1095,7 @@
             if (removed.length > 0) {
                 showAlert(`Removed ${removed[0].name}`, 'info');
             }
+            updateDiscoveredHeaders();
             renderFileList();
             updateButtons();
         }
@@ -836,8 +1103,12 @@
         // Clear all
         function clearAll() {
             builderFiles.length = 0;
+            discoveredHeaders.clear();
+            selectedHeaders.clear();
+            document.getElementById('headerSelectorSection').classList.add('hidden');
             renderFileList();
             updateButtons();
+            updateSchemaDisplay();
             showAlert('All files cleared', 'info');
         }
 
@@ -900,12 +1171,27 @@
                 const jobsResult = db.exec('SELECT DISTINCT "Job #" FROM sensor_readings WHERE "Job #" IS NOT NULL AND "Job #" != ""');
                 const jobNumbers = jobsResult.length > 0 ? jobsResult[0].values.map(r => r[0]) : [];
 
+                // Get existing DB columns for constraining header selection
+                const colInfo = db.exec("PRAGMA table_info(sensor_readings)");
+                const dbColumns = colInfo.length > 0
+                    ? colInfo[0].values.map(r => r[1]).filter(c => c !== 'id')
+                    : [];
+
                 db.close();
 
                 // Store the raw bytes for cloning later
                 existingDbBytes = bytes;
                 existingDbName = file.name;
                 existingDbRowCount = rowCount;
+                existingDbColumns = dbColumns;
+
+                // Constrain header selection to match existing DB schema
+                for (const h of discoveredHeaders) {
+                    if (!existingDbColumns.includes(h)) {
+                        selectedHeaders.set(h, false);
+                    }
+                }
+                renderHeaderSelector();
 
                 // Update UI
                 existingDbArea.style.display = 'none';
@@ -934,9 +1220,11 @@
             existingDbBytes = null;
             existingDbName = null;
             existingDbRowCount = 0;
+            existingDbColumns = null;
             existingDbArea.style.display = '';
             existingDbStatus.classList.add('hidden');
             existingDbStatus.innerHTML = '';
+            renderHeaderSelector();
             updateSummary();
             showAlert('Existing database removed', 'info');
         }
@@ -946,19 +1234,41 @@
             return document.querySelector('input[name="exportFormat"]:checked').value;
         }
 
+        // Resolve a row value for a canonical column, trying fallbacks
+        function resolveRowValue(row, colName) {
+            const cfg = HEADER_CONFIG[colName];
+            if (cfg) {
+                let val = row[colName];
+                if (val === undefined || val === '') {
+                    for (const fb of cfg.fallbacks) {
+                        if (row[fb] !== undefined && row[fb] !== '') {
+                            val = row[fb];
+                            break;
+                        }
+                    }
+                }
+                if (val === undefined || val === '') {
+                    return (cfg.type === 'REAL' || cfg.type === 'INTEGER') ? null : '';
+                }
+                return val;
+            }
+            // Custom/unknown header
+            return row[colName] ?? '';
+        }
+
         // Extract rows from files with dedup logic, returns { rows, skippedCount }
         function extractRows(existingKeys, skipDups) {
+            const activeCols = getActiveColumns();
             const rows = [];
             let skippedCount = 0;
 
             for (const file of builderFiles) {
                 for (const sheet of file.sheets) {
                     for (const row of sheet.data) {
-                        const serialNum = row['Serial Number'] || row['Serial#'] || row['Serial'] || '';
-                        const testNum = row['Test #'] ?? row['Test'] ?? '';
-                        const jobNum = row['Job #'] || row['Job Number'] || '';
-
                         if (skipDups) {
+                            const serialNum = resolveRowValue(row, 'Serial Number');
+                            const testNum = resolveRowValue(row, 'Test #');
+                            const jobNum = resolveRowValue(row, 'Job #');
                             const key = `${serialNum}|${testNum}|${jobNum}`;
                             if (existingKeys.has(key)) {
                                 skippedCount++;
@@ -967,21 +1277,7 @@
                             existingKeys.add(key);
                         }
 
-                        rows.push([
-                            jobNum,
-                            serialNum,
-                            row['Channel'] || '',
-                            row['0'] ?? null,
-                            row['5'] ?? null,
-                            row['15'] ?? null,
-                            row['30'] ?? null,
-                            row['60'] ?? null,
-                            row['90'] ?? null,
-                            row['120'] ?? null,
-                            testNum,
-                            row['Timestamp'] || row['Date'] || row['Test Date'] || null,
-                            row['Initials'] || row['Built By'] || row['Builder'] || ''
-                        ]);
+                        rows.push(activeCols.map(col => resolveRowValue(row, col)));
                     }
                 }
             }
@@ -1004,7 +1300,14 @@
             showLoading('Compiling CSV...');
 
             try {
-                const CSV_COLUMNS = ['Job #', 'Serial Number', 'Channel', '0', '5', '15', '30', '60', '90', '120', 'Test #', 'Timestamp', 'Initials'];
+                const activeCols = getActiveColumns();
+
+                if (activeCols.length === 0) {
+                    hideLoading();
+                    showAlert('No columns selected. Please select at least one column.', 'warning');
+                    return;
+                }
+
                 const skipDups = document.getElementById('skipDuplicates').checked;
                 const existingKeys = new Set();
 
@@ -1015,16 +1318,21 @@
                     const db = new SQL.Database(new Uint8Array(existingDbBytes));
 
                     if (skipDups) {
-                        const existing = db.exec(`SELECT "Serial Number", "Test #", "Job #" FROM sensor_readings`);
-                        if (existing.length > 0) {
-                            for (const row of existing[0].values) {
-                                existingKeys.add(`${row[0]}|${row[1]}|${row[2]}`);
+                        const dedupCols = ['Serial Number', 'Test #', 'Job #'].filter(c => activeCols.includes(c));
+                        if (dedupCols.length > 0) {
+                            const selectCols = dedupCols.map(c => `"${c}"`).join(', ');
+                            const existing = db.exec(`SELECT ${selectCols} FROM sensor_readings`);
+                            if (existing.length > 0) {
+                                for (const row of existing[0].values) {
+                                    existingKeys.add(row.join('|'));
+                                }
                             }
                         }
                     }
 
                     // Include existing DB rows in CSV output
-                    const allData = db.exec(`SELECT "Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp", "Initials" FROM sensor_readings`);
+                    const colNames = activeCols.map(c => `"${c}"`).join(', ');
+                    const allData = db.exec(`SELECT ${colNames} FROM sensor_readings`);
                     if (allData.length > 0) {
                         existingRows = allData[0].values;
                     }
@@ -1035,7 +1343,7 @@
                 const { rows: newRows, skippedCount } = extractRows(existingKeys, skipDups);
 
                 // Build CSV content
-                const lines = [CSV_COLUMNS.map(csvEscape).join(',')];
+                const lines = [activeCols.map(csvEscape).join(',')];
 
                 for (const row of existingRows) {
                     lines.push(row.map(csvEscape).join(','));
@@ -1102,28 +1410,28 @@
                 const SQL = await loadSqlEngine();
                 let db;
                 const isAppend = existingDbBytes !== null;
+                const activeCols = getActiveColumns();
+
+                if (activeCols.length === 0) {
+                    hideLoading();
+                    showAlert('No columns selected. Please select at least one column.', 'warning');
+                    return;
+                }
 
                 if (isAppend) {
                     // Clone the existing database from stored bytes
                     db = new SQL.Database(new Uint8Array(existingDbBytes));
                 } else {
                     db = new SQL.Database();
+                    const colDefs = activeCols.map(col => {
+                        const cfg = HEADER_CONFIG[col];
+                        const sqlType = cfg ? cfg.type : 'TEXT';
+                        return `"${col}" ${sqlType}`;
+                    }).join(',\n                            ');
                     db.run(`
                         CREATE TABLE sensor_readings (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            "Job #" TEXT,
-                            "Serial Number" TEXT,
-                            "Channel" TEXT,
-                            "0" REAL,
-                            "5" REAL,
-                            "15" REAL,
-                            "30" REAL,
-                            "60" REAL,
-                            "90" REAL,
-                            "120" REAL,
-                            "Test #" INTEGER,
-                            "Timestamp" TEXT,
-                            "Initials" TEXT
+                            ${colDefs}
                         )
                     `);
                 }
@@ -1133,10 +1441,14 @@
                 // Build set of existing keys for dedup
                 const existingKeys = new Set();
                 if (skipDups) {
-                    const existing = db.exec(`SELECT "Serial Number", "Test #", "Job #" FROM sensor_readings`);
-                    if (existing.length > 0) {
-                        for (const row of existing[0].values) {
-                            existingKeys.add(`${row[0]}|${row[1]}|${row[2]}`);
+                    const dedupCols = ['Serial Number', 'Test #', 'Job #'].filter(c => activeCols.includes(c));
+                    if (dedupCols.length > 0) {
+                        const selectCols = dedupCols.map(c => `"${c}"`).join(', ');
+                        const existing = db.exec(`SELECT ${selectCols} FROM sensor_readings`);
+                        if (existing.length > 0) {
+                            for (const row of existing[0].values) {
+                                existingKeys.add(row.join('|'));
+                            }
                         }
                     }
                 }
@@ -1144,10 +1456,11 @@
                 const { rows, skippedCount } = extractRows(existingKeys, skipDups);
 
                 // Prepare insert statement
-                const insertStmt = db.prepare(`
-                    INSERT INTO sensor_readings ("Job #", "Serial Number", "Channel", "0", "5", "15", "30", "60", "90", "120", "Test #", "Timestamp", "Initials")
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `);
+                const colNames = activeCols.map(c => `"${c}"`).join(', ');
+                const placeholders = activeCols.map(() => '?').join(', ');
+                const insertStmt = db.prepare(
+                    `INSERT INTO sensor_readings (${colNames}) VALUES (${placeholders})`
+                );
 
                 for (const row of rows) {
                     insertStmt.run(row);
