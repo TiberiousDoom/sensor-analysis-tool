@@ -718,6 +718,7 @@
             '90':            { fallbacks: ['90 s'], type: 'REAL' },
             '120':           { fallbacks: ['120 s'], type: 'REAL' },
             'Test #':        { fallbacks: ['Test'], type: 'INTEGER', critical: true },
+            'Paste Lot':     { fallbacks: [], type: 'TEXT' },
             'Timestamp':     { fallbacks: ['Date', 'Test Date'], type: 'TEXT' },
             'Initials':      { fallbacks: ['Built By', 'Builder', 'ID'], type: 'TEXT' }
         };
@@ -917,6 +918,17 @@
         }
 
         // Parse Excel file
+        // Parse Job # and Paste Lot from filename
+        // Expected format: "CT46 Job 080 (Paste Lot 031) AS10 Hand Epoxied.xlsx"
+        function parseFilename(filename) {
+            const result = {};
+            const jobMatch = filename.match(/Job\s+(\d+)/i);
+            if (jobMatch) result['Job #'] = jobMatch[1];
+            const pasteMatch = filename.match(/Paste\s+Lot\s+(\d+)/i);
+            if (pasteMatch) result['Paste Lot'] = pasteMatch[1];
+            return result;
+        }
+
         function parseExcelFile(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -924,6 +936,7 @@
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        const filenameData = parseFilename(file.name);
 
                         const sheets = [];
                         const ACCEPTED_SHEETS = [
@@ -982,6 +995,31 @@
                                 }
                                 return processed;
                             });
+
+                            // Inject Job # and Paste Lot from filename when missing from sheet data
+                            const filenameCols = Object.keys(filenameData);
+                            for (const col of filenameCols) {
+                                // Check if any row has this column (or a fallback) already
+                                const cfg = HEADER_CONFIG[col];
+                                const allNames = cfg ? [col, ...cfg.fallbacks] : [col];
+                                const sheetHasCol = allNames.some(n => rawHeaders.includes(n));
+
+                                if (!sheetHasCol) {
+                                    // Add to every row and register in rawHeaders
+                                    for (const row of processedData) {
+                                        row[col] = filenameData[col];
+                                    }
+                                    rawHeaders.push(col);
+                                } else {
+                                    // Fill in blank values where the sheet column is empty
+                                    for (const row of processedData) {
+                                        const existing = allNames.find(n => row[n] !== undefined && row[n] !== '');
+                                        if (!existing) {
+                                            row[col] = filenameData[col];
+                                        }
+                                    }
+                                }
+                            }
 
                             sheets.push({
                                 name: sheetName,
